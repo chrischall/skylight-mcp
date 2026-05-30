@@ -34,4 +34,42 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       const id = frameId ?? (await c.resolveFrameId());
       return textContent(flattenJsonApi(await c.request('GET', `/frames/${id}/devices`)));
     });
+
+  server.tool('skylight_get_plus_access', 'Get Skylight Plus subscription / entitlement status.', {},
+    async () => {
+      const c = await getClient();
+      return textContent(flattenJsonApi(await c.request('GET', '/plus_access') as any));
+    });
+
+  server.tool('skylight_get_reward_points', 'Get reward-point balances per family member (lifetime earned + current balance).',
+    { frameId: z.string().optional() },
+    async ({ frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/reward_points`) as any));
+    });
+
+  server.tool('skylight_get_household_config', 'Get household configuration for the frame.',
+    { frameId: z.string().optional() },
+    async ({ frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/household_config`) as any));
+    });
+
+  server.tool('skylight_list_calendars', "List the frame's calendar accounts (Google/Apple/etc.) and their active calendars.",
+    { frameId: z.string().optional() },
+    async ({ frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/calendars`) as any));
+    });
+
+  server.tool('skylight_get_event_notification_settings', "Get the frame's calendar-event notification settings.",
+    { frameId: z.string().optional() },
+    async ({ frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/event_notification_settings`) as any));
+    });
 }
