@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## TL;DR
 
-MCP server for Skylight Calendar — 21 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), and frame/device info (read). **Meals are not supported** — Skylight does not expose a meals API on this account type (all meals endpoints return 404). Do not create a `meals.ts` module.
+MCP server for Skylight Calendar — 37 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read), messages and albums (read), and frame/device/account info (read).
 
 Auth resolution lives in `src/auth.ts`. There is one auth path: headless email+password OAuth2 authorization-code flow (Node-direct). See "Auth resolution" below.
 
@@ -45,8 +45,8 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `src/auth-session-login.ts` — `login()`: headless four-step authorization-code flow.
 - `src/config.ts` — `loadAccount()`: env-var resolution, exposes `baseUrl` and `authBaseUrl`.
 - `src/client.ts` — `SkylightClient`: HTTP client with proactive + reactive token refresh via `refreshFn`, JSON:API response flattening, `resolveFrameId()` for frame auto-discovery.
-- `src/index.ts` — entry point. Boots `McpServer`, wires lazy `getClient`, registers the four tool modules.
-- `src/tools/` — one file per domain: `frames.ts`, `events.ts`, `lists.ts`, `chores.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers.
+- `src/index.ts` — entry point. Boots `McpServer`, wires lazy `getClient`, registers the seven tool modules.
+- `src/tools/` — one file per domain: `frames.ts`, `events.ts`, `lists.ts`, `chores.ts`, `meals.ts`, `messages.ts`, `tasks.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers.
 - `tests/` — mirrors `src/`. Tool tests are in `tests/tools/<name>.test.ts`.
 
 ## JSON:API flattening convention
@@ -55,21 +55,28 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ## Tool surface
 
-21 tools total. 4 read-only frame/device tools, 7 event tools (5R+2W... actually 4R+3W), 6 list tools (2R+4W), 4 chore/reward tools (2R+2W).
+37 tools total. 9 read-only frame/device/account tools, 8 event tools, 8 list tools (2R+6W), 4 chore/reward tools (2R+2W), 2 meal tools (2R), 2 message/album tools (2R), 4 task-box tools (1R+3W).
 
 | Module | Tools |
 |---|---|
-| frames.ts | `skylight_list_frames`, `skylight_get_frame`, `skylight_list_frame_members`, `skylight_list_devices` |
-| events.ts | `skylight_list_events`, `skylight_get_event`, `skylight_create_event`, `skylight_update_event`, `skylight_delete_event`, `skylight_list_categories`, `skylight_list_source_calendars` |
-| lists.ts | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item` |
+| frames.ts | `skylight_list_frames`, `skylight_get_frame`, `skylight_list_frame_members`, `skylight_list_devices`, `skylight_get_plus_access`, `skylight_get_reward_points`, `skylight_get_household_config`, `skylight_list_calendars`, `skylight_get_event_notification_settings` |
+| events.ts | `skylight_list_events`, `skylight_get_event`, `skylight_create_event`, `skylight_update_event`, `skylight_delete_event`, `skylight_list_categories`, `skylight_list_source_calendars`, `skylight_list_recent_invited_emails` |
+| lists.ts | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_update_list`, `skylight_delete_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item` |
 | chores.ts | `skylight_list_chores`, `skylight_create_chore`, `skylight_complete_chore`, `skylight_list_rewards` |
+| meals.ts | `skylight_list_recipes`, `skylight_list_meal_categories` |
+| messages.ts | `skylight_list_messages`, `skylight_list_albums` |
+| tasks.ts | `skylight_list_tasks`, `skylight_create_task`, `skylight_update_task`, `skylight_delete_task` |
 
 ### Known unknowns — write payload shapes
 
 Write-tool payload shapes have been partially verified live:
 
 - `skylight_create_event` and `skylight_delete_event` — **live-confirmed**: flat top-level params (e.g. `{ summary, starts_at, ... }`) return 200; the `{ calendar_event: { ... } }` JSON:API wrapper returns 422.
-- `skylight_create_list` and list-item writes — use the same flat pattern by inference (not yet live-verified against a real list endpoint).
+- `skylight_update_event` — **LIVE-VERIFIED**: uses `PUT /frames/{f}/calendar_events/{id}` (not PATCH — PATCH did not update); flat body.
+- `skylight_create_list` — **LIVE-VERIFIED**: requires flat `{ label, color, kind }`. `color` is a hex string (e.g. `#42D792`); `kind` is a strict enum — valid values include `shopping` and `to_do` (others like `checklist` return HTTP 500). Both `color` and `kind` are required.
+- `skylight_update_list_item` — **LIVE-VERIFIED**: list items carry a `status` field (`pending` default, `completed` = checked), NOT a `checked` field. The tool exposes a friendly `checked` boolean that maps to `status` (`completed`/`pending`). `PATCH` confirmed 200.
+- `skylight_update_list` — **LIVE-VERIFIED**: `PUT /frames/{f}/lists/{id}` with flat `{ label?, color?, kind? }` renames/recolors/retypes a list.
+- `skylight_delete_list` — **LIVE-VERIFIED**: `DELETE /frames/{f}/lists/{id}`.
 - `skylight_create_chore` — **LIVE-VERIFIED**: flat `{ summary, category_id }` body; `category_id` is **required** (422 "Category is required" without it). The field was previously named `name` — that was wrong. Optional fields: `start`, `description`, `reward_points`.
 - `skylight_complete_chore` — **LIVE-VERIFIED**: `PUT /frames/{f}/chores/{id}/completions` with body `{ status: 'complete' }` returns 200 and flips the chore's `status` to `complete` (`completed_on` becomes today). The old `POST /complete` was 404 and the prior `PATCH /frames/{f}/chores/{id}` was a no-op (status stayed pending). Completing a specific recurring *instance* (via `instance_date` + `category_id` in the completions body) is intentionally not exposed — only the simple whole-chore completion.
 - `SkylightClient.request()` — **fixed**: now tolerates 2xx responses with an empty body (e.g. chore DELETE returns HTTP 200 with no body). Previously would throw "Unexpected end of JSON input".
@@ -131,7 +138,6 @@ The repo allows squash-merge only — `--merge` and `--rebase` are blocked.
 
 ## What to not do
 
-- **Do not create `src/tools/meals.ts`.** Skylight does not expose a meals API on this account type. All meals endpoints return 404. If Skylight ever adds a meals surface, verify the endpoints live before implementing.
 - Don't add a browser-bridge or login-proxy dependency. The headless authorization-code flow works directly — no bot wall has been observed, and per-request proxying is not needed.
 - Don't paste real credentials or cookies into tests. Mock `login()` and `SkylightClient.request` at the module boundary.
 - Don't break the "no env vars" smoke path. The server must start cleanly with no credentials set — `resolveAuth()` errors are deferred to tool-call time.

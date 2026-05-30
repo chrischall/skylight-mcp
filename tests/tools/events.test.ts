@@ -119,18 +119,18 @@ describe('event tools', () => {
 
   // ── skylight_update_event ───────────────────────────────────────────────
 
-  it('update_event patches by id with only provided attrs (flat body)', async () => {
+  it('update_event puts by id with only provided attrs (flat body)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
     await tools.skylight_update_event({ id: '5', location: 'Office' });
-    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/calendar_events/5', { body: { location: 'Office' } });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/calendar_events/5', { body: { location: 'Office' } });
   });
 
   it('update_event with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
     await tools.skylight_update_event({ id: '5', summary: 'Updated', frameId: '99' });
-    expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/calendar_events/5', { body: { summary: 'Updated' } });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/calendar_events/5', { body: { summary: 'Updated' } });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
@@ -210,6 +210,24 @@ describe('event tools', () => {
     request.mockResolvedValue({ data: [] });
     await tools.skylight_list_source_calendars({ frameId: '99' });
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/source_calendars');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_list_recent_invited_emails ─────────────────────────────────
+
+  it('list_recent_invited_emails fetches recent invited emails with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '1', type: 'recent_invited_email', attributes: { email: 'alice@example.com' } }] });
+    const out = await tools.skylight_list_recent_invited_emails({});
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/calendar_events/recent_invited_emails');
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', type: 'recent_invited_email', email: 'alice@example.com' }]);
+  });
+
+  it('list_recent_invited_emails with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_recent_invited_emails({ frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendar_events/recent_invited_emails');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 });

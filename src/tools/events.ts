@@ -59,7 +59,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ id, frameId, ...attrs }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('PATCH', `/frames/${f}/calendar_events/${id}`, { body: compact(attrs) });
+      const doc = await c.request('PUT', `/frames/${f}/calendar_events/${id}`, { body: compact(attrs) });
       return textContent(flattenJsonApi(doc as any));
     });
 
@@ -86,5 +86,13 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
       return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/source_calendars`) as any));
+    });
+
+  server.tool('skylight_list_recent_invited_emails', 'List recently-invited email addresses (handy for filling create_event invited_emails).',
+    { frameId: z.string().optional() },
+    async ({ frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/calendar_events/recent_invited_emails`) as any));
     });
 }
