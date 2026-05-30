@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const fpFetch = vi.fn();
+const fpClose = vi.fn().mockResolvedValue(undefined);
 
 // FetchproxyServer must be a proper class/constructor to work with `new`.
 class MockFetchproxyServer {
   fetch = fpFetch;
-  close = vi.fn();
+  close = fpClose;
 }
 
 vi.mock('@fetchproxy/server', () => ({
   FetchproxyServer: MockFetchproxyServer,
-  classifyBotWall: vi.fn().mockReturnValue({ isBotWall: false }),
 }));
 
 import { resolveAuth } from '../src/auth.js';
@@ -65,6 +65,28 @@ describe('resolveAuth', () => {
     expect(source).toBe('fetchproxy');
     expect(client).toBeDefined();
     expect(fpFetch).toHaveBeenCalled();
+    // Fix 1: close() must be called after a successful fetchproxy login
+    expect(fpClose).toHaveBeenCalledTimes(1);
+  });
+
+  // Test 1b: fetchproxy grant throws → close() must still be called (finally branch)
+  it('calls close() on the fetchproxy server even when the fetchproxy grant fails', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Direct POST returns 403 → triggers bot-wall fallback
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // fpFetch returns 403 → oauthPasswordGrant inside makeFetchproxyPoster throws
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 403,
+      body: JSON.stringify({ error: 'forbidden' }),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/fetchproxy fallback also failed/);
+    // close() must be called even when the grant threw
+    expect(fpClose).toHaveBeenCalledTimes(1);
   });
 
   // Test 2: Bot-wall but fetchproxy disabled → should throw HTTP 403, NOT call fpFetch
@@ -214,8 +236,8 @@ describe('resolveAuth', () => {
     expect(source).toBe('fetchproxy');
   });
 
-  // Test for looksLikeBotWall with non-Error (covers String(e) branch)
-  it('looksLikeBotWall recognizes HTTP 429 — exercises non-Error throw path (non-Error thrown)', async () => {
+  // Test for looksLikeBotWall with HTTP 429 Error (covers Error instance branch of looksLikeBotWall)
+  it('looksLikeBotWall recognizes HTTP 429 via an Error instance — falls back to fetchproxy', async () => {
     process.env.SKYLIGHT_EMAIL = 'a@b.com';
     process.env.SKYLIGHT_PASSWORD = 'pw';
 
@@ -376,6 +398,57 @@ describe('resolveAuth', () => {
       ((i as RequestInit).body as string).includes('grant_type=refresh_token'),
     );
     expect(refreshCallBody).toBeDefined();
+  });
+
+  // Fix 3a: Combined error message when both direct and fetchproxy paths fail (Error instance branch)
+  it('wraps fetchproxy-path Error failure with a combined context message (Error instance branch)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Direct POST returns 403 → bot-wall fallback triggered
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // fpFetch also returns 403 → oauthPasswordGrant throws "Skylight login failed (HTTP 403)"
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 403,
+      body: JSON.stringify({ error: 'forbidden' }),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(
+      /Skylight login failed via the direct path and the fetchproxy fallback also failed/,
+    );
+  });
+
+  // Fix 3b: Combined error message — non-Error thrown by fetchproxy (covers String(fpErr) branch)
+  it('wraps fetchproxy-path non-Error failure with String(fpErr) in the combined context message', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Direct POST returns 403 → bot-wall fallback triggered
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // fpFetch throws a plain string (non-Error), bypassing the poster's typed path
+    fpFetch.mockRejectedValue('extension offline');
+
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(
+      /fetchproxy fallback also failed: extension offline/,
+    );
+    // close() must still have been called in the finally block
+    expect(fpClose).toHaveBeenCalledTimes(1);
+  });
+
+  // Fix 4: Cross-module error-format coupling — verify 403 from oauthPasswordGrant
+  // matches the /HTTP 403/ pattern that looksLikeBotWall relies on.
+  // A future format change in normalize() will break this test before silently
+  // disabling the bot-wall fallback.
+  it('oauthPasswordGrant rejects with a message matching /HTTP 403/ on a 403 response (looksLikeBotWall coupling)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = '1';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // With fetchproxy disabled, the 403 error propagates directly
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/HTTP 403/);
   });
 
   // Test 8: Default httpFetch fallback via vi.stubGlobal (covers the ?? branch)

@@ -50,8 +50,23 @@ export async function resolveAuth(opts: { httpFetch?: HttpFetch } = {}): Promise
     return { client: makeClient(account, tokens, directPoster, httpFetch), source: 'env' };
   } catch (e) {
     if (fetchproxyDisabled() || !looksLikeBotWall(e)) throw e;
-    const { poster: fpPoster } = await makeFetchproxyPoster();
-    const tokens = await oauthPasswordGrant(account, fpPoster);
+    // The login-proxy server is closed after login. If the access token later
+    // expires, the fetchproxy-backed refresh will fail and the user must
+    // restart — acceptable because this path only exists to get past a
+    // login-time bot wall (Option B: one-shot login proxy, no long-lived handle).
+    const { poster: fpPoster, close } = await makeFetchproxyPoster();
+    let tokens;
+    try {
+      try {
+        tokens = await oauthPasswordGrant(account, fpPoster);
+      } catch (fpErr) {
+        throw new Error(
+          `Skylight login failed via the direct path and the fetchproxy fallback also failed: ${fpErr instanceof Error ? fpErr.message : String(fpErr)}`,
+        );
+      }
+    } finally {
+      await close();
+    }
     return { client: makeClient(account, tokens, fpPoster, httpFetch), source: 'fetchproxy' };
   }
 }
@@ -65,7 +80,7 @@ function looksLikeBotWall(e: unknown): boolean {
   return /HTTP 403|HTTP 429|challenge|captcha|cloudflare|akamai/i.test(msg);
 }
 
-async function makeFetchproxyPoster(): Promise<{ poster: TokenPoster }> {
+async function makeFetchproxyPoster(): Promise<{ poster: TokenPoster; close: () => Promise<void> }> {
   const { FetchproxyServer } = await import('@fetchproxy/server');
   // FetchproxyServerOpts: { serverName, version, domains, capabilities?, ... }
   // All fields here match the declared type exactly — no cast needed.
@@ -98,5 +113,5 @@ async function makeFetchproxyPoster(): Promise<{ poster: TokenPoster }> {
     try { json = JSON.parse(res.body ?? '{}'); } catch { /* keep {} */ }
     return { status: res.status, json };
   };
-  return { poster };
+  return { poster, close: () => server.close() };
 }
