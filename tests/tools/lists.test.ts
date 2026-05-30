@@ -57,24 +57,24 @@ describe('list tools', () => {
 
   // ── skylight_create_list ────────────────────────────────────────────────
 
-  it('create_list posts all attrs (label+color+kind)', async () => {
+  it('create_list posts all attrs flat (label+color+kind, no wrapper)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '10', type: 'list', attributes: { label: 'Groceries', color: 'green', kind: 'grocery' } } });
     const out = await tools.skylight_create_list({ label: 'Groceries', color: 'green', kind: 'grocery' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/lists', {
-      body: { list: { label: 'Groceries', color: 'green', kind: 'grocery' } },
+      body: { label: 'Groceries', color: 'green', kind: 'grocery' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '10', type: 'list', label: 'Groceries', color: 'green', kind: 'grocery' });
   });
 
-  it('create_list with only label drops undefined color/kind via compact()', async () => {
+  it('create_list with only label drops undefined color/kind via compact() (flat body)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '11', type: 'list', attributes: { label: 'Todos' } } });
     await tools.skylight_create_list({ label: 'Todos' });
     const body = request.mock.calls[0][2].body;
-    expect(body.list).toEqual({ label: 'Todos' });
-    expect('color' in body.list).toBe(false);
-    expect('kind' in body.list).toBe(false);
+    expect(body).toEqual({ label: 'Todos' });
+    expect('color' in body).toBe(false);
+    expect('kind' in body).toBe(false);
   });
 
   it('create_list with explicit frameId uses it and skips resolveFrameId', async () => {
@@ -87,12 +87,12 @@ describe('list tools', () => {
 
   // ── skylight_add_list_item ──────────────────────────────────────────────
 
-  it('add_list_item posts to the correct list path with default frame', async () => {
+  it('add_list_item posts to the correct list path flat (no wrapper)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Eggs' } } });
     const out = await tools.skylight_add_list_item({ listId: '7', label: 'Eggs' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/lists/7/list_items', {
-      body: { list_item: { label: 'Eggs' } },
+      body: { label: 'Eggs' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '55', type: 'list_item', label: 'Eggs' });
   });
@@ -102,38 +102,38 @@ describe('list tools', () => {
     request.mockResolvedValue({ data: { id: '56', type: 'list_item', attributes: { label: 'Butter' } } });
     await tools.skylight_add_list_item({ listId: '7', label: 'Butter', frameId: '99' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/lists/7/list_items', {
-      body: { list_item: { label: 'Butter' } },
+      body: { label: 'Butter' },
     });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
   // ── skylight_update_list_item ───────────────────────────────────────────
 
-  it('update_list_item patches with only checked (drops label)', async () => {
+  it('update_list_item patches with only checked flat (drops label)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Eggs', checked: true } } });
     const out = await tools.skylight_update_list_item({ listId: '7', itemId: '55', checked: true });
     expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/lists/7/list_items/55', {
-      body: { list_item: { checked: true } },
+      body: { checked: true },
     });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '55', type: 'list_item', label: 'Eggs', checked: true });
   });
 
-  it('update_list_item patches with only label (drops checked)', async () => {
+  it('update_list_item patches with only label flat (drops checked)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Dozen Eggs', checked: false } } });
     await tools.skylight_update_list_item({ listId: '7', itemId: '55', label: 'Dozen Eggs' });
     const body = request.mock.calls[0][2].body;
-    expect(body.list_item).toEqual({ label: 'Dozen Eggs' });
-    expect('checked' in body.list_item).toBe(false);
+    expect(body).toEqual({ label: 'Dozen Eggs' });
+    expect('checked' in body).toBe(false);
   });
 
-  it('update_list_item patches with both label and checked', async () => {
+  it('update_list_item patches with both label and checked flat', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Cheese', checked: true } } });
     await tools.skylight_update_list_item({ listId: '7', itemId: '55', label: 'Cheese', checked: true });
     expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/lists/7/list_items/55', {
-      body: { list_item: { label: 'Cheese', checked: true } },
+      body: { label: 'Cheese', checked: true },
     });
   });
 
@@ -142,7 +142,7 @@ describe('list tools', () => {
     request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: {} } });
     await tools.skylight_update_list_item({ listId: '7', itemId: '55', checked: false, frameId: '99' });
     expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/lists/7/list_items/55', {
-      body: { list_item: { checked: false } },
+      body: { checked: false },
     });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });

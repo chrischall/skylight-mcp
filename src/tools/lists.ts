@@ -35,7 +35,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
   }, async ({ label, color, kind, frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    const doc = await c.request('POST', `/frames/${f}/lists`, { body: { list: compact({ label, color, kind }) } });
+    const doc = await c.request('POST', `/frames/${f}/lists`, { body: compact({ label, color, kind }) });
     return textContent(flattenJsonApi(doc as any));
   });
 
@@ -46,7 +46,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
   }, async ({ listId, label, frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    const doc = await c.request('POST', `/frames/${f}/lists/${listId}/list_items`, { body: { list_item: compact({ label }) } });
+    const doc = await c.request('POST', `/frames/${f}/lists/${listId}/list_items`, { body: compact({ label }) });
     return textContent(flattenJsonApi(doc as any));
   });
 
@@ -59,7 +59,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
   }, async ({ listId, itemId, label, checked, frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    const doc = await c.request('PATCH', `/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: { list_item: compact({ label, checked }) } });
+    const doc = await c.request('PATCH', `/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: compact({ label, checked }) });
     return textContent(flattenJsonApi(doc as any));
   });
 

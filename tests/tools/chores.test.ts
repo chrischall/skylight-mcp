@@ -39,12 +39,12 @@ describe('chore tools', () => {
 
   // ── skylight_create_chore ────────────────────────────────────────────────
 
-  it('create_chore posts chore envelope with name', async () => {
+  it('create_chore posts flat params with name (no wrapper)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '2', type: 'chore', attributes: { name: 'Dishes' } } });
     const out = await tools.skylight_create_chore({ name: 'Dishes' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores', {
-      body: { chore: { name: 'Dishes' } },
+      body: { name: 'Dishes' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '2', type: 'chore', name: 'Dishes' });
   });

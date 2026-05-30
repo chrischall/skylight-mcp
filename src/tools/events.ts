@@ -50,7 +50,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ frameId, ...attrs }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('POST', `/frames/${f}/calendar_events`, { body: { calendar_event: compact(attrs) } });
+      const doc = await c.request('POST', `/frames/${f}/calendar_events`, { body: compact(attrs) });
       return textContent(flattenJsonApi(doc as any));
     });
 
@@ -59,7 +59,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ id, frameId, ...attrs }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('PATCH', `/frames/${f}/calendar_events/${id}`, { body: { calendar_event: compact(attrs) } });
+      const doc = await c.request('PATCH', `/frames/${f}/calendar_events/${id}`, { body: compact(attrs) });
       return textContent(flattenJsonApi(doc as any));
     });
 

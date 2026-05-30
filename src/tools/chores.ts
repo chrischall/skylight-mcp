@@ -26,7 +26,9 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     },
   );
 
-  // TODO(Task 13): reconcile body/field names + complete verb against live API
+  // TODO(Task 13): chore `name` field and complete_chore verb/path are still inferred (not live-verified).
+  // Events writes are LIVE-CONFIRMED flat; lists/chores writes use the same flat pattern by inference
+  // (live-verify when convenient).
   server.tool(
     'skylight_create_chore',
     'Create a chore on a Skylight frame.',
@@ -37,12 +39,12 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     async ({ name, frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('POST', `/frames/${f}/chores`, { body: { chore: compact({ name }) } });
+      const doc = await c.request('POST', `/frames/${f}/chores`, { body: compact({ name }) });
       return textContent(flattenJsonApi(doc as any));
     },
   );
 
-  // TODO(Task 13): reconcile body/field names + complete verb against live API
+  // TODO(Task 13): complete_chore verb/path still inferred (not live-verified).
   server.tool(
     'skylight_complete_chore',
     'Mark a chore as complete on a Skylight frame.',
