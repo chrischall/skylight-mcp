@@ -2,6 +2,8 @@ export interface SessionAccount {
   mode: 'session';
   name: string;
   baseUrl: string;
+  /** Origin of baseUrl, used for auth endpoints (e.g. https://app.ourskylight.com). */
+  authBaseUrl: string;
   email: string;
   password: string;
   /** Optional explicit frame id; when unset the client discovers it. */
@@ -42,10 +44,12 @@ export function loadAccount(env: Record<string, string | undefined> = process.en
   }
 
   const baseUrl = (readVar(env, 'SKYLIGHT_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/$/, '');
+  const authBaseUrl = new URL(baseUrl).origin;
   return {
     mode: 'session',
     name: readVar(env, 'SKYLIGHT_NAME') ?? email,
     baseUrl,
+    authBaseUrl,
     email,
     password,
     frameId: readVar(env, 'SKYLIGHT_FRAME_ID'),

@@ -1,13 +1,14 @@
 import type { Account } from './config.js';
-import { oauthRefresh, type Tokens, type TokenPoster } from './auth-session-login.js';
+import type { Tokens } from './auth-session-login.js';
 
+export type { Tokens };
 export type HttpFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 export interface SkylightClientOpts {
   account: Account;
   tokens: Tokens;
-  /** POST transport for the refresh grant (Node-direct or fetchproxy). */
-  tokenPoster: TokenPoster;
+  /** Called with the current refreshToken; must return fresh tokens. */
+  refreshFn: (refreshToken: string) => Promise<Tokens>;
   /** HTTP transport for API calls. Defaults to global fetch. */
   httpFetch?: HttpFetch;
 }
@@ -25,7 +26,7 @@ export class SkylightClient {
   private accessToken: string;
   private refreshToken: string;
   private expiresAt: number; // epoch ms
-  private tokenPoster: TokenPoster;
+  private refreshFn: (refreshToken: string) => Promise<Tokens>;
   private httpFetch: HttpFetch;
   private frameId?: string;
   private refreshInFlight?: Promise<void>;
@@ -35,7 +36,7 @@ export class SkylightClient {
     this.accessToken = opts.tokens.accessToken;
     this.refreshToken = opts.tokens.refreshToken;
     this.expiresAt = Date.now() + opts.tokens.expiresInMs;
-    this.tokenPoster = opts.tokenPoster;
+    this.refreshFn = opts.refreshFn;
     this.httpFetch = opts.httpFetch ?? ((url, init) => fetch(url, init));
     this.frameId = opts.account.frameId;
   }
@@ -43,10 +44,7 @@ export class SkylightClient {
   private async refresh(): Promise<void> {
     if (!this.refreshInFlight) {
       this.refreshInFlight = (async () => {
-        const tok = await oauthRefresh(
-          { baseUrl: this.account.baseUrl, refreshToken: this.refreshToken },
-          this.tokenPoster,
-        );
+        const tok = await this.refreshFn(this.refreshToken);
         this.accessToken = tok.accessToken;
         if (tok.refreshToken) this.refreshToken = tok.refreshToken;
         this.expiresAt = Date.now() + tok.expiresInMs;
