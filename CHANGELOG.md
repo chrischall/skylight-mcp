@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/chrischall/skylight-mcp/compare/v0.2.0...v0.2.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* add SKILL.md so release publish packaging succeeds ([#3](https://github.com/chrischall/skylight-mcp/issues/3)) ([bac61fd](https://github.com/chrischall/skylight-mcp/commit/bac61fd75d3ce0af46a2289836a4f7848d1c0120))
+
 ## [0.2.0](https://github.com/chrischall/skylight-mcp/compare/v0.1.0...v0.2.0) (2026-05-30)
 
 
