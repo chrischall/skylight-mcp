@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "skylight-mcp",
   "version": "0.1.0",
-  "description": "Skylight Calendar MCP — read/write family calendar events, chores, rewards, and shared lists via Claude. Auth via email/password or fetchproxy browser extension.",
+  "description": "Skylight Calendar MCP — read/write family calendar events, chores, rewards, and shared lists via Claude. Auth via email+password.",
   "author": {
     "name": "Claude Code (AI)"
   },
@@ -24,7 +24,7 @@
     "skylight_email": {
       "type": "string",
       "title": "Email",
-      "description": "Skylight account email. Pair with the password below for direct login. Leave blank to use the fetchproxy browser extension instead.",
+      "description": "Skylight account email. Required together with the password below.",
       "required": false
     },
     "skylight_password": {

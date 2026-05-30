@@ -40,12 +40,6 @@
           "description": "Friendly account name used in startup logs.",
           "isRequired": false,
           "format": "string"
-        },
-        {
-          "name": "SKYLIGHT_DISABLE_FETCHPROXY",
-          "description": "Set to 1 to skip the fetchproxy browser-extension fallback (headless CI).",
-          "isRequired": false,
-          "format": "string"
         }
       ]
     }

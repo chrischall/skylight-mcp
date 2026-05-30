@@ -6,13 +6,17 @@ MCP server for [Skylight Calendar](https://www.ourskylight.com) — 21 tools acr
 
 ## Auth
 
-Skylight uses an OAuth2 password grant. The server requires your Skylight email and password (set as env vars). No SSO/2FA. No paste-token shortcut — credentials are always email+password.
+The server uses a headless email+password OAuth2 authorization-code flow — no SSO, no 2FA, no browser extension required. Credentials are always `SKYLIGHT_EMAIL` + `SKYLIGHT_PASSWORD`.
 
-**Primary path (Node-direct):** `SKYLIGHT_EMAIL` + `SKYLIGHT_PASSWORD` → `POST https://app.ourskylight.com/api/oauth/token` with `grant_type=password` and `client_id=skylight-mobile` → bearer `access_token` + `refresh_token`. The client refreshes proactively (~60 s before expiry) and reactively on any 401. All API calls go directly from Node.
+On first tool call, the server performs four steps against `https://app.ourskylight.com`:
+1. `GET /auth/session/new` — fetch the Rails CSRF token and session cookie.
+2. `POST /auth/session` — log in with email + password (must happen before OAuth authorize).
+3. `GET /oauth/authorize` — receive the one-time authorization code via redirect.
+4. `POST /oauth/token` — exchange the code for a bearer `access_token` + `refresh_token` (7-day expiry).
 
-**Fetchproxy fallback:** If the OAuth token POST trips a bot wall (HTTP 403/429, Cloudflare/Akamai/captcha keyword in the error), the login POST is re-routed through your already-signed-in `ourskylight.com` browser tab via the [fetchproxy](https://github.com/chrischall/fetchproxy) browser extension (`@fetchproxy/server`). The login-proxy server closes immediately after the login succeeds (one-shot). After that, all API calls still go Node-direct with the acquired token. Token refresh is **not** supported via fetchproxy — if the token expires you must restart. Set `SKYLIGHT_DISABLE_FETCHPROXY=1` to skip the fallback entirely (turns a bot-wall error into a hard error — useful in headless CI). Skylight's API has no observed bot wall in practice, so the primary path normally suffices.
+The client then refreshes the token proactively (~60 s before expiry) and reactively on any 401. No bot wall has been observed — the headless flow works directly from Node.
 
-**No env vars → clean start:** if neither `SKYLIGHT_EMAIL` nor `SKYLIGHT_PASSWORD` is set the server still starts without error. Auth is deferred to the first tool call, so MCP hosts can complete install-time tool listing before credentials are configured.
+**No env vars → clean start:** if credentials are not set, the server still starts without error. Auth is deferred to the first tool call, so MCP hosts can complete install-time tool listing before credentials are configured.
 
 ## Frame model
 
@@ -60,7 +64,6 @@ SKYLIGHT_PASSWORD=your-password
 | `SKYLIGHT_FRAME_ID` | auto-discovered | Force a specific frame when the account has multiple |
 | `SKYLIGHT_NAME` | *(none)* | Friendly label used in startup logs |
 | `SKYLIGHT_BASE_URL` | `https://app.ourskylight.com/api` | Override the API base URL |
-| `SKYLIGHT_DISABLE_FETCHPROXY` | unset | Set to `1` to skip the fetchproxy fallback |
 
 Treat `.env` like a password file — it is gitignored, do not commit it.
 
