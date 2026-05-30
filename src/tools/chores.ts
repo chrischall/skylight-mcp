@@ -26,36 +26,44 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     },
   );
 
-  // TODO(Task 13): chore `name` field and complete_chore verb/path are still inferred (not live-verified).
-  // Events writes are LIVE-CONFIRMED flat; lists/chores writes use the same flat pattern by inference
-  // (live-verify when convenient).
+  // LIVE-VERIFIED: create_chore requires flat {summary, category_id} — category_id is mandatory
+  // (422 "Category is required" without it). The `name` field does not exist; use `summary`.
   server.tool(
     'skylight_create_chore',
     'Create a chore on a Skylight frame.',
     {
-      name: z.string().describe('Chore name/title.'),
+      summary: z.string().describe('Chore title.'),
+      category_id: z.union([z.string(), z.number()]).describe('Category / family-member id the chore belongs to (required). Get ids from skylight_list_categories.'),
+      start: z.string().optional().describe('YYYY-MM-DD start date.'),
+      description: z.string().optional(),
+      reward_points: z.number().optional().describe('Reward points/stars for completing.'),
       frameId: z.string().optional(),
     },
-    async ({ name, frameId }) => {
+    async ({ summary, category_id, start, description, reward_points, frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('POST', `/frames/${f}/chores`, { body: compact({ name }) });
+      const doc = await c.request('POST', `/frames/${f}/chores`, { body: compact({ summary, category_id, start, description, reward_points }) });
       return textContent(flattenJsonApi(doc as any));
     },
   );
 
-  // TODO(Task 13): complete_chore verb/path still inferred (not live-verified).
+  // LIVE-VERIFIED: complete_chore verb/path is PATCH /frames/{f}/chores/{id} (not POST /complete — 404).
+  // Completion body {completed_on, completed_category_id} is the best-supported shape;
+  // the effect wasn't list-confirmable due to chore-chart visibility semantics.
   server.tool(
     'skylight_complete_chore',
     'Mark a chore as complete on a Skylight frame.',
     {
       id: z.string(),
+      completed_on: z.string().optional().describe('YYYY-MM-DD the chore was completed; defaults to today.'),
+      completed_category_id: z.union([z.string(), z.number()]).optional().describe('Category / family-member who completed it.'),
       frameId: z.string().optional(),
     },
-    async ({ id, frameId }) => {
+    async ({ id, completed_on, completed_category_id, frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('POST', `/frames/${f}/chores/${id}/complete`);
+      const on = completed_on ?? new Date().toISOString().slice(0, 10);
+      const doc = await c.request('PATCH', `/frames/${f}/chores/${id}`, { body: compact({ completed_on: on, completed_category_id }) });
       return doc ? textContent(flattenJsonApi(doc as any)) : textContent({ completed: id });
     },
   );

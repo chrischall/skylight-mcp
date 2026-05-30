@@ -67,7 +67,9 @@ export class SkylightClient {
       throw new Error(`Skylight API ${method} ${path} failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
     }
     if (res.status === 204) return undefined as T;
-    return (await res.json()) as T;
+    const text = await res.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
   }
 
   private send(method: string, path: string, opts: RequestOpts): Promise<Response> {

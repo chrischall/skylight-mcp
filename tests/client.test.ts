@@ -90,6 +90,27 @@ describe('SkylightClient.request', () => {
     expect((response as unknown as { json: ReturnType<typeof vi.fn> }).json).not.toHaveBeenCalled();
   });
 
+  it('returns undefined for 200 with empty body (e.g. chore DELETE)', async () => {
+    const response = {
+      status: 200,
+      ok: true,
+      json: vi.fn(),
+      text: async () => '',
+    } as unknown as Response;
+    const httpFetch = vi.fn().mockResolvedValue(response);
+    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });
+    const result = await c.request('DELETE', '/x');
+    expect(result).toBeUndefined();
+    expect((response as unknown as { json: ReturnType<typeof vi.fn> }).json).not.toHaveBeenCalled();
+  });
+
+  it('returns parsed JSON for 200 with non-empty body', async () => {
+    const httpFetch = vi.fn().mockResolvedValue(jsonResponse(200, { id: '1' }));
+    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });
+    const result = await c.request('GET', '/x');
+    expect(result).toEqual({ id: '1' });
+  });
+
   it('sends body as JSON and sets Content-Type header', async () => {
     const httpFetch = vi.fn().mockResolvedValue(jsonResponse(200, { created: true }));
     const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });

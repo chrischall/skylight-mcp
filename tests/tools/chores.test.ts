@@ -39,47 +39,92 @@ describe('chore tools', () => {
 
   // ── skylight_create_chore ────────────────────────────────────────────────
 
-  it('create_chore posts flat params with name (no wrapper)', async () => {
+  it('create_chore posts flat {summary, category_id} (no wrapper)', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '2', type: 'chore', attributes: { name: 'Dishes' } } });
-    const out = await tools.skylight_create_chore({ name: 'Dishes' });
+    request.mockResolvedValue({ data: { id: '2', type: 'chore', attributes: { summary: 'Dishes' } } });
+    const out = await tools.skylight_create_chore({ summary: 'Dishes', category_id: '10901869' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores', {
-      body: { name: 'Dishes' },
+      body: { summary: 'Dishes', category_id: '10901869' },
     });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '2', type: 'chore', name: 'Dishes' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '2', type: 'chore', summary: 'Dishes' });
+  });
+
+  it('create_chore includes optional fields when provided', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '3', type: 'chore', attributes: { summary: 'Vacuuming' } } });
+    await tools.skylight_create_chore({
+      summary: 'Vacuuming',
+      category_id: '10901869',
+      start: '2026-06-01',
+      description: 'All rooms',
+      reward_points: 5,
+    });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores', {
+      body: { summary: 'Vacuuming', category_id: '10901869', start: '2026-06-01', description: 'All rooms', reward_points: 5 },
+    });
+  });
+
+  it('create_chore omits undefined optional fields (compact)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '4', type: 'chore', attributes: {} } });
+    await tools.skylight_create_chore({ summary: 'Walk dog', category_id: 42 });
+    const callBody = request.mock.calls[0][2].body;
+    expect(callBody).not.toHaveProperty('start');
+    expect(callBody).not.toHaveProperty('description');
+    expect(callBody).not.toHaveProperty('reward_points');
   });
 
   it('create_chore with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '3', type: 'chore', attributes: {} } });
-    await tools.skylight_create_chore({ name: 'Vacuuming', frameId: '99' });
+    await tools.skylight_create_chore({ summary: 'Vacuuming', category_id: '10901869', frameId: '99' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/chores', expect.any(Object));
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
   // ── skylight_complete_chore ──────────────────────────────────────────────
 
-  it('complete_chore returns flattened doc when API returns a resource', async () => {
+  it('complete_chore PATCHes with explicit completed_on and completed_category_id', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'complete' } } });
-    const out = await tools.skylight_complete_chore({ id: '5' });
-    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/5/complete');
+    const out = await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30', completed_category_id: '10901869' });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/chores/5', {
+      body: { completed_on: '2026-05-30', completed_category_id: '10901869' },
+    });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'complete' });
   });
 
-  it('complete_chore returns { completed: id } when API returns no body (204)', async () => {
+  it('complete_chore defaults completed_on to today when not provided', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-30T12:00:00Z'));
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
-    const out = await tools.skylight_complete_chore({ id: '5' });
-    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/5/complete');
+    await tools.skylight_complete_chore({ id: '5' });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/chores/5', {
+      body: { completed_on: '2026-05-30' },
+    });
+    vi.useRealTimers();
+  });
+
+  it('complete_chore returns { completed: id } when API returns no body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30' });
     expect(JSON.parse(out.content[0].text)).toEqual({ completed: '5' });
+  });
+
+  it('complete_chore returns flattened doc when API returns a resource', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { completed_on: '2026-05-30' } } });
+    const out = await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', completed_on: '2026-05-30' });
   });
 
   it('complete_chore with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue(undefined);
-    await tools.skylight_complete_chore({ id: '5', frameId: '99' });
-    expect(request).toHaveBeenCalledWith('POST', '/frames/99/chores/5/complete');
+    await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/chores/5', expect.any(Object));
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 

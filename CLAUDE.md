@@ -66,12 +66,13 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ### Known unknowns — write payload shapes
 
-Write-tool payload shapes have been partially verified live. There are `TODO(Task 13)` comments in `src/tools/chores.ts` marking remaining uncertainties:
+Write-tool payload shapes have been partially verified live:
 
 - `skylight_create_event` and `skylight_delete_event` — **live-confirmed**: flat top-level params (e.g. `{ summary, starts_at, ... }`) return 200; the `{ calendar_event: { ... } }` JSON:API wrapper returns 422.
 - `skylight_create_list` and list-item writes — use the same flat pattern by inference (not yet live-verified against a real list endpoint).
-- `skylight_create_chore` — field names (e.g. `name`) and envelope structure are inferred, not confirmed.
-- `skylight_complete_chore` — the HTTP verb and the path for marking a chore complete are inferred; the actual endpoint and body may differ.
+- `skylight_create_chore` — **LIVE-VERIFIED**: flat `{ summary, category_id }` body; `category_id` is **required** (422 "Category is required" without it). The field was previously named `name` — that was wrong. Optional fields: `start`, `description`, `reward_points`.
+- `skylight_complete_chore` — **LIVE-VERIFIED** verb/path: `PATCH /frames/{f}/chores/{id}` (`POST /frames/{f}/chores/{id}/complete` returns 404). Completion body `{ completed_on, completed_category_id }` is the best-supported shape; the effect (chore-chart list visibility after completion) was not confirmable due to Skylight chore-chart visibility semantics.
+- `SkylightClient.request()` — **fixed**: now tolerates 2xx responses with an empty body (e.g. chore DELETE returns HTTP 200 with no body). Previously would throw "Unexpected end of JSON input".
 
 When verifying or fixing write tools: run `npm test` to confirm the mock-based tests still pass, then verify against the live API with real credentials and update both the implementation and the tests.
 
