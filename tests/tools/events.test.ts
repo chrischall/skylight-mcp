@@ -119,18 +119,18 @@ describe('event tools', () => {
 
   // ── skylight_update_event ───────────────────────────────────────────────
 
-  it('update_event patches by id with only provided attrs (flat body)', async () => {
+  it('update_event puts by id with only provided attrs (flat body)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
     await tools.skylight_update_event({ id: '5', location: 'Office' });
-    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/calendar_events/5', { body: { location: 'Office' } });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/calendar_events/5', { body: { location: 'Office' } });
   });
 
   it('update_event with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
     await tools.skylight_update_event({ id: '5', summary: 'Updated', frameId: '99' });
-    expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/calendar_events/5', { body: { summary: 'Updated' } });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/calendar_events/5', { body: { summary: 'Updated' } });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 

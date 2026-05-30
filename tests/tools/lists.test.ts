@@ -59,29 +59,21 @@ describe('list tools', () => {
 
   it('create_list posts all attrs flat (label+color+kind, no wrapper)', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '10', type: 'list', attributes: { label: 'Groceries', color: 'green', kind: 'grocery' } } });
-    const out = await tools.skylight_create_list({ label: 'Groceries', color: 'green', kind: 'grocery' });
+    request.mockResolvedValue({ data: { id: '10', type: 'list', attributes: { label: 'Groceries', color: '#42D792', kind: 'shopping' } } });
+    const out = await tools.skylight_create_list({ label: 'Groceries', color: '#42D792', kind: 'shopping' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/lists', {
-      body: { label: 'Groceries', color: 'green', kind: 'grocery' },
+      body: { label: 'Groceries', color: '#42D792', kind: 'shopping' },
     });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '10', type: 'list', label: 'Groceries', color: 'green', kind: 'grocery' });
-  });
-
-  it('create_list with only label drops undefined color/kind via compact() (flat body)', async () => {
-    const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '11', type: 'list', attributes: { label: 'Todos' } } });
-    await tools.skylight_create_list({ label: 'Todos' });
-    const body = request.mock.calls[0][2].body;
-    expect(body).toEqual({ label: 'Todos' });
-    expect('color' in body).toBe(false);
-    expect('kind' in body).toBe(false);
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '10', type: 'list', label: 'Groceries', color: '#42D792', kind: 'shopping' });
   });
 
   it('create_list with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '12', type: 'list', attributes: {} } });
-    await tools.skylight_create_list({ label: 'Test', frameId: '99' });
-    expect(request).toHaveBeenCalledWith('POST', '/frames/99/lists', expect.any(Object));
+    await tools.skylight_create_list({ label: 'Test', color: '#000000', kind: 'to_do', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/lists', {
+      body: { label: 'Test', color: '#000000', kind: 'to_do' },
+    });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
@@ -109,31 +101,40 @@ describe('list tools', () => {
 
   // ── skylight_update_list_item ───────────────────────────────────────────
 
-  it('update_list_item patches with only checked flat (drops label)', async () => {
+  it('update_list_item maps checked:true to status completed (drops label)', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Eggs', checked: true } } });
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Eggs', status: 'completed' } } });
     const out = await tools.skylight_update_list_item({ listId: '7', itemId: '55', checked: true });
     expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/lists/7/list_items/55', {
-      body: { checked: true },
+      body: { status: 'completed' },
     });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '55', type: 'list_item', label: 'Eggs', checked: true });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '55', type: 'list_item', label: 'Eggs', status: 'completed' });
   });
 
-  it('update_list_item patches with only label flat (drops checked)', async () => {
+  it('update_list_item maps checked:false to status pending', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Dozen Eggs', checked: false } } });
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Eggs', status: 'pending' } } });
+    await tools.skylight_update_list_item({ listId: '7', itemId: '55', checked: false });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/lists/7/list_items/55', {
+      body: { status: 'pending' },
+    });
+  });
+
+  it('update_list_item patches with only label flat (drops status when checked undefined)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Dozen Eggs', status: 'pending' } } });
     await tools.skylight_update_list_item({ listId: '7', itemId: '55', label: 'Dozen Eggs' });
     const body = request.mock.calls[0][2].body;
     expect(body).toEqual({ label: 'Dozen Eggs' });
-    expect('checked' in body).toBe(false);
+    expect('status' in body).toBe(false);
   });
 
-  it('update_list_item patches with both label and checked flat', async () => {
+  it('update_list_item patches with both label and status flat', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Cheese', checked: true } } });
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Cheese', status: 'completed' } } });
     await tools.skylight_update_list_item({ listId: '7', itemId: '55', label: 'Cheese', checked: true });
     expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/lists/7/list_items/55', {
-      body: { label: 'Cheese', checked: true },
+      body: { label: 'Cheese', status: 'completed' },
     });
   });
 
@@ -142,7 +143,7 @@ describe('list tools', () => {
     request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: {} } });
     await tools.skylight_update_list_item({ listId: '7', itemId: '55', checked: false, frameId: '99' });
     expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/lists/7/list_items/55', {
-      body: { checked: false },
+      body: { status: 'pending' },
     });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
@@ -162,6 +163,55 @@ describe('list tools', () => {
     request.mockResolvedValue(undefined);
     await tools.skylight_delete_list_item({ listId: '7', itemId: '55', frameId: '99' });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/lists/7/list_items/55');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_update_list ────────────────────────────────────────────────
+
+  it('update_list puts with only provided attrs flat with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'list', attributes: { label: 'Renamed' } } });
+    const out = await tools.skylight_update_list({ listId: '7', label: 'Renamed' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/lists/7', {
+      body: { label: 'Renamed' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'list', label: 'Renamed' });
+  });
+
+  it('update_list puts all attrs flat (label+color+kind)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'list', attributes: {} } });
+    await tools.skylight_update_list({ listId: '7', label: 'Shop', color: '#42D792', kind: 'shopping' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/lists/7', {
+      body: { label: 'Shop', color: '#42D792', kind: 'shopping' },
+    });
+  });
+
+  it('update_list with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'list', attributes: {} } });
+    await tools.skylight_update_list({ listId: '7', kind: 'to_do', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/lists/7', {
+      body: { kind: 'to_do' },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_delete_list ────────────────────────────────────────────────
+
+  it('delete_list deletes by listId with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_delete_list({ listId: '7' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/lists/7');
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '7' });
+  });
+
+  it('delete_list with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_list({ listId: '7', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/lists/7');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 });
