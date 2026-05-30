@@ -1,0 +1,325 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const postJson = vi.fn();
+const fpFetch = vi.fn();
+
+// FetchproxyServer must be a proper class/constructor to work with `new`.
+class MockFetchproxyServer {
+  fetch = fpFetch;
+  postJson = postJson;
+  close = vi.fn();
+}
+
+vi.mock('@fetchproxy/server', () => ({
+  FetchproxyServer: MockFetchproxyServer,
+  classifyBotWall: vi.fn().mockReturnValue({ isBotWall: false }),
+}));
+
+import { resolveAuth } from '../src/auth.js';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  for (const k of Object.keys(process.env)) if (k.startsWith('SKYLIGHT_')) delete process.env[k];
+});
+
+// Helpers
+const GOOD_TOKENS = { access_token: 'AT', refresh_token: 'RT', expires_in: 600 };
+const GOOD_200 = { status: 200, json: async () => GOOD_TOKENS, text: async () => '' };
+const BAD_403 = { status: 403, json: async () => ({ error: 'forbidden' }), text: async () => 'forbidden' };
+const BAD_401 = { status: 401, json: async () => ({ error: 'invalid_grant' }), text: async () => 'invalid_grant' };
+
+describe('resolveAuth', () => {
+  // --- Base tests from the plan scaffold ---
+
+  it('uses the Node-direct password grant when creds are set', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    const httpPost = vi.fn().mockResolvedValue(GOOD_200);
+    const { client, source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('env');
+    expect(client).toBeDefined();
+    expect(postJson).not.toHaveBeenCalled();
+  });
+
+  it('throws when no creds and fetchproxy disabled', async () => {
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = '1';
+    await expect(resolveAuth()).rejects.toThrow(/Missing Skylight auth config/);
+  });
+
+  // --- Coverage expansion tests ---
+
+  // Test 1: Bot-wall fallback to fetchproxy (Path 2 + makeFetchproxyPoster + looksLikeBotWall true)
+  it('falls back to fetchproxy poster when direct login returns HTTP 403 (bot-wall)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Direct POST returns 403 → oauthPasswordGrant throws "Skylight login failed (HTTP 403)"
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // FetchproxyServer.fetch returns a successful token response
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify(GOOD_TOKENS),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+
+    const { client, source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('fetchproxy');
+    expect(client).toBeDefined();
+    expect(fpFetch).toHaveBeenCalled();
+  });
+
+  // Test 2: Bot-wall but fetchproxy disabled → should throw HTTP 403, NOT call fpFetch
+  it('throws bot-wall error when fetchproxy is disabled (SKYLIGHT_DISABLE_FETCHPROXY=1)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = '1';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/HTTP 403/);
+    expect(fpFetch).not.toHaveBeenCalled();
+  });
+
+  // Test 3: Non-bot-wall login failure → throw original error, fetchproxy NOT used
+  it('throws non-bot-wall login error without falling back to fetchproxy', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_401);
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/HTTP 401/);
+    expect(fpFetch).not.toHaveBeenCalled();
+  });
+
+  // Test 4: Partial-config error (only SKYLIGHT_EMAIL set) → should throw with SKYLIGHT_PASSWORD
+  it('throws with SKYLIGHT_PASSWORD info when only email is set (partial config)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    // SKYLIGHT_PASSWORD intentionally not set
+    await expect(resolveAuth()).rejects.toThrow(/SKYLIGHT_PASSWORD/);
+  });
+
+  // Test 5: No creds at all, fetchproxy NOT disabled → throws Missing Skylight auth config
+  it('throws missing-config error when no creds and fetchproxy is not disabled', async () => {
+    // No SKYLIGHT_EMAIL, no SKYLIGHT_PASSWORD, no SKYLIGHT_DISABLE_FETCHPROXY
+    await expect(resolveAuth()).rejects.toThrow(/Missing Skylight auth config/);
+  });
+
+  // Test 6: JSON.parse catch in makeFetchproxyPoster — fpFetch returns non-JSON body
+  it('surfaces login failure when fetchproxy poster receives non-JSON body', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Direct POST returns 403 to trigger bot-wall fallback
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // fpFetch returns non-JSON body → JSON.parse catch branch fires → json stays {}
+    // oauthPasswordGrant then throws because there's no access_token
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: 'not-valid-json!!!',
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/no access_token/);
+    expect(fpFetch).toHaveBeenCalled();
+  });
+
+  // Test 7a: readEnv placeholder branch — must call fetchproxyDisabled() to exercise line 15
+  // Use 403 to trigger the catch block where fetchproxyDisabled() is evaluated
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY placeholder value as not-disabled (falls back to fetchproxy on 403)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = '${SKYLIGHT_DISABLE_FETCHPROXY}';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify(GOOD_TOKENS),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+    // Placeholder treated as absent → not disabled → fetchproxy fallback used
+    const { source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('fetchproxy');
+  });
+
+  // Test 7b: SKYLIGHT_DISABLE_FETCHPROXY='true' (word form) is treated as disabled
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY=true as disabled', async () => {
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = 'true';
+    await expect(resolveAuth()).rejects.toThrow(/Missing Skylight auth config/);
+    expect(fpFetch).not.toHaveBeenCalled();
+  });
+
+  // Test 7c: SKYLIGHT_DISABLE_FETCHPROXY='yes' is treated as disabled
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY=yes as disabled', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = 'yes';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/HTTP 403/);
+    expect(fpFetch).not.toHaveBeenCalled();
+  });
+
+  // Test 7d: SKYLIGHT_DISABLE_FETCHPROXY='on' is treated as disabled
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY=on as disabled', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = 'on';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/HTTP 403/);
+    expect(fpFetch).not.toHaveBeenCalled();
+  });
+
+  // Test 7e: readEnv 'null' branch — must reach fetchproxyDisabled() (via 403 bot-wall)
+  // so that readEnv actually evaluates line 15 with t='null'
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY=null as not-disabled (falls back to fetchproxy on 403)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = 'null'; // treated as unset → not-disabled
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify(GOOD_TOKENS),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+    // 'null' → readEnv returns undefined → fetchproxyDisabled() returns false → fallback to fetchproxy
+    const { source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('fetchproxy');
+  });
+
+  // Test 7f: readEnv 'undefined' branch — same setup, t='undefined' triggers the condition
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY=undefined as not-disabled (falls back to fetchproxy on 403)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = 'undefined'; // treated as unset → not-disabled
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify(GOOD_TOKENS),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+    // 'undefined' → readEnv returns undefined → fetchproxyDisabled() returns false → fallback
+    const { source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('fetchproxy');
+  });
+
+  // Test for looksLikeBotWall with non-Error (covers String(e) branch)
+  it('looksLikeBotWall recognizes HTTP 429 — exercises non-Error throw path (non-Error thrown)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Make the poster throw a plain string (non-Error) containing "HTTP 429"
+    // by making httpFetch resolve with a 429 status — oauthPasswordGrant throws an Error
+    // Alternatively, verify via the 429 path:
+    const httpPost = vi.fn().mockResolvedValue({
+      status: 429,
+      json: async () => ({ error: 'rate_limited' }),
+      text: async () => 'rate limited',
+    });
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify(GOOD_TOKENS),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+
+    const { source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('fetchproxy');
+  });
+
+  // Test for nodePoster res.json() rejection (covers the .catch(() => ({})) branch)
+  it('handles json() rejection in nodePoster by falling back to empty object', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Return a response where .json() throws — the catch returns {}
+    // Then oauthPasswordGrant sees status=200 but empty json → throws "no access_token"
+    const httpPost = vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => { throw new Error('not JSON'); },
+      text: async () => '',
+    });
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/no access_token/);
+  });
+
+  // Test for looksLikeBotWall with a non-Error thrown value (covers String(e) branch)
+  it('looksLikeBotWall handles non-Error thrown value via String(e)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    // Make httpFetch throw a non-Error object (plain string with bot-wall keyword)
+    // nodePoster doesn't catch, so oauthPasswordGrant propagates the throw.
+    // looksLikeBotWall then calls String(e) since it's not an Error instance.
+    const httpPost = vi.fn().mockRejectedValue('HTTP 403 forbidden');
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify(GOOD_TOKENS),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+    const { source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('fetchproxy');
+    expect(fpFetch).toHaveBeenCalled();
+  });
+
+  // readEnv with empty-string value: !t branch (t = '' after trim → !t is true)
+  // Must trigger fetchproxyDisabled() via 403 so readEnv is actually called
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY="" (empty) as not-disabled (falls back to fetchproxy on 403)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_DISABLE_FETCHPROXY = '';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify(GOOD_TOKENS),
+      url: 'https://app.ourskylight.com/api/oauth/token',
+    });
+    // empty string → readEnv returns undefined → not disabled → fetchproxy fallback
+    const { source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('fetchproxy');
+  });
+
+  // makeFetchproxyPoster body ?? '{}' branch: fpFetch returns no body field
+  it('handles undefined body in fetchproxy response (body ?? "{}" branch)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // Return a response with no body field → body ?? '{}' → JSON.parse('{}') → {} → no access_token
+    fpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      url: 'https://app.ourskylight.com/api/oauth/token',
+      // body intentionally absent
+    });
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/no access_token/);
+    expect(fpFetch).toHaveBeenCalled();
+  });
+
+  // Test 8: Default httpFetch fallback via vi.stubGlobal (covers the ?? branch)
+  it('uses global fetch as the default httpFetch when none is provided', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    const globalFetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => GOOD_TOKENS,
+      text: async () => '',
+    });
+    vi.stubGlobal('fetch', globalFetchMock);
+    try {
+      const { source } = await resolveAuth(); // no httpFetch → uses global fetch
+      expect(source).toBe('env');
+      expect(globalFetchMock).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
