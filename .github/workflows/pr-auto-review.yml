@@ -32,6 +32,10 @@ name: PR auto-review
 # Bot-authored PRs (dependabot/renovate/etc.) are skipped via the
 # `user.type == 'User'` filter — those go straight to CI + auto-merge.
 #
+# PRs that already carry `ready-to-merge` are skipped — they've passed
+# review once and are armed for auto-merge, so re-reviewing on a follow-up
+# `synchronize` (or unrelated label change) just burns quota.
+#
 # `ready-to-merge` MUST be added via RELEASE_PAT, not GITHUB_TOKEN.
 # GitHub suppresses workflow runs for `GITHUB_TOKEN`-triggered events,
 # so a label added that way would not fire auto-merge.yml.
@@ -63,6 +67,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
       !contains(github.event.pull_request.labels.*.name, 'autorelease: pending') &&
+      !contains(github.event.pull_request.labels.*.name, 'ready-to-merge') &&
       (github.event.action != 'labeled' || github.event.label.name == 'review-with-opus')
     steps:
       - name: Apply auto-review label
@@ -208,13 +213,23 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Arm auto-merge on pass
-        if: |
-          steps.review.outputs.structured_output != '' &&
-          fromJSON(steps.review.outputs.structured_output).verdict == 'pass'
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          OUT: ${{ steps.review.outputs.structured_output }}
         run: |
-          gh pr edit "$PR" --repo "$REPO" --add-label ready-to-merge
-          echo "Verdict=pass — added ready-to-merge to arm auto-merge."
+          verdict=""
+          [ -n "$OUT" ] && verdict=$(echo "$OUT" | jq -r '.verdict // empty')
+          if [ -z "$verdict" ]; then
+            body=$(gh pr view "$PR" --repo "$REPO" --json comments --jq '[.comments[]|select(.author.login=="claude")]|last|.body' 2>/dev/null || echo "")
+            vline=$(printf '%s' "$body" | grep -ioE 'verdict[^a-z]{0,6}(pass|warn|fail)' | tail -1)
+            case "$vline" in *[Pp]ass*) verdict="pass";; esac
+          fi
+          if [ "$verdict" = "pass" ]; then
+            gh pr edit "$PR" --repo "$REPO" --add-label ready-to-merge
+            echo "Verdict=pass — added ready-to-merge to arm auto-merge."
+          else
+            echo "Verdict=${verdict:-unknown} — not arming (human-in-the-loop preserved)."
+          fi
