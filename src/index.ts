@@ -10,7 +10,7 @@ import { registerListTools } from './tools/lists.js';
 import { registerChoreTools } from './tools/chores.js';
 
 async function main() {
-  const server = new McpServer({ name: 'skylight-mcp', version: '0.2.1' }); // x-release-please-version
+  const server = new McpServer({ name: 'skylight-mcp', version: '0.2.2' }); // x-release-please-version
 
   let client: SkylightClient | undefined;
   let configError: string | undefined;

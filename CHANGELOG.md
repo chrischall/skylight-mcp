@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/chrischall/skylight-mcp/compare/v0.2.1...v0.2.2) (2026-05-30)
+
+
+### Bug Fixes
+
+* add .mcpbignore to shrink the .mcpb bundle ([#5](https://github.com/chrischall/skylight-mcp/issues/5)) ([076e89c](https://github.com/chrischall/skylight-mcp/commit/076e89c18cccffd1e1a7a99398aaaf8777a4e5b7))
+
 ## [0.2.1](https://github.com/chrischall/skylight-mcp/compare/v0.2.0...v0.2.1) (2026-05-30)
 
 
