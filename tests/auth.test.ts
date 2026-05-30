@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const postJson = vi.fn();
 const fpFetch = vi.fn();
 
 // FetchproxyServer must be a proper class/constructor to work with `new`.
 class MockFetchproxyServer {
   fetch = fpFetch;
-  postJson = postJson;
   close = vi.fn();
 }
 
@@ -38,7 +36,7 @@ describe('resolveAuth', () => {
     const { client, source } = await resolveAuth({ httpFetch: httpPost });
     expect(source).toBe('env');
     expect(client).toBeDefined();
-    expect(postJson).not.toHaveBeenCalled();
+    expect(fpFetch).not.toHaveBeenCalled();
   });
 
   it('throws when no creds and fetchproxy disabled', async () => {
@@ -98,9 +96,11 @@ describe('resolveAuth', () => {
   });
 
   // Test 5: No creds at all, fetchproxy NOT disabled → throws Missing Skylight auth config
+  // (loadAccount throws before fetchproxy is even considered — credentials are always required)
   it('throws missing-config error when no creds and fetchproxy is not disabled', async () => {
     // No SKYLIGHT_EMAIL, no SKYLIGHT_PASSWORD, no SKYLIGHT_DISABLE_FETCHPROXY
     await expect(resolveAuth()).rejects.toThrow(/Missing Skylight auth config/);
+    expect(fpFetch).not.toHaveBeenCalled();
   });
 
   // Test 6: JSON.parse catch in makeFetchproxyPoster — fpFetch returns non-JSON body
@@ -142,10 +142,16 @@ describe('resolveAuth', () => {
     expect(source).toBe('fetchproxy');
   });
 
-  // Test 7b: SKYLIGHT_DISABLE_FETCHPROXY='true' (word form) is treated as disabled
-  it('treats SKYLIGHT_DISABLE_FETCHPROXY=true as disabled', async () => {
+  // Test 7b: SKYLIGHT_DISABLE_FETCHPROXY='true' (word form) + creds + 403 bot-wall →
+  // should throw HTTP 403 and NOT fall back to fetchproxy (exercises the
+  // `fetchproxyDisabled()` short-circuit WITH credentials present)
+  it('treats SKYLIGHT_DISABLE_FETCHPROXY=true as disabled (creds+403, no fetchproxy fallback)', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
     process.env.SKYLIGHT_DISABLE_FETCHPROXY = 'true';
-    await expect(resolveAuth()).rejects.toThrow(/Missing Skylight auth config/);
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/HTTP 403/);
     expect(fpFetch).not.toHaveBeenCalled();
   });
 
@@ -301,6 +307,75 @@ describe('resolveAuth', () => {
     });
     await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/no access_token/);
     expect(fpFetch).toHaveBeenCalled();
+  });
+
+  // Test for fetchproxy bridge ok:false path — exercises line 95 throw in makeFetchproxyPoster
+  it('throws fetchproxy bridge error when fpFetch returns ok:false', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    const httpPost = vi.fn().mockResolvedValue(BAD_403);
+    // Simulate a bridge-level failure (no signed-in tab, extension offline, etc.)
+    fpFetch.mockResolvedValue({ ok: false, error: 'no signed-in tab', kind: 'bridge_down' });
+
+    await expect(resolveAuth({ httpFetch: httpPost })).rejects.toThrow(/fetchproxy bridge error/);
+    expect(fpFetch).toHaveBeenCalled();
+  });
+
+  // Fix 3.1: Refresh-channel identity — prove the env-path client's tokenPoster
+  // is the NODE poster (httpFetch), not fpFetch.
+  // Strategy: login returns expires_in:0 → expiresInMs=0 → token is immediately
+  // near-expiry → first client.request() triggers a refresh through tokenPoster.
+  // Assert the refresh went via httpFetch (node channel), NOT fpFetch.
+  it('env-path client refreshes tokens through the Node poster, not fetchproxy', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+
+    let callIndex = 0;
+    const httpPost = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      callIndex++;
+      const body = typeof init.body === 'string' ? init.body : '';
+      if (callIndex === 1) {
+        // Call 1: password grant login — return expires_in:0 so token is immediately stale
+        return {
+          status: 200,
+          json: async () => ({ access_token: 'AT', refresh_token: 'RT', expires_in: 0 }),
+          text: async () => '',
+        };
+      }
+      if (body.includes('grant_type=refresh_token')) {
+        // Call 2: refresh grant — return a fresh token
+        return {
+          status: 200,
+          json: async () => ({ access_token: 'AT2', refresh_token: 'RT2', expires_in: 600 }),
+          text: async () => '',
+        };
+      }
+      // Call 3: API GET /x — return success
+      return {
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => '{"ok":true}',
+      };
+    });
+
+    const { client, source } = await resolveAuth({ httpFetch: httpPost });
+    expect(source).toBe('env');
+
+    // Force a refresh by triggering an API call — expires_in:0 makes the token stale immediately
+    const result = await client.request('GET', '/x');
+    expect(result).toEqual({ ok: true });
+
+    // The refresh went through httpPost (node channel), NOT fpFetch
+    expect(fpFetch).not.toHaveBeenCalled();
+    // At least the login + refresh calls happened via httpPost
+    expect(httpPost.mock.calls.length).toBeGreaterThanOrEqual(2);
+    // The second call (after login) must have been a refresh_token grant
+    const refreshCallBody = httpPost.mock.calls.find(([, i]) =>
+      typeof (i as RequestInit).body === 'string' &&
+      ((i as RequestInit).body as string).includes('grant_type=refresh_token'),
+    );
+    expect(refreshCallBody).toBeDefined();
   });
 
   // Test 8: Default httpFetch fallback via vi.stubGlobal (covers the ?? branch)

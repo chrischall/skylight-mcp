@@ -1,7 +1,9 @@
-import { loadAccount, NO_ENV_CONFIG_MARKER, type Account } from './config.js';
+import { loadAccount, type Account } from './config.js';
 import { oauthPasswordGrant, type TokenPoster, type Tokens } from './auth-session-login.js';
 import { SkylightClient, type HttpFetch } from './client.js';
 import pkg from '../package.json' with { type: 'json' };
+import type { FetchInit } from '@fetchproxy/protocol';
+import type { FetchResult, FetchResultError } from '@fetchproxy/server';
 
 export interface ResolvedAuth {
   client: SkylightClient;
@@ -37,14 +39,10 @@ function nodePoster(httpFetch: HttpFetch): TokenPoster {
 export async function resolveAuth(opts: { httpFetch?: HttpFetch } = {}): Promise<ResolvedAuth> {
   const httpFetch: HttpFetch = opts.httpFetch ?? ((u, i) => fetch(u, i));
 
-  let account: Account;
-  try {
-    account = loadAccount();
-  } catch (e) {
-    if (!(e as Error).message.startsWith(NO_ENV_CONFIG_MARKER)) throw e;
-    if (fetchproxyDisabled()) throw e;
-    throw e;
-  }
+  // Credentials are always required (email+password). Any loadAccount error —
+  // missing config or partial config — must surface; fetchproxy can't log in
+  // without a password, so there is no no-creds fallthrough.
+  const account: Account = loadAccount();
 
   const directPoster = nodePoster(httpFetch);
   try {
@@ -69,10 +67,8 @@ function looksLikeBotWall(e: unknown): boolean {
 
 async function makeFetchproxyPoster(): Promise<{ poster: TokenPoster }> {
   const { FetchproxyServer } = await import('@fetchproxy/server');
-  // TODO(Task 11): reconcile with @fetchproxy/server types — FetchInit requires `tabUrl`
-  // which this call doesn't supply. Casting to `any` so `tsc` passes until Task 11
-  // audits the full FetchproxyServer usage surface.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // FetchproxyServerOpts: { serverName, version, domains, capabilities?, ... }
+  // All fields here match the declared type exactly — no cast needed.
   const server = new FetchproxyServer({
     serverName: pkg.name,
     version: pkg.version,
@@ -80,18 +76,27 @@ async function makeFetchproxyPoster(): Promise<{ poster: TokenPoster }> {
     capabilities: [],
   });
   const poster: TokenPoster = async (url, formBody) => {
-    // TODO(Task 11): FetchInit requires `tabUrl`; add it once the token endpoint's
-    // expected tab origin is confirmed. Using `as any` to pass tsc for now.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await server.fetch({
+    // FetchInit requires `tabUrl: string` — the token endpoint is issued from
+    // the Skylight app origin. Supplying it here satisfies the type and tells
+    // the browser extension which signed-in tab to route the request through.
+    const init: FetchInit = {
       url,
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: formBody,
-    } as any);
+      tabUrl: 'https://app.ourskylight.com',
+    };
+    const res: FetchResult | FetchResultError = await server.fetch(init);
+    // FetchResult (ok:true) carries { status, url, body }.
+    // FetchResultError (ok:false) means the bridge itself failed — surface as a
+    // transport error so oauthPasswordGrant can throw and the caller can decide
+    // whether to retry (or rethrow). We use status 503 as a sentinel.
+    if (!res.ok) {
+      throw new Error(`fetchproxy bridge error: ${res.error}`);
+    }
     let json: unknown = {};
-    try { json = JSON.parse((res as { body?: string }).body ?? '{}'); } catch { /* keep {} */ }
-    return { status: (res as { status: number }).status, json };
+    try { json = JSON.parse(res.body ?? '{}'); } catch { /* keep {} */ }
+    return { status: res.status, json };
   };
   return { poster };
 }
