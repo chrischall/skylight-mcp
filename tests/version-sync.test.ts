@@ -3,10 +3,9 @@
 // Also asserts that manifest.json and server.json carry the same version.
 //
 // Why this exists: a recurring class of bug where a VERSION constant
-// (used as the MCP server's self-reported version + as the fetchproxy
-// bridge identity) drifts from package.json because release-please's
-// `extra-files` registration lacks the marker — so release-please
-// silently skips bumping it on each release.
+// (used as the MCP server's self-reported version) drifts from package.json
+// because release-please's `extra-files` registration lacks the marker —
+// so release-please silently skips bumping it on each release.
 //
 // This test catches it at CI time. If a future contributor registers
 // a new version-bearing constant, just add the `x-release-please-version`

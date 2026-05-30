@@ -13,10 +13,3 @@ export function flattenJsonApi(doc: JsonApiDoc): unknown {
   return Array.isArray(doc.data) ? doc.data.map(flattenOne) : flattenOne(doc.data);
 }
 
-export function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-export function toolError(message: string) {
-  return { content: [{ type: 'text' as const, text: message }], isError: true };
-}

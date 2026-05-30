@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { textContent, flattenJsonApi, isoDate, toolError } from '../../src/tools/_shared.js';
+import { textContent, flattenJsonApi } from '../../src/tools/_shared.js';
 
 describe('_shared', () => {
   it('textContent wraps JSON', () => {
@@ -14,17 +14,6 @@ describe('_shared', () => {
   it('flattenJsonApi handles a single resource', () => {
     expect(flattenJsonApi({ data: { id: '1', type: 'frame', attributes: { name: 'x' } } }))
       .toEqual({ id: '1', type: 'frame', name: 'x' });
-  });
-
-  it('isoDate formats a Date as YYYY-MM-DD', () => {
-    expect(isoDate(new Date('2026-05-30T12:00:00Z'))).toBe('2026-05-30');
-  });
-
-  it('toolError returns error content', () => {
-    expect(toolError('something went wrong')).toEqual({
-      content: [{ type: 'text', text: 'something went wrong' }],
-      isError: true,
-    });
   });
 
   it('flattenJsonApi handles resource without attributes (array)', () => {
