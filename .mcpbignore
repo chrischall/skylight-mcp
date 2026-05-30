@@ -1,0 +1,69 @@
+# Keep the .mcpb lean — the esbuild bundle at dist/bundle.js is self-contained
+# and is the only thing the host runs. Ship just three files:
+#   - manifest.json    (declared entry point + user config)
+#   - dist/bundle.js   (the bundle itself)
+#   - package.json     ({"type":"module"} is required for Node to read bundle.js as ESM)
+
+# Dependencies — already inlined into dist/bundle.js by esbuild
+node_modules/
+
+# Source (TypeScript + tests) — not executed at runtime
+src/
+tests/
+*.test.ts
+*.spec.ts
+
+# tsc emits one .js per .ts alongside the bundle — those aren't referenced
+dist/*
+!dist/bundle.js
+
+# Build config / dev tooling
+tsconfig.json
+vitest.config.ts
+package-lock.json
+esbuild.config.*
+
+# Reports & build artifacts
+coverage/
+*.tsbuildinfo
+*.map
+
+# Docs & planning
+docs/
+README.md
+CLAUDE.md
+.env.example
+*.yaml
+*.yml
+
+# Registry / plugin / skill manifests (not used at runtime)
+server.json
+plugin.json
+.claude-plugin/
+.mcp.json
+SKILL.md
+skills/
+
+# Companion native bits (e.g. Chrome extension) are installed separately
+extension/
+
+# Repo-local maintenance scripts
+scripts/
+
+# CI / local tooling
+.github/
+.claude/
+
+# Runtime secrets
+.env
+.env.*
+
+# Editor / OS noise
+.DS_Store
+*.log
+.vscode/
+.idea/
+
+# Don't recursively pack the bundle into itself
+*.mcpb
+*.skill
