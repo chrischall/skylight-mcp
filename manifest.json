@@ -1,0 +1,124 @@
+{
+  "dxt_version": "0.1",
+  "name": "skylight-mcp",
+  "version": "0.1.0",
+  "description": "Skylight Calendar MCP — read/write family calendar events, chores, rewards, and shared lists via Claude. Auth via email+password.",
+  "author": {
+    "name": "Claude Code (AI)"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/bundle.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/bundle.js"
+      ],
+      "env": {
+        "SKYLIGHT_EMAIL": "${user_config.skylight_email}",
+        "SKYLIGHT_PASSWORD": "${user_config.skylight_password}"
+      }
+    }
+  },
+  "user_config": {
+    "skylight_email": {
+      "type": "string",
+      "title": "Email",
+      "description": "Skylight account email. Required together with the password below.",
+      "required": false
+    },
+    "skylight_password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Skylight account password. Required only when the email above is set. Stored locally in the bundle config — keep it private.",
+      "required": false,
+      "sensitive": true
+    }
+  },
+  "tools": [
+    {
+      "name": "skylight_list_frames",
+      "description": "List all Skylight frames (family hubs) on the account"
+    },
+    {
+      "name": "skylight_get_frame",
+      "description": "Get details for a specific Skylight frame"
+    },
+    {
+      "name": "skylight_list_frame_members",
+      "description": "List members (users) associated with a frame"
+    },
+    {
+      "name": "skylight_list_devices",
+      "description": "List physical devices linked to a frame"
+    },
+    {
+      "name": "skylight_list_events",
+      "description": "List calendar events for a frame within a date range"
+    },
+    {
+      "name": "skylight_get_event",
+      "description": "Get details for a specific calendar event"
+    },
+    {
+      "name": "skylight_create_event",
+      "description": "Create a new calendar event on a frame (write)"
+    },
+    {
+      "name": "skylight_update_event",
+      "description": "Update an existing calendar event (write)"
+    },
+    {
+      "name": "skylight_delete_event",
+      "description": "Delete a calendar event from a frame (write)"
+    },
+    {
+      "name": "skylight_list_categories",
+      "description": "List event categories available for a frame"
+    },
+    {
+      "name": "skylight_list_source_calendars",
+      "description": "List external source calendars linked to a frame"
+    },
+    {
+      "name": "skylight_list_lists",
+      "description": "List all shared lists on a frame"
+    },
+    {
+      "name": "skylight_get_list_items",
+      "description": "Get items in a specific shared list"
+    },
+    {
+      "name": "skylight_create_list",
+      "description": "Create a new shared list on a frame (write)"
+    },
+    {
+      "name": "skylight_add_list_item",
+      "description": "Add an item to a shared list (write)"
+    },
+    {
+      "name": "skylight_update_list_item",
+      "description": "Update an existing item in a shared list (write)"
+    },
+    {
+      "name": "skylight_delete_list_item",
+      "description": "Delete an item from a shared list (write)"
+    },
+    {
+      "name": "skylight_list_chores",
+      "description": "List chores for a frame within a date range"
+    },
+    {
+      "name": "skylight_create_chore",
+      "description": "Create a new chore on a frame (write)"
+    },
+    {
+      "name": "skylight_complete_chore",
+      "description": "Mark a chore as complete for a member (write)"
+    },
+    {
+      "name": "skylight_list_rewards",
+      "description": "List rewards configured for a frame"
+    }
+  ]
+}

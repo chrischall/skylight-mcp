@@ -1,0 +1,47 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.chrischall/skylight-mcp",
+  "description": "Skylight Calendar for Claude — family events, chores, and rewards.",
+  "repository": {
+    "url": "https://github.com/chrischall/skylight-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "skylight-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SKYLIGHT_EMAIL",
+          "description": "Skylight account email. Pair with SKYLIGHT_PASSWORD for direct login.",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "SKYLIGHT_PASSWORD",
+          "description": "Skylight account password — required iff SKYLIGHT_EMAIL is set.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "SKYLIGHT_FRAME_ID",
+          "description": "Optional: pick a specific Skylight frame when the account has more than one.",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "SKYLIGHT_NAME",
+          "description": "Friendly account name used in startup logs.",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
