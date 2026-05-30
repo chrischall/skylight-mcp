@@ -8,6 +8,9 @@ import { registerFrameTools } from './tools/frames.js';
 import { registerEventTools } from './tools/events.js';
 import { registerListTools } from './tools/lists.js';
 import { registerChoreTools } from './tools/chores.js';
+import { registerMealTools } from './tools/meals.js';
+import { registerMessageTools } from './tools/messages.js';
+import { registerTaskTools } from './tools/tasks.js';
 
 async function main() {
   const server = new McpServer({ name: 'skylight-mcp', version: '0.2.1' }); // x-release-please-version
@@ -30,6 +33,9 @@ async function main() {
   registerEventTools(server, getClient);
   registerListTools(server, getClient);
   registerChoreTools(server, getClient);
+  registerMealTools(server, getClient);
+  registerMessageTools(server, getClient);
+  registerTaskTools(server, getClient);
 
   await server.connect(new StdioServerTransport());
 }

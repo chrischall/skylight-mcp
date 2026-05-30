@@ -1,8 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 21 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), and frame/device info (read).
-
-**Meals are not supported.** Skylight does not expose a meals API on this account type — the meals endpoints return 404. There is no `meals.ts` module and no meals tools.
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 37 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read), messages and albums (read), and frame/device info (read).
 
 ## Auth
 
