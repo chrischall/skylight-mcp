@@ -84,48 +84,31 @@ describe('chore tools', () => {
 
   // ── skylight_complete_chore ──────────────────────────────────────────────
 
-  it('complete_chore PATCHes with explicit completed_on and completed_category_id', async () => {
+  it('complete_chore PUTs {status:complete} to the completions endpoint (default frame)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'complete' } } });
-    const out = await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30', completed_category_id: '10901869' });
-    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/chores/5', {
-      body: { completed_on: '2026-05-30', completed_category_id: '10901869' },
+    const out = await tools.skylight_complete_chore({ id: '5' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5/completions', {
+      body: { status: 'complete' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'complete' });
   });
 
-  it('complete_chore defaults completed_on to today when not provided', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-05-30T12:00:00Z'));
-    const { tools, request } = harness();
-    request.mockResolvedValue(undefined);
-    await tools.skylight_complete_chore({ id: '5' });
-    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/chores/5', {
-      body: { completed_on: '2026-05-30' },
+  it('complete_chore with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'complete' } } });
+    await tools.skylight_complete_chore({ id: '5', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/chores/5/completions', {
+      body: { status: 'complete' },
     });
-    vi.useRealTimers();
+    expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
   it('complete_chore returns { completed: id } when API returns no body', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
-    const out = await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30' });
+    const out = await tools.skylight_complete_chore({ id: '5' });
     expect(JSON.parse(out.content[0].text)).toEqual({ completed: '5' });
-  });
-
-  it('complete_chore returns flattened doc when API returns a resource', async () => {
-    const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { completed_on: '2026-05-30' } } });
-    const out = await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30' });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', completed_on: '2026-05-30' });
-  });
-
-  it('complete_chore with explicit frameId uses it and skips resolveFrameId', async () => {
-    const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue(undefined);
-    await tools.skylight_complete_chore({ id: '5', completed_on: '2026-05-30', frameId: '99' });
-    expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/chores/5', expect.any(Object));
-    expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
   // ── skylight_list_rewards ────────────────────────────────────────────────

@@ -47,23 +47,18 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     },
   );
 
-  // LIVE-VERIFIED: complete_chore verb/path is PATCH /frames/{f}/chores/{id} (not POST /complete — 404).
-  // Completion body {completed_on, completed_category_id} is the best-supported shape;
-  // the effect wasn't list-confirmable due to chore-chart visibility semantics.
+  // LIVE-VERIFIED: complete_chore is PUT /frames/{f}/chores/{id}/completions with {status:'complete'}
+  // (the old POST /complete was 404 and the PATCH /frames/{f}/chores/{id} was a no-op — status stayed
+  // pending). Completing a specific recurring *instance* (via instance_date + category_id) is
+  // intentionally not exposed; this is the simple whole-chore completion.
   server.tool(
     'skylight_complete_chore',
-    'Mark a chore as complete on a Skylight frame.',
-    {
-      id: z.string(),
-      completed_on: z.string().optional().describe('YYYY-MM-DD the chore was completed; defaults to today.'),
-      completed_category_id: z.union([z.string(), z.number()]).optional().describe('Category / family-member who completed it.'),
-      frameId: z.string().optional(),
-    },
-    async ({ id, completed_on, completed_category_id, frameId }) => {
+    'Mark a chore complete.',
+    { id: z.string(), frameId: z.string().optional() },
+    async ({ id, frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const on = completed_on ?? new Date().toISOString().slice(0, 10);
-      const doc = await c.request('PATCH', `/frames/${f}/chores/${id}`, { body: compact({ completed_on: on, completed_category_id }) });
+      const doc = await c.request('PUT', `/frames/${f}/chores/${id}/completions`, { body: { status: 'complete' } });
       return doc ? textContent(flattenJsonApi(doc as any)) : textContent({ completed: id });
     },
   );
