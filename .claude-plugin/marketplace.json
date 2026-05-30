@@ -1,0 +1,35 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "skylight-mcp",
+  "owner": {
+    "name": "Chris Hall",
+    "email": "chris.c.hall@gmail.com"
+  },
+  "metadata": {
+    "description": "MCP server for Skylight Calendar — read/write family events, chores, rewards, and shared lists.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "skylight-mcp",
+      "displayName": "Skylight",
+      "source": "./",
+      "description": "Skylight Calendar MCP server for Claude — family events, chores, and rewards via natural language.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Chris Hall"
+      },
+      "homepage": "https://github.com/chrischall/skylight-mcp",
+      "repository": "https://github.com/chrischall/skylight-mcp",
+      "license": "MIT",
+      "keywords": [
+        "skylight",
+        "calendar",
+        "chores",
+        "family",
+        "mcp"
+      ],
+      "category": "productivity"
+    }
+  ]
+}

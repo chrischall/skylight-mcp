@@ -1,0 +1,33 @@
+{
+  "name": "skylight-mcp",
+  "version": "0.1.0",
+  "mcpName": "io.github.chrischall/skylight-mcp",
+  "description": "Skylight Calendar MCP — read/write family calendar events, chores, rewards, and shared lists.",
+  "author": "Claude Code (AI) <https://www.anthropic.com/claude>",
+  "repository": { "type": "git", "url": "git+https://github.com/chrischall/skylight-mcp.git" },
+  "license": "MIT",
+  "keywords": ["mcp", "model-context-protocol", "claude", "ai", "skylight", "calendar", "chores", "family"],
+  "type": "module",
+  "bin": { "skylight-mcp": "dist/index.js" },
+  "files": ["dist", ".claude-plugin", "skills", ".mcp.json", "server.json"],
+  "scripts": {
+    "build": "tsc && npm run bundle",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --external:dotenv --banner:js='import { createRequire as __createRequire } from \"module\"; const require = __createRequire(import.meta.url);' --outfile=dist/bundle.js",
+    "dev": "node --env-file=.env dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@fetchproxy/server": "^0.11.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}
