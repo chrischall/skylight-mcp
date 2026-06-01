@@ -246,4 +246,34 @@ describe('event tools', () => {
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendar_events/recent_invited_emails');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_update_event_notification_settings ──────────────────────────
+
+  it('update_event_notification_settings PUTs compacted body with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: { on_time: true } } });
+    const out = await tools.skylight_update_event_notification_settings({ on_time: true, early: false, early_minutes_before: 15 });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/event_notification_settings', {
+      body: { on_time: true, early: false, early_minutes_before: 15 },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'event_notification_setting', on_time: true });
+  });
+
+  it('update_event_notification_settings compacts undefined fields', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: {} } });
+    await tools.skylight_update_event_notification_settings({ on_time: true });
+    const body = request.mock.calls[0][2].body;
+    expect(body).toEqual({ on_time: true });
+    expect('early' in body).toBe(false);
+    expect('early_minutes_before' in body).toBe(false);
+  });
+
+  it('update_event_notification_settings with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: {} } });
+    await tools.skylight_update_event_notification_settings({ early: true, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/event_notification_settings', { body: { early: true } });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

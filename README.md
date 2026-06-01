@@ -1,6 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 57 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read), and frame/device info (read).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 66 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read), and frame/device/account settings + calendar management (read+write).
 
 ## Auth
 
@@ -36,6 +36,14 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_resolve_member` | R | Resolve a family-member name to its category id |
 | frames | `skylight_get_calendar` | R | Get one calendar account |
 | frames | `skylight_list_nudges` | R | List nudges (reminders) in a date range |
+| frames | `skylight_update_frame` | W | Update frame display/sleep settings |
+| frames | `skylight_rename_frame` | W | Rename a frame |
+| frames | `skylight_update_profile` | W | Update the frame profile (name, birthday) |
+| frames | `skylight_update_household_config` | W | Update household configuration |
+| frames | `skylight_add_webcal` | W | Subscribe the frame to a webcal/ICS calendar URL |
+| frames | `skylight_update_calendar` | W | Set which sub-calendars of a connected account are active |
+| frames | `skylight_delete_source_calendar` | W | Remove a connected source calendar (incl. webcal subscriptions) |
+| frames | `skylight_set_default_calendar` | W | Set the default source calendar for new events |
 | events | `skylight_list_events` | R | List calendar events within a date range |
 | events | `skylight_get_event` | R | Get details for a specific event |
 | events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members) |
@@ -44,6 +52,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | events | `skylight_list_categories` | R | List event categories for a frame |
 | events | `skylight_list_source_calendars` | R | List external source calendars linked to a frame |
 | events | `skylight_list_recent_invited_emails` | R | List recently-invited email addresses |
+| events | `skylight_update_event_notification_settings` | W | Update calendar-event notification settings |
 | lists | `skylight_list_lists` | R | List all shared lists on a frame |
 | lists | `skylight_get_list_items` | R | Get items in a specific shared list |
 | lists | `skylight_create_list` | W | Create a new shared list (label + color + kind) |

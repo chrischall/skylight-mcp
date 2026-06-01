@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { SkylightClient } from '../client.js';
-import { textContent, flattenJsonApi, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, compact, type JsonApiDoc } from './_shared.js';
 
 type GetClient = () => Promise<SkylightClient>;
 
@@ -106,5 +106,104 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/nudges`, { query: { after, before } })));
+    });
+
+  server.tool('skylight_update_frame', 'Update Skylight frame display/sleep settings.',
+    {
+      brightness: z.number().optional(),
+      slideshow_speed: z.number().optional(),
+      slideshow_style: z.string().optional(),
+      sleeps_at: z.string().optional().describe('Time the frame sleeps, e.g. "22:00".'),
+      wakes_at: z.string().optional(),
+      show_caption: z.boolean().optional(),
+      show_heart: z.boolean().optional(),
+      blur_effect: z.boolean().optional(),
+      side_by_side: z.boolean().optional(),
+      open_to_public: z.boolean().optional(),
+      frameId: z.string().optional(),
+    },
+    async ({ frameId, brightness, slideshow_speed, slideshow_style, sleeps_at, wakes_at, show_caption, show_heart, blur_effect, side_by_side, open_to_public }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const body = compact({ brightness, slideshow_speed, slideshow_style, sleeps_at, wakes_at, show_caption, show_heart, blur_effect, side_by_side, open_to_public });
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}`, { body })));
+    });
+
+  server.tool('skylight_rename_frame', 'Rename a Skylight frame.',
+    { name: z.string(), frameId: z.string().optional() },
+    async ({ name, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/rename`, { body: { name } })));
+    });
+
+  server.tool('skylight_update_profile', 'Update the frame profile (name, birthday).',
+    {
+      name: z.string().optional(),
+      birthday: z.string().optional().describe('YYYY-MM-DD'),
+      frameId: z.string().optional(),
+    },
+    async ({ name, birthday, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const body = compact({ name, birthday });
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/profile`, { body })));
+    });
+
+  server.tool('skylight_update_household_config', 'Update household configuration.',
+    {
+      disney_profile_pictures: z.boolean().optional(),
+      disney_screensaver: z.boolean().optional(),
+      frameId: z.string().optional(),
+    },
+    async ({ disney_profile_pictures, disney_screensaver, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const body = compact({ disney_profile_pictures, disney_screensaver });
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', `/frames/${f}/household_config`, { body })));
+    });
+
+  server.tool('skylight_add_webcal', 'Subscribe the frame to a webcal/ICS calendar URL.',
+    {
+      sync_url: z.string().describe('Public webcal/ICS URL to subscribe the frame to.'),
+      frameId: z.string().optional(),
+    },
+    async ({ sync_url, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/webcal_accounts`, { body: { sync_url } })));
+    });
+
+  server.tool('skylight_update_calendar', 'Set which sub-calendars of a connected account are active.',
+    {
+      id: z.string(),
+      active_calendars: z.array(z.union([z.string(), z.number()])).describe('Calendar ids to keep active.'),
+      frameId: z.string().optional(),
+    },
+    async ({ id, active_calendars, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/calendars/${id}`, { body: { active_calendars } })));
+    });
+
+  server.tool('skylight_delete_source_calendar', 'Remove a connected source calendar (incl. webcal subscriptions).',
+    { id: z.string(), frameId: z.string().optional() },
+    async ({ id, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      await c.request('DELETE', `/frames/${f}/source_calendars/${id}`);
+      return textContent({ deleted: id });
+    });
+
+  server.tool('skylight_set_default_calendar', 'Set the default source calendar for new events.',
+    {
+      id: z.union([z.string(), z.number()]).describe('Source-calendar id to make the default for new events.'),
+      frameId: z.string().optional(),
+    },
+    async ({ id, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
+      return textContent(doc ? flattenJsonApi(doc) : { default: id });
     });
 }
