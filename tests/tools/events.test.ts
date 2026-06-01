@@ -109,6 +109,14 @@ describe('event tools', () => {
     expect('ends_at' in body).toBe(false);
   });
 
+  it('create_event includes category_ids for member assignment', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
+    await tools.skylight_create_event({ summary: 'Dentist', category_ids: ['10901869'] });
+    const body = request.mock.calls[0][2].body;
+    expect(body.category_ids).toEqual(['10901869']);
+  });
+
   it('create_event with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'calendar_event', attributes: {} } });
@@ -157,6 +165,14 @@ describe('event tools', () => {
     expect(body.timezone).toBe('America/Denver');
     expect(body.invited_emails).toEqual(['bob@example.com']);
     expect(body.rrule).toBe('FREQ=DAILY');
+  });
+
+  it('update_event includes category_ids for member assignment', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
+    await tools.skylight_update_event({ id: '5', category_ids: ['10901869'] });
+    const body = request.mock.calls[0][2].body;
+    expect(body.category_ids).toEqual(['10901869']);
   });
 
   // ── skylight_delete_event ───────────────────────────────────────────────

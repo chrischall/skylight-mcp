@@ -16,6 +16,7 @@ const eventAttrs = {
   timezone: z.string().optional(),
   invited_emails: z.array(z.string()).optional(),
   rrule: z.string().optional().describe('iCalendar RRULE for recurrence.'),
+  category_ids: z.array(z.union([z.string(), z.number()])).optional().describe('Family-member category ids to assign the event to (see skylight_list_categories / skylight_resolve_member).'),
 };
 
 export function registerEventTools(server: McpServer, getClient: GetClient) {

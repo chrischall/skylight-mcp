@@ -1,6 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 53 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read), messages and albums (read), and frame/device info (read).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 57 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read), and frame/device info (read).
 
 ## Auth
 
@@ -38,8 +38,8 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_list_nudges` | R | List nudges (reminders) in a date range |
 | events | `skylight_list_events` | R | List calendar events within a date range |
 | events | `skylight_get_event` | R | Get details for a specific event |
-| events | `skylight_create_event` | W | Create a new calendar event |
-| events | `skylight_update_event` | W | Update an existing calendar event |
+| events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members) |
+| events | `skylight_update_event` | W | Update an existing calendar event (optional `category_ids` assigns members) |
 | events | `skylight_delete_event` | W | Delete a calendar event |
 | events | `skylight_list_categories` | R | List event categories for a frame |
 | events | `skylight_list_source_calendars` | R | List external source calendars linked to a frame |
@@ -70,6 +70,10 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | meals | `skylight_list_recipes` | R | List meal recipes for the frame |
 | meals | `skylight_list_meal_categories` | R | List meal categories for the frame |
 | meals | `skylight_get_recipe` | R | Get one meal recipe |
+| meals | `skylight_create_recipe` | W | Create a meal recipe (meal_category_id + summary) |
+| meals | `skylight_update_recipe` | W | Update a meal recipe |
+| meals | `skylight_delete_recipe` | W | Delete a meal recipe |
+| meals | `skylight_add_recipe_to_grocery_list` | W | Add a recipe's ingredients to a grocery list |
 | messages | `skylight_list_messages` | R | List messages posted to the frame |
 | messages | `skylight_list_albums` | R | List photo albums on the frame |
 | messages | `skylight_get_message` | R | Get one frame message |
