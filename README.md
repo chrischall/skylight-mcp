@@ -1,6 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 88 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 91 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -78,11 +78,14 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | lists | `skylight_clear_list` | W | Remove all items from a list (single bulk delete) |
 | lists | `skylight_set_list_item_section` | W | Move list items into a named section (or clear it) |
 | chores | `skylight_list_chores` | R | List chores within a date range |
+| chores | `skylight_search_chores` | R | Search chores (incl. unscheduled/template chores) |
 | chores | `skylight_create_chore` | W | Create a new chore (summary + category) |
+| chores | `skylight_create_recurring_chore` | W | Create a recurring chore or routine (RRULE) |
 | chores | `skylight_complete_chore` | W | Mark a chore complete |
 | chores | `skylight_uncomplete_chore` | W | Reopen (un-complete) a chore |
-| chores | `skylight_update_chore` | W | Update a chore (supports recurring `apply_to`) |
+| chores | `skylight_update_chore` | W | Update a chore (supports recurrence + `apply_to`) |
 | chores | `skylight_complete_chore_instance` | W | Mark a specific recurring-chore occurrence complete |
+| chores | `skylight_delete_chore` | W | Delete a chore (occurrence or whole series via `apply_to`) |
 | chores | `skylight_list_rewards` | R | List rewards configured for a frame |
 | rewards | `skylight_get_reward` | R | Get one reward |
 | rewards | `skylight_create_reward` | W | Create a reward (name + description + point_value + respawn_on_redemption + category_ids) |
