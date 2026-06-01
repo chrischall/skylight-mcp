@@ -1,6 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 66 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read), and frame/device/account settings + calendar management (read+write).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 79 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
 
 ## Auth
 
@@ -44,6 +44,10 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_update_calendar` | W | Set which sub-calendars of a connected account are active |
 | frames | `skylight_delete_source_calendar` | W | Remove a connected source calendar (incl. webcal subscriptions) |
 | frames | `skylight_set_default_calendar` | W | Set the default source calendar for new events |
+| frames | `skylight_invite_user` | W | Invite a user to the frame by email |
+| frames | `skylight_approve_user` | W | Approve a pending frame user |
+| frames | `skylight_remove_user` | W | Remove a user from the frame |
+| frames | `skylight_delete_category` | W | Delete a category / family member |
 | events | `skylight_list_events` | R | List calendar events within a date range |
 | events | `skylight_get_event` | R | Get details for a specific event |
 | events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members) |
@@ -86,6 +90,15 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | messages | `skylight_list_messages` | R | List messages posted to the frame |
 | messages | `skylight_list_albums` | R | List photo albums on the frame |
 | messages | `skylight_get_message` | R | Get one frame message |
+| messages | `skylight_create_album` | W | Create a photo album |
+| messages | `skylight_delete_album` | W | Delete a photo album |
+| messages | `skylight_add_to_album` | W | Add messages/photos to albums |
+| messages | `skylight_remove_from_album` | W | Remove messages/photos from albums |
+| messages | `skylight_add_message_comment` | W | Comment on a frame message/photo |
+| messages | `skylight_set_message_caption` | W | Set a message/photo caption |
+| messages | `skylight_like_message` | W | Like a frame message/photo |
+| messages | `skylight_unlike_message` | W | Remove a like from a message/photo |
+| messages | `skylight_delete_message` | W | Delete a frame message/photo |
 | tasks | `skylight_list_tasks` | R | List task-box items |
 | tasks | `skylight_create_task` | W | Create a task-box item |
 | tasks | `skylight_update_task` | W | Update a task-box item |

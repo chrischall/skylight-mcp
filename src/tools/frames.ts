@@ -206,4 +206,42 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
       return textContent(doc ? flattenJsonApi(doc) : { default: id });
     });
+
+  server.tool('skylight_invite_user', 'Invite a user to the frame by email.',
+    {
+      email: z.string().describe('Email to invite to the frame.'),
+      frameId: z.string().optional(),
+    },
+    async ({ email, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/users`, { body: { email } })));
+    });
+
+  server.tool('skylight_approve_user', 'Approve a pending frame user.',
+    { id: z.string(), frameId: z.string().optional() },
+    async ({ id, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/users/${id}/approve`);
+      return textContent(doc ? flattenJsonApi(doc) : { approved: id });
+    });
+
+  server.tool('skylight_remove_user', 'Remove a user from the frame.',
+    { id: z.union([z.string(), z.number()]), frameId: z.string().optional() },
+    async ({ id, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      await c.request('DELETE', `/frames/${f}/users/${id}`);
+      return textContent({ removed: id });
+    });
+
+  server.tool('skylight_delete_category', 'Delete a category / family member.',
+    { id: z.union([z.string(), z.number()]), frameId: z.string().optional() },
+    async ({ id, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      await c.request('DELETE', `/frames/${f}/categories/${id}`);
+      return textContent({ deleted: id });
+    });
 }
