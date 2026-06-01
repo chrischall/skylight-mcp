@@ -148,4 +148,85 @@ describe('frame tools', () => {
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/event_notification_settings');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_resolve_member ──────────────────────────────────────────────
+
+  it('resolve_member returns only categories whose label matches (case-insensitive)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        { id: '1', type: 'category', attributes: { label: 'Mom' } },
+        { id: '2', type: 'category', attributes: { label: 'Dad' } },
+        { id: '3', type: 'category', attributes: { label: 'Emma' } },
+      ],
+    });
+    const out = await tools.skylight_resolve_member({ name: 'mo' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/categories');
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', label: 'Mom' }]);
+  });
+
+  it('resolve_member returns all categories when none match', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        { id: '1', type: 'category', attributes: { label: 'Mom' } },
+        { id: '2', type: 'category', attributes: { label: 'Dad' } },
+        { id: '3', type: 'category' },
+      ],
+    });
+    const out = await tools.skylight_resolve_member({ name: 'zzz' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '1', label: 'Mom' },
+      { id: '2', label: 'Dad' },
+      { id: '3' },
+    ]);
+  });
+
+  it('resolve_member with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [{ id: '1', type: 'category', attributes: { label: 'Mom' } }] });
+    await tools.skylight_resolve_member({ name: 'mom', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/categories');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_get_calendar ────────────────────────────────────────────────
+
+  it('get_calendar fetches one calendar account with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar', attributes: { name: 'Google' } } });
+    const out = await tools.skylight_get_calendar({ id: '5' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/calendars/5');
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'calendar', name: 'Google' });
+  });
+
+  it('get_calendar with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar', attributes: {} } });
+    await tools.skylight_get_calendar({ id: '5', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendars/5');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_list_nudges ─────────────────────────────────────────────────
+
+  it('list_nudges passes after/before query with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '1', type: 'nudge', attributes: { summary: 'Reminder' } }] });
+    const out = await tools.skylight_list_nudges({ after: '2026-01-01', before: '2026-01-31' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/nudges', {
+      query: { after: '2026-01-01', before: '2026-01-31' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', type: 'nudge', summary: 'Reminder' }]);
+  });
+
+  it('list_nudges with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_nudges({ after: '2026-01-01', before: '2026-01-31', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/nudges', {
+      query: { after: '2026-01-01', before: '2026-01-31' },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

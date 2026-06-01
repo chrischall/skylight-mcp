@@ -21,4 +21,13 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     const f = frameId ?? (await c.resolveFrameId());
     return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/categories`)));
   });
+
+  server.tool('skylight_get_recipe', 'Get one meal recipe.', {
+    id: z.string(),
+    frameId: z.string().optional(),
+  }, async ({ id, frameId }) => {
+    const c = await getClient();
+    const f = frameId ?? (await c.resolveFrameId());
+    return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/recipes/${id}?include=meal_category`)));
+  });
 }

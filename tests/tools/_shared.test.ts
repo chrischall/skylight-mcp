@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { textContent, flattenJsonApi } from '../../src/tools/_shared.js';
+import { textContent, flattenJsonApi, compact } from '../../src/tools/_shared.js';
 
 describe('_shared', () => {
   it('textContent wraps JSON', () => {
@@ -24,5 +24,10 @@ describe('_shared', () => {
   it('flattenJsonApi handles resource without attributes (single)', () => {
     const out = flattenJsonApi({ data: { id: '2', type: 'x' } });
     expect(out).toEqual({ id: '2', type: 'x' });
+  });
+
+  it('compact drops undefined values but keeps falsy (0, "", false)', () => {
+    expect(compact({ a: 1, b: undefined, c: 0, d: '', e: false, f: undefined }))
+      .toEqual({ a: 1, c: 0, d: '', e: false });
   });
 });

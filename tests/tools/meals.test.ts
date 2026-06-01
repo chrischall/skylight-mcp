@@ -54,4 +54,22 @@ describe('meal tools', () => {
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/meals/categories');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_get_recipe ─────────────────────────────────────────────────
+
+  it('get_recipe fetches one recipe with meal_category include and default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'recipe', attributes: { summary: 'Tacos' } } });
+    const out = await tools.skylight_get_recipe({ id: '1' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/meals/recipes/1?include=meal_category');
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'recipe', summary: 'Tacos' });
+  });
+
+  it('get_recipe with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'recipe', attributes: {} } });
+    await tools.skylight_get_recipe({ id: '1', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/meals/recipes/1?include=meal_category');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

@@ -50,4 +50,22 @@ describe('message tools', () => {
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/albums');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_get_message ────────────────────────────────────────────────
+
+  it('get_message fetches one message with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'message', attributes: { body: 'Hi' } } });
+    const out = await tools.skylight_get_message({ id: '1' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/messages/1');
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'message', body: 'Hi' });
+  });
+
+  it('get_message with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'message', attributes: {} } });
+    await tools.skylight_get_message({ id: '1', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/messages/1');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

@@ -93,4 +93,26 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     await c.request('DELETE', `/frames/${f}/lists/${listId}`);
     return textContent({ deleted: listId });
   });
+
+  server.tool('skylight_move_list_item', 'Reorder a list item.', {
+    listId: z.string(),
+    itemId: z.string(),
+    afterItemId: z.string().optional().describe('Place after this item id; omit to move to the top.'),
+    frameId: z.string().optional(),
+  }, async ({ listId, itemId, afterItemId, frameId }) => {
+    const c = await getClient();
+    const f = frameId ?? (await c.resolveFrameId());
+    const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/lists/${listId}/list_items/${itemId}/move`, { body: { after_item_id: afterItemId ?? null } });
+    return doc ? textContent(flattenJsonApi(doc)) : textContent({ moved: itemId });
+  });
+
+  server.tool('skylight_clear_list', 'Remove all items from a list.', {
+    listId: z.string(),
+    frameId: z.string().optional(),
+  }, async ({ listId, frameId }) => {
+    const c = await getClient();
+    const f = frameId ?? (await c.resolveFrameId());
+    await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/bulk_destroy`);
+    return textContent({ cleared: listId });
+  });
 }

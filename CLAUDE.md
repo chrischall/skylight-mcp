@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## TL;DR
 
-MCP server for Skylight Calendar — 37 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read), messages and albums (read), and frame/device/account info (read).
+MCP server for Skylight Calendar — 44 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read), messages and albums (read), and frame/device/account info (read).
 
 Auth resolution lives in `src/auth.ts`. There is one auth path: headless email+password OAuth2 authorization-code flow (Node-direct). See "Auth resolution" below.
 
@@ -55,16 +55,16 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ## Tool surface
 
-37 tools total. 9 read-only frame/device/account tools, 8 event tools, 8 list tools (2R+6W), 4 chore/reward tools (2R+2W), 2 meal tools (2R), 2 message/album tools (2R), 4 task-box tools (1R+3W).
+44 tools total. 12 read-only frame/device/account tools, 8 event tools, 10 list tools (2R+8W), 4 chore/reward tools (2R+2W), 3 meal tools (3R), 3 message/album tools (3R), 4 task-box tools (1R+3W).
 
 | Module | Tools |
 |---|---|
-| frames.ts | `skylight_list_frames`, `skylight_get_frame`, `skylight_list_frame_members`, `skylight_list_devices`, `skylight_get_plus_access`, `skylight_get_reward_points`, `skylight_get_household_config`, `skylight_list_calendars`, `skylight_get_event_notification_settings` |
+| frames.ts | `skylight_list_frames`, `skylight_get_frame`, `skylight_list_frame_members`, `skylight_list_devices`, `skylight_get_plus_access`, `skylight_get_reward_points`, `skylight_get_household_config`, `skylight_list_calendars`, `skylight_get_event_notification_settings`, `skylight_resolve_member`, `skylight_get_calendar`, `skylight_list_nudges` |
 | events.ts | `skylight_list_events`, `skylight_get_event`, `skylight_create_event`, `skylight_update_event`, `skylight_delete_event`, `skylight_list_categories`, `skylight_list_source_calendars`, `skylight_list_recent_invited_emails` |
-| lists.ts | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_update_list`, `skylight_delete_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item` |
+| lists.ts | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_update_list`, `skylight_delete_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item`, `skylight_move_list_item`, `skylight_clear_list` |
 | chores.ts | `skylight_list_chores`, `skylight_create_chore`, `skylight_complete_chore`, `skylight_list_rewards` |
-| meals.ts | `skylight_list_recipes`, `skylight_list_meal_categories` |
-| messages.ts | `skylight_list_messages`, `skylight_list_albums` |
+| meals.ts | `skylight_list_recipes`, `skylight_list_meal_categories`, `skylight_get_recipe` |
+| messages.ts | `skylight_list_messages`, `skylight_list_albums`, `skylight_get_message` |
 | tasks.ts | `skylight_list_tasks`, `skylight_create_task`, `skylight_update_task`, `skylight_delete_task` |
 
 ### Known unknowns — write payload shapes

@@ -214,4 +214,54 @@ describe('list tools', () => {
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/lists/7');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_move_list_item ─────────────────────────────────────────────
+
+  it('move_list_item posts after_item_id and returns flattened doc', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Eggs' } } });
+    const out = await tools.skylight_move_list_item({ listId: '7', itemId: '55', afterItemId: '42' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/lists/7/list_items/55/move', {
+      body: { after_item_id: '42' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '55', type: 'list_item', label: 'Eggs' });
+  });
+
+  it('move_list_item sends after_item_id null when afterItemId omitted (move to top)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_move_list_item({ listId: '7', itemId: '55' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/lists/7/list_items/55/move', {
+      body: { after_item_id: null },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ moved: '55' });
+  });
+
+  it('move_list_item with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: {} } });
+    await tools.skylight_move_list_item({ listId: '7', itemId: '55', afterItemId: '42', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/lists/7/list_items/55/move', {
+      body: { after_item_id: '42' },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_clear_list ─────────────────────────────────────────────────
+
+  it('clear_list bulk-destroys all items with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_clear_list({ listId: '7' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/lists/7/list_items/bulk_destroy');
+    expect(JSON.parse(out.content[0].text)).toEqual({ cleared: '7' });
+  });
+
+  it('clear_list with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_clear_list({ listId: '7', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/lists/7/list_items/bulk_destroy');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

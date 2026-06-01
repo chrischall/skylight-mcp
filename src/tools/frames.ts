@@ -72,4 +72,39 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       const f = frameId ?? (await c.resolveFrameId());
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/event_notification_settings`)));
     });
+
+  server.tool('skylight_resolve_member', 'Resolve a family-member name to its category id (used by chores/rewards).',
+    {
+      name: z.string().describe('Family-member name (or partial) to resolve to a category id.'),
+      frameId: z.string().optional(),
+    },
+    async ({ name, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const cats = flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/categories`)) as Array<{ id: string; label?: string }>;
+      const q = name.toLowerCase();
+      const matches = cats.filter((cat) => String(cat.label ?? '').toLowerCase().includes(q));
+      const chosen = (matches.length > 0 ? matches : cats).map((cat) => ({ id: cat.id, label: cat.label }));
+      return textContent(chosen);
+    });
+
+  server.tool('skylight_get_calendar', 'Get one calendar account.',
+    { id: z.string(), frameId: z.string().optional() },
+    async ({ id, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/calendars/${id}`)));
+    });
+
+  server.tool('skylight_list_nudges', 'List nudges (reminders) in a date range.',
+    {
+      after: z.string().describe('YYYY-MM-DD lower bound (required).'),
+      before: z.string().describe('YYYY-MM-DD upper bound (required).'),
+      frameId: z.string().optional(),
+    },
+    async ({ after, before, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/nudges`, { query: { after, before } })));
+    });
 }

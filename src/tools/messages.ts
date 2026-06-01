@@ -21,4 +21,13 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     const f = frameId ?? (await c.resolveFrameId());
     return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/albums`)));
   });
+
+  server.tool('skylight_get_message', 'Get one frame message.', {
+    id: z.string(),
+    frameId: z.string().optional(),
+  }, async ({ id, frameId }) => {
+    const c = await getClient();
+    const f = frameId ?? (await c.resolveFrameId());
+    return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/messages/${id}`)));
+  });
 }
