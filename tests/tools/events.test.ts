@@ -247,6 +247,24 @@ describe('event tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── skylight_get_event_notification_settings ─────────────────────────────
+
+  it('get_event_notification_settings fetches settings with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: { enabled: true } } });
+    const out = await tools.skylight_get_event_notification_settings({});
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/event_notification_settings');
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'event_notification_setting', enabled: true });
+  });
+
+  it('get_event_notification_settings with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: {} } });
+    await tools.skylight_get_event_notification_settings({ frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/event_notification_settings');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
   // ── skylight_update_event_notification_settings ──────────────────────────
 
   it('update_event_notification_settings PUTs compacted body with default frame', async () => {

@@ -71,6 +71,10 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/calendar_events/recent_invited_emails`)))));
 
+  server.tool('skylight_get_event_notification_settings', "Get the frame's calendar-event notification settings.",
+    { frameId: z.string().optional() },
+    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/event_notification_settings`)))));
+
   server.tool('skylight_update_event_notification_settings', 'Update calendar-event notification settings.',
     {
       on_time: z.boolean().optional(),

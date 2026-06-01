@@ -45,8 +45,8 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `src/auth-session-login.ts` — `login()`: headless four-step authorization-code flow.
 - `src/config.ts` — `loadAccount()`: env-var resolution, exposes `baseUrl` and `authBaseUrl`.
 - `src/client.ts` — `SkylightClient`: HTTP client with proactive + reactive token refresh via `refreshFn`, JSON:API response flattening, `resolveFrameId()` for frame auto-discovery.
-- `src/index.ts` — entry point. Boots `McpServer`, wires lazy `getClient`, registers the eight tool modules.
-- `src/tools/` — one file per domain: `frames.ts`, `events.ts`, `lists.ts`, `chores.ts`, `rewards.ts`, `meals.ts`, `messages.ts`, `tasks.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers.
+- `src/index.ts` — entry point. Boots `McpServer`, wires lazy `getClient`, registers the eleven tool modules.
+- `src/tools/` — one file per domain: `frames.ts`, `settings.ts`, `calendars.ts`, `members.ts`, `events.ts`, `lists.ts`, `chores.ts`, `rewards.ts`, `meals.ts`, `messages.ts`, `tasks.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers.
 - `tests/` — mirrors `src/`. Tool tests are in `tests/tools/<name>.test.ts`.
 
 ## JSON:API flattening convention
@@ -55,12 +55,15 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ## Tool surface
 
-79 tools total. 24 frame/device/account settings + calendar + member-management tools (12R+12W), 9 event tools (incl. notification-settings write), 10 list tools (2R+8W), 6 chore tools (2R+4W), 7 reward write tools, 7 meal tools (3R+4W), 12 message/album tools (3R+9W), 4 task-box tools (1R+3W). The frames and messages modules are now read+write.
+79 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (7 core frame/device/account reads), `settings.ts` (4 frame-settings writes), `calendars.ts` (7 calendar + reminder tools), and `members.ts` (5 people/category tools). Counts: 7 frame + 4 settings + 7 calendar + 5 member, 10 event tools (incl. both notification-settings read+write), 10 list tools (2R+8W), 6 chore tools (2R+4W), 7 reward write tools, 7 meal tools (3R+4W), 12 message/album tools (3R+9W), 4 task-box tools (1R+3W).
 
 | Module | Tools |
 |---|---|
-| frames.ts | `skylight_list_frames`, `skylight_get_frame`, `skylight_list_frame_members`, `skylight_list_devices`, `skylight_get_plus_access`, `skylight_get_reward_points`, `skylight_get_household_config`, `skylight_list_calendars`, `skylight_get_event_notification_settings`, `skylight_resolve_member`, `skylight_get_calendar`, `skylight_list_nudges`, `skylight_update_frame`, `skylight_rename_frame`, `skylight_update_profile`, `skylight_update_household_config`, `skylight_add_webcal`, `skylight_update_calendar`, `skylight_delete_source_calendar`, `skylight_set_default_calendar`, `skylight_invite_user`, `skylight_approve_user`, `skylight_remove_user`, `skylight_delete_category` |
-| events.ts | `skylight_list_events`, `skylight_get_event`, `skylight_create_event`, `skylight_update_event`, `skylight_delete_event`, `skylight_list_categories`, `skylight_list_source_calendars`, `skylight_list_recent_invited_emails`, `skylight_update_event_notification_settings` |
+| frames.ts | `skylight_list_frames`, `skylight_get_frame`, `skylight_list_frame_members`, `skylight_list_devices`, `skylight_get_plus_access`, `skylight_get_reward_points`, `skylight_get_household_config` |
+| settings.ts | `skylight_update_frame`, `skylight_rename_frame`, `skylight_update_profile`, `skylight_update_household_config` |
+| calendars.ts | `skylight_list_calendars`, `skylight_get_calendar`, `skylight_add_webcal`, `skylight_update_calendar`, `skylight_delete_source_calendar`, `skylight_set_default_calendar`, `skylight_list_nudges` |
+| members.ts | `skylight_resolve_member`, `skylight_invite_user`, `skylight_approve_user`, `skylight_remove_user`, `skylight_delete_category` |
+| events.ts | `skylight_list_events`, `skylight_get_event`, `skylight_create_event`, `skylight_update_event`, `skylight_delete_event`, `skylight_list_categories`, `skylight_list_source_calendars`, `skylight_list_recent_invited_emails`, `skylight_get_event_notification_settings`, `skylight_update_event_notification_settings` |
 | lists.ts | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_update_list`, `skylight_delete_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item`, `skylight_move_list_item`, `skylight_clear_list` |
 | chores.ts | `skylight_list_chores`, `skylight_create_chore`, `skylight_complete_chore`, `skylight_update_chore`, `skylight_complete_chore_instance`, `skylight_list_rewards` |
 | rewards.ts | `skylight_get_reward`, `skylight_create_reward`, `skylight_update_reward`, `skylight_delete_reward`, `skylight_redeem_reward`, `skylight_unredeem_reward`, `skylight_add_reward_points` |
