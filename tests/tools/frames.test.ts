@@ -112,4 +112,26 @@ describe('frame tools', () => {
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/household_config');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_set_device_album ────────────────────────────────────────────
+
+  it('set_device_album PUTs current_album_id to the device (default frame)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '12', type: 'device', attributes: { current_album_id: '88' } } });
+    const out = await tools.skylight_set_device_album({ id: '12', current_album_id: '88' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/devices/12', {
+      body: { current_album_id: '88' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '12', type: 'device', current_album_id: '88' });
+  });
+
+  it('set_device_album with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '12', type: 'device', attributes: {} } });
+    await tools.skylight_set_device_album({ id: 12, current_album_id: 88, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/devices/12', {
+      body: { current_album_id: 88 },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

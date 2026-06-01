@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerFrameTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_frames', 'List Skylight frames (family hubs) on this account.', {}, async () => {
@@ -33,4 +33,16 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_get_household_config', 'Get household configuration for the frame.',
     { frameId: z.string().optional() },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/household_config`)))));
+
+  // NOTE: device PUT body confirmed for current_album_id from the bundle; other device fields not yet exposed.
+  server.tool('skylight_set_device_album', 'Set which photo album a device displays.',
+    {
+      id: idParam.describe('Device id (from skylight_list_devices).'),
+      current_album_id: idParam.describe('Album id to display on this device.'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { id, current_album_id }: { id: string | number; current_album_id: string | number; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/devices/${id}`, { body: { current_album_id } });
+      return textContent(flattenJsonApi(doc));
+    }));
 }

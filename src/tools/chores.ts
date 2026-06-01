@@ -85,6 +85,18 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     }),
   );
 
+  // LIVE-VERIFIED: uncomplete reverses a completion — PUT the completions endpoint
+  // with {status:'pending'} reopens a chore that `complete` had marked complete.
+  server.tool(
+    'skylight_uncomplete_chore',
+    'Reopen (un-complete) a chore.',
+    { id: z.string(), frameId: z.string().optional() },
+    frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: { status: 'pending' } });
+      return doc ? textContent(flattenJsonApi(doc)) : textContent({ uncompleted: id });
+    }),
+  );
+
   server.tool(
     'skylight_list_rewards',
     'List redeemed rewards for a Skylight frame, defaulting to the last 30 days.',

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, compact, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerListTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_lists', 'List all lists on a Skylight frame.', {
@@ -83,11 +83,28 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     return doc ? textContent(flattenJsonApi(doc)) : textContent({ moved: itemId });
   }));
 
+  // The bulk_destroy endpoint returns 422 with no usable body shape; delete per-item
+  // instead — fetch the current items, then DELETE each one individually.
   server.tool('skylight_clear_list', 'Remove all items from a list.', {
     listId: z.string(),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
-    await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/bulk_destroy`);
-    return textContent({ cleared: listId });
+    const doc = await c.request<{ data?: Array<{ id: string }> }>('GET', `/frames/${f}/lists/${listId}/list_items`);
+    const items = doc?.data ?? [];
+    for (const it of items) {
+      await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/${it.id}`);
+    }
+    return textContent({ cleared: listId, removed: items.length });
+  }));
+
+  // LIVE-VERIFIED: bulk_update_section moves list items into a named section (200).
+  server.tool('skylight_set_list_item_section', 'Move list items into a named section (or clear it).', {
+    listId: z.string(),
+    item_ids: idArrayParam.describe('List-item ids to move.'),
+    section: z.string().nullable().optional().describe('Section name to assign (null/omit to clear the section).'),
+    frameId: z.string().optional(),
+  }, frameScoped(getClient, async (c, f, { listId, item_ids, section }: { listId: string; item_ids: Array<string | number>; section?: string | null; frameId?: string }) => {
+    const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/lists/${listId}/list_items/bulk_update_section`, { body: { item_ids, section: section ?? null } });
+    return textContent(flattenJsonApi(doc));
   }));
 }

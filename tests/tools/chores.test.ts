@@ -179,6 +179,35 @@ describe('chore tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── skylight_uncomplete_chore ────────────────────────────────────────────
+
+  it('uncomplete_chore PUTs {status:pending} to the completions endpoint (default frame)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'pending' } } });
+    const out = await tools.skylight_uncomplete_chore({ id: '5' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5/completions', {
+      body: { status: 'pending' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'pending' });
+  });
+
+  it('uncomplete_chore with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'pending' } } });
+    await tools.skylight_uncomplete_chore({ id: '5', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/chores/5/completions', {
+      body: { status: 'pending' },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  it('uncomplete_chore returns { uncompleted: id } when API returns no body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_uncomplete_chore({ id: '5' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ uncompleted: '5' });
+  });
+
   // ── skylight_list_rewards ────────────────────────────────────────────────
 
   it('list_rewards passes explicit redeemed_at_min/max directly', async () => {

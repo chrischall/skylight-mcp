@@ -120,11 +120,21 @@ describe('member tools', () => {
 
   // ── skylight_delete_category ─────────────────────────────────────────────
 
-  it('delete_category deletes by id and returns deleted id', async () => {
+  it('delete_category deletes by id with no body when reassign omitted', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
     const out = await tools.skylight_delete_category({ id: '3' });
-    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/categories/3');
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/categories/3', {});
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '3' });
+  });
+
+  it('delete_category passes reassign_to_category_id as the request body when provided', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_delete_category({ id: '3', reassign_to_category_id: '4' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/categories/3', {
+      body: { reassign_to_category_id: '4' },
+    });
     expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '3' });
   });
 
@@ -132,7 +142,40 @@ describe('member tools', () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue(undefined);
     await tools.skylight_delete_category({ id: 3, frameId: '99' });
-    expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/categories/3');
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/categories/3', {});
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_update_family_member ────────────────────────────────────────
+
+  it('update_family_member PUTs compacted {name, birthday} to family_member (default frame)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '3', type: 'category', attributes: { label: 'Emma' } } });
+    const out = await tools.skylight_update_family_member({ id: '3', name: 'Emma', birthday: '2015-04-01' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/categories/3/family_member', {
+      body: { name: 'Emma', birthday: '2015-04-01' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '3', type: 'category', label: 'Emma' });
+  });
+
+  it('update_family_member omits undefined fields (compact)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '3', type: 'category', attributes: {} } });
+    await tools.skylight_update_family_member({ id: '3', name: 'Emma' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/categories/3/family_member', {
+      body: { name: 'Emma' },
+    });
+    const body = request.mock.calls[0][2].body;
+    expect(body).not.toHaveProperty('birthday');
+  });
+
+  it('update_family_member with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '3', type: 'category', attributes: {} } });
+    await tools.skylight_update_family_member({ id: 3, birthday: '2015-04-01', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/categories/3/family_member', {
+      body: { birthday: '2015-04-01' },
+    });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 });
