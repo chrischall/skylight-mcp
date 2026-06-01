@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/chrischall/skylight-mcp/compare/v0.2.2...v0.3.0) (2026-06-01)
+
+
+### Features
+
+* expand to 86 tools — rewards, chores, meal writes, frame/calendar settings, albums/messages, member management + polish ([#20](https://github.com/chrischall/skylight-mcp/issues/20)) ([22fd03c](https://github.com/chrischall/skylight-mcp/commit/22fd03c035cecf40ac1e87bc2eceb0bb7b6c945b))
+* expand tool surface to 37 (meals, tasks, messages, calendars, reward points) + fix update verbs & list writes ([#7](https://github.com/chrischall/skylight-mcp/issues/7)) ([b0463ae](https://github.com/chrischall/skylight-mcp/commit/b0463ae6a828af333655bcef77a52dbdcb3a6952))
+
 ## [0.2.2](https://github.com/chrischall/skylight-mcp/compare/v0.2.1...v0.2.2) (2026-05-30)
 
 
