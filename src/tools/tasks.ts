@@ -1,13 +1,9 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { SkylightClient } from '../client.js';
-import { textContent, flattenJsonApi } from './_shared.js';
+import { textContent, flattenJsonApi, compact, type JsonApiDoc } from './_shared.js';
 
 type GetClient = () => Promise<SkylightClient>;
-
-function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
-  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
-}
 
 export function registerTaskTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_tasks', "List task-box items (the frame's task list).", {
@@ -15,7 +11,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
   }, async ({ frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/task_box/items`) as any));
+    return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/task_box/items`)));
   });
 
   server.tool('skylight_create_task', 'Create a task-box item.', {
@@ -27,8 +23,8 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
   }, async ({ summary, emoji_icon, reward_points, routine, frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    const doc = await c.request('POST', `/frames/${f}/task_box/items`, { body: compact({ summary, emoji_icon, reward_points, routine }) });
-    return textContent(flattenJsonApi(doc as any));
+    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/task_box/items`, { body: compact({ summary, emoji_icon, reward_points, routine }) });
+    return textContent(flattenJsonApi(doc));
   });
 
   server.tool('skylight_update_task', 'Update a task-box item.', {
@@ -41,8 +37,8 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
   }, async ({ id, summary, emoji_icon, reward_points, routine, frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    const doc = await c.request('PATCH', `/frames/${f}/task_box/items/${id}`, { body: compact({ summary, emoji_icon, reward_points, routine }) });
-    return textContent(flattenJsonApi(doc as any));
+    const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/task_box/items/${id}`, { body: compact({ summary, emoji_icon, reward_points, routine }) });
+    return textContent(flattenJsonApi(doc));
   });
 
   server.tool('skylight_delete_task', 'Delete a task-box item.', {

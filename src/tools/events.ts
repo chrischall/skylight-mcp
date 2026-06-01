@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { SkylightClient } from '../client.js';
-import { textContent, flattenJsonApi } from './_shared.js';
+import { textContent, flattenJsonApi, compact, type JsonApiDoc } from './_shared.js';
 
 type GetClient = () => Promise<SkylightClient>;
 const INCLUDE = 'categories,calendar_account,event_notification_setting';
@@ -18,10 +18,6 @@ const eventAttrs = {
   rrule: z.string().optional().describe('iCalendar RRULE for recurrence.'),
 };
 
-function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
-  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
-}
-
 export function registerEventTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_events', 'List calendar events in a date range for a Skylight frame.', {
     date_min: z.string().describe('YYYY-MM-DD inclusive lower bound.'),
@@ -31,10 +27,10 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
   }, async ({ date_min, date_max, timezone, frameId }) => {
     const c = await getClient();
     const id = frameId ?? (await c.resolveFrameId());
-    const doc = await c.request('GET', `/frames/${id}/calendar_events`, {
+    const doc = await c.request<JsonApiDoc>('GET', `/frames/${id}/calendar_events`, {
       query: { date_min, date_max, timezone, include: INCLUDE },
     });
-    return textContent(flattenJsonApi(doc as any));
+    return textContent(flattenJsonApi(doc));
   });
 
   server.tool('skylight_get_event', 'Get one calendar event by id.', {
@@ -42,7 +38,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
   }, async ({ id, frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/calendar_events/${id}`) as any));
+    return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/calendar_events/${id}`)));
   });
 
   server.tool('skylight_create_event', 'Create a calendar event on a Skylight frame.',
@@ -50,8 +46,8 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ frameId, ...attrs }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('POST', `/frames/${f}/calendar_events`, { body: compact(attrs) });
-      return textContent(flattenJsonApi(doc as any));
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/calendar_events`, { body: compact(attrs) });
+      return textContent(flattenJsonApi(doc));
     });
 
   server.tool('skylight_update_event', 'Update a calendar event by id.',
@@ -59,8 +55,8 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ id, frameId, ...attrs }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('PUT', `/frames/${f}/calendar_events/${id}`, { body: compact(attrs) });
-      return textContent(flattenJsonApi(doc as any));
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/calendar_events/${id}`, { body: compact(attrs) });
+      return textContent(flattenJsonApi(doc));
     });
 
   server.tool('skylight_delete_event', 'Delete a calendar event by id.',
@@ -77,7 +73,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/categories`) as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/categories`)));
     });
 
   server.tool('skylight_list_source_calendars', 'List linked source calendars (Google, etc.) for a frame.',
@@ -85,7 +81,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/source_calendars`) as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/source_calendars`)));
     });
 
   server.tool('skylight_list_recent_invited_emails', 'List recently-invited email addresses (handy for filling create_event invited_emails).',
@@ -93,6 +89,6 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     async ({ frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/calendar_events/recent_invited_emails`) as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/calendar_events/recent_invited_emails`)));
     });
 }

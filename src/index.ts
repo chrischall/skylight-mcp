@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-import 'dotenv/config';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { runMcp, loadDotenvSafely } from '@chrischall/mcp-utils';
 import { resolveAuth } from './auth.js';
 import type { SkylightClient } from './client.js';
 import { registerFrameTools } from './tools/frames.js';
@@ -12,32 +10,38 @@ import { registerMealTools } from './tools/meals.js';
 import { registerMessageTools } from './tools/messages.js';
 import { registerTaskTools } from './tools/tasks.js';
 
-async function main() {
-  const server = new McpServer({ name: 'skylight-mcp', version: '0.2.2' }); // x-release-please-version
+await loadDotenvSafely();
 
-  let client: SkylightClient | undefined;
-  let configError: string | undefined;
-  const getClient = async (): Promise<SkylightClient> => {
-    if (client) return client;
-    if (configError) throw new Error(configError);
-    try {
-      ({ client } = await resolveAuth());
-      return client!;
-    } catch (e) {
-      configError = e instanceof Error ? e.message : String(e);
-      throw new Error(configError);
-    }
-  };
+// Deferred-config-error pattern: the server boots before credentials exist so
+// the host's first `tools/list` always succeeds. `getClient` resolves auth
+// lazily on the first tool call and caches the (one-time) config error so every
+// later call surfaces the same actionable message instead of re-running login.
+let client: SkylightClient | undefined;
+let configError: string | undefined;
+const getClient = async (): Promise<SkylightClient> => {
+  if (client) return client;
+  if (configError) throw new Error(configError);
+  try {
+    ({ client } = await resolveAuth());
+    return client!;
+  } catch (e) {
+    configError = e instanceof Error ? e.message : String(e);
+    throw new Error(configError);
+  }
+};
 
-  registerFrameTools(server, getClient);
-  registerEventTools(server, getClient);
-  registerListTools(server, getClient);
-  registerChoreTools(server, getClient);
-  registerMealTools(server, getClient);
-  registerMessageTools(server, getClient);
-  registerTaskTools(server, getClient);
-
-  await server.connect(new StdioServerTransport());
-}
-
-main().catch((e) => { console.error(e); process.exit(1); });
+await runMcp<typeof getClient>({
+  name: 'skylight-mcp',
+  version: '0.2.2', // x-release-please-version
+  banner: 'skylight-mcp ready',
+  deps: getClient,
+  tools: [
+    registerFrameTools,
+    registerEventTools,
+    registerListTools,
+    registerChoreTools,
+    registerMealTools,
+    registerMessageTools,
+    registerTaskTools,
+  ],
+});

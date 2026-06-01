@@ -1,3 +1,5 @@
+import { truncateErrorMessage } from '@chrischall/mcp-utils';
+import { TokenManager } from '@chrischall/mcp-utils/session';
 import type { Account } from './config.js';
 import type { Tokens } from './auth-session-login.js';
 
@@ -23,48 +25,45 @@ const REFRESH_SKEW_MS = 60_000;
 
 export class SkylightClient {
   private account: Account;
-  private accessToken: string;
-  private refreshToken: string;
-  private expiresAt: number; // epoch ms
-  private refreshFn: (refreshToken: string) => Promise<Tokens>;
+  private tokens: TokenManager;
   private httpFetch: HttpFetch;
   private frameId?: string;
-  private refreshInFlight?: Promise<void>;
 
   constructor(opts: SkylightClientOpts) {
     this.account = opts.account;
-    this.accessToken = opts.tokens.accessToken;
-    this.refreshToken = opts.tokens.refreshToken;
-    this.expiresAt = Date.now() + opts.tokens.expiresInMs;
-    this.refreshFn = opts.refreshFn;
+    // TokenManager owns the bearer-token lifecycle: proactive skew refresh,
+    // reactive 401-replay, and single-flight coalescing. Skylight's refreshFn
+    // returns a RELATIVE `expiresInMs`; adapt it to TokenManager's absolute
+    // `expiresAt` (epoch ms). Default skew is 5 min, so pass 60s explicitly.
+    this.tokens = new TokenManager({
+      initial: {
+        accessToken: opts.tokens.accessToken,
+        refreshToken: opts.tokens.refreshToken,
+        expiresAt: Date.now() + opts.tokens.expiresInMs,
+      },
+      refresh: async (refreshToken) => {
+        const tok = await opts.refreshFn(refreshToken);
+        return {
+          accessToken: tok.accessToken,
+          // Omit an empty refresh token so TokenManager keeps the prior one.
+          refreshToken: tok.refreshToken || undefined,
+          expiresAt: Date.now() + tok.expiresInMs,
+        };
+      },
+      skewMs: REFRESH_SKEW_MS,
+    });
     this.httpFetch = opts.httpFetch ?? ((url, init) => fetch(url, init));
     this.frameId = opts.account.frameId;
   }
 
-  private async refresh(): Promise<void> {
-    if (!this.refreshInFlight) {
-      this.refreshInFlight = (async () => {
-        const tok = await this.refreshFn(this.refreshToken);
-        this.accessToken = tok.accessToken;
-        if (tok.refreshToken) this.refreshToken = tok.refreshToken;
-        this.expiresAt = Date.now() + tok.expiresInMs;
-      })().finally(() => { this.refreshInFlight = undefined; });
-    }
-    return this.refreshInFlight;
-  }
-
   async request<T = unknown>(method: string, path: string, opts: RequestOpts = {}): Promise<T> {
-    if (Date.now() >= this.expiresAt - REFRESH_SKEW_MS) {
-      await this.refresh();
-    }
-    let res = await this.send(method, path, opts);
-    if (res.status === 401) {
-      await this.refresh();
-      res = await this.send(method, path, opts);
-    }
+    const res = await this.tokens.withAuth((accessToken) =>
+      this.send(method, path, opts, accessToken),
+    );
     if (res.status < 200 || res.status >= 300) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Skylight API ${method} ${path} failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
+      // prevents credentials leaking into tool results via upstream error echo
+      throw new Error(`Skylight API ${method} ${path} failed (HTTP ${res.status}): ${truncateErrorMessage(text, 300)}`);
     }
     if (res.status === 204) return undefined as T;
     const text = await res.text();
@@ -72,12 +71,12 @@ export class SkylightClient {
     return JSON.parse(text) as T;
   }
 
-  private send(method: string, path: string, opts: RequestOpts): Promise<Response> {
+  private send(method: string, path: string, opts: RequestOpts, accessToken: string): Promise<Response> {
     const url = new URL(this.account.baseUrl + path);
     for (const [k, v] of Object.entries(opts.query ?? {})) {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
-    const headers: Record<string, string> = { Authorization: `Bearer ${this.accessToken}`, Accept: 'application/json' };
+    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' };
     const init: RequestInit = { method, headers };
     if (opts.body !== undefined) {
       headers['Content-Type'] = 'application/json';
