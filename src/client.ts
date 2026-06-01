@@ -1,3 +1,4 @@
+import { truncateErrorMessage } from '@chrischall/mcp-utils';
 import type { Account } from './config.js';
 import type { Tokens } from './auth-session-login.js';
 
@@ -64,7 +65,9 @@ export class SkylightClient {
     }
     if (res.status < 200 || res.status >= 300) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Skylight API ${method} ${path} failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
+      // truncateErrorMessage redacts bearer tokens/JWTs then caps length, so an
+      // upstream body that echoes the request can't leak credentials into a tool result.
+      throw new Error(`Skylight API ${method} ${path} failed (HTTP ${res.status}): ${truncateErrorMessage(text, 300)}`);
     }
     if (res.status === 204) return undefined as T;
     const text = await res.text();

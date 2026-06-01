@@ -1,3 +1,5 @@
+import { truncateErrorMessage } from '@chrischall/mcp-utils';
+
 export type HttpFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 export interface Tokens {
@@ -50,13 +52,15 @@ function cookieHeader(jar: CookieJar): string {
 // ---------------------------------------------------------------------------
 
 function normalizeTokenResponse(status: number, json: unknown): Tokens {
+  // truncateErrorMessage redacts any tokens/JWTs in the echoed body and caps length
+  // before it reaches a thrown message (and thus a tool result).
   if (status < 200 || status >= 300) {
-    throw new Error(`Skylight token request failed (HTTP ${status}): ${JSON.stringify(json)}`);
+    throw new Error(`Skylight token request failed (HTTP ${status}): ${truncateErrorMessage(JSON.stringify(json))}`);
   }
   const j = json as Record<string, unknown>;
   const accessToken = j.access_token as string | undefined;
   if (!accessToken) {
-    throw new Error(`Skylight token request failed: no access_token in response ${JSON.stringify(json)}`);
+    throw new Error(`Skylight token request failed: no access_token in response ${truncateErrorMessage(JSON.stringify(json))}`);
   }
   const refreshToken = (j.refresh_token as string | undefined) ?? '';
   const expiresInSec = typeof j.expires_in === 'number' ? j.expires_in : 604800;

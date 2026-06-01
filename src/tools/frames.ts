@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { SkylightClient } from '../client.js';
-import { textContent, flattenJsonApi } from './_shared.js';
+import { textContent, flattenJsonApi, type JsonApiDoc } from './_shared.js';
 
 type GetClient = () => Promise<SkylightClient>;
 
@@ -38,7 +38,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_get_plus_access', 'Get Skylight Plus subscription / entitlement status.', {},
     async () => {
       const c = await getClient();
-      return textContent(flattenJsonApi(await c.request('GET', '/plus_access') as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', '/plus_access')));
     });
 
   server.tool('skylight_get_reward_points', 'Get reward-point balances per family member (lifetime earned + current balance).',
@@ -46,7 +46,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     async ({ frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/reward_points`) as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/reward_points`)));
     });
 
   server.tool('skylight_get_household_config', 'Get household configuration for the frame.',
@@ -54,7 +54,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     async ({ frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/household_config`) as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/household_config`)));
     });
 
   server.tool('skylight_list_calendars', "List the frame's calendar accounts (Google/Apple/etc.) and their active calendars.",
@@ -62,7 +62,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     async ({ frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/calendars`) as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/calendars`)));
     });
 
   server.tool('skylight_get_event_notification_settings', "Get the frame's calendar-event notification settings.",
@@ -70,6 +70,6 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     async ({ frameId }) => {
       const c = await getClient();
       const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/event_notification_settings`) as any));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/event_notification_settings`)));
     });
 }

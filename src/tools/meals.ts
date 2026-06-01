@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { SkylightClient } from '../client.js';
-import { textContent, flattenJsonApi } from './_shared.js';
+import { textContent, flattenJsonApi, type JsonApiDoc } from './_shared.js';
 
 type GetClient = () => Promise<SkylightClient>;
 
@@ -11,7 +11,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   }, async ({ frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/meals/recipes`) as any));
+    return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/recipes`)));
   });
 
   server.tool('skylight_list_meal_categories', 'List meal categories for the frame.', {
@@ -19,6 +19,6 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   }, async ({ frameId }) => {
     const c = await getClient();
     const f = frameId ?? (await c.resolveFrameId());
-    return textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/meals/categories`) as any));
+    return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/categories`)));
   });
 }

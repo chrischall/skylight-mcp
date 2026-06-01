@@ -12,23 +12,22 @@ export interface SessionAccount {
 
 export type Account = SessionAccount;
 
+import { readEnvVar } from '@chrischall/mcp-utils';
+
 const DEFAULT_BASE_URL = 'https://app.ourskylight.com/api';
 const NO_CONFIG = 'Missing Skylight auth config. Set SKYLIGHT_EMAIL + SKYLIGHT_PASSWORD.';
 
 /**
- * Read an env var and treat empty/placeholder values as unset. Some MCP hosts
+ * Read an env var, treating empty/placeholder values as unset. Some MCP hosts
  * stringify undefined user_config refs (Claude Desktop emits the literal
- * "undefined"; others leave the `${user_config.foo}` placeholder intact), and
- * a Bearer-style header built from those would silently authenticate as the
- * wrong identity or fail upstream with a confusing 403.
+ * "undefined"; others leave the `${user_config.foo}` placeholder intact), and a
+ * Bearer-style header built from those would silently authenticate as the wrong
+ * identity or fail upstream with a confusing 403. `readEnvVar` from
+ * @chrischall/mcp-utils applies the same trim + reject `''`/`undefined`/`null`/
+ * `${...}` filtering the local `readVar` did.
  */
 function readVar(env: Record<string, string | undefined>, key: string): string | undefined {
-  const raw = env[key];
-  if (typeof raw !== 'string') return undefined;
-  const t = raw.trim();
-  if (t.length === 0 || t === 'undefined' || t === 'null') return undefined;
-  if (/^\$\{[^}]*\}$/.test(t)) return undefined;
-  return t;
+  return readEnvVar(key, { env });
 }
 
 export const NO_ENV_CONFIG_MARKER = NO_CONFIG;
