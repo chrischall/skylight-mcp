@@ -52,10 +52,12 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     frameScoped(getClient, async (c, f, { image_path, caption, frame_ids }: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string }) => {
       const { bucket, key, etag, ext } = await uploadFile(c, image_path);
       const frames = frame_ids && frame_ids.length ? frame_ids : [f];
-      const doc = await c.request<JsonApiDoc>('POST', '/messages/uploads', {
+      // Register returns `{ data: { message_ids: [...] } }`; the photo then transcodes
+      // server-side (status "processing") before it shows on the frame.
+      const doc = await c.request<{ data?: { message_ids?: Array<string | number> } }>('POST', '/messages/uploads', {
         body: compact({ file_upload: { bucket, key, etag }, frame_ids: frames, caption, ext }),
       });
-      return textContent(flattenJsonApi(doc));
+      return textContent({ message_ids: doc.data?.message_ids ?? [], key, frame_ids: frames, status: 'processing' });
     }),
   );
 

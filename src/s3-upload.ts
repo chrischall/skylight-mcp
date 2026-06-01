@@ -48,6 +48,11 @@ export async function s3Put(opts: S3PutOptions): Promise<string> {
   const headers: Record<string, string> = {
     'content-type': contentType,
     host,
+    // The bucket's IAM policy only allows PutObject as a conditional create-if-absent
+    // write — the request MUST carry a signed `If-None-Match: *` or it is denied
+    // ("no identity-based policy allows the s3:PutObject action"). Verified against
+    // the real app's upload, which signs this header.
+    'if-none-match': '*',
     'x-amz-content-sha256': payloadHash,
     'x-amz-date': amzDate,
     'x-amz-security-token': creds.session_token,

@@ -46,7 +46,7 @@ describe('photo tools', () => {
     const { tools, request } = harness();
     request
       .mockResolvedValueOnce(CREDS_DOC) // GET cloud_upload_credentials
-      .mockResolvedValueOnce({ data: { id: '77', type: 'message', attributes: { caption: 'Hi' } } });
+      .mockResolvedValueOnce({ data: { message_ids: [1753265440] } }); // POST /messages/uploads
 
     const out = await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg', caption: 'Hi' });
 
@@ -68,7 +68,9 @@ describe('photo tools', () => {
       file_upload: { bucket: 'prod-bucket', key: putArgs.key, etag: '"etag-xyz"' },
       frame_ids: ['3435252'], caption: 'Hi', ext: 'jpg',
     });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '77', type: 'message', caption: 'Hi' });
+    expect(JSON.parse(out.content[0].text)).toEqual({
+      message_ids: [1753265440], key: putArgs.key, frame_ids: ['3435252'], status: 'processing',
+    });
   });
 
   it('upload_photo: honors explicit frame_ids and omits an absent caption', async () => {

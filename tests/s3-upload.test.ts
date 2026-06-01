@@ -38,10 +38,13 @@ describe('s3Put (SigV4)', () => {
     expect(h['x-amz-security-token']).toBe(creds.session_token);
     expect(h['content-type']).toBe('image/jpeg');
     expect(h.host).toBe('my-bucket.s3.us-east-1.amazonaws.com');
+    // Conditional create-if-absent — required by the bucket IAM policy, and signed.
+    expect(h['if-none-match']).toBe('*');
 
     // Authorization: AWS4-HMAC-SHA256 Credential=.../scope, SignedHeaders=..., Signature=<64 hex>
+    // if-none-match is in the signed set (alphabetical order between host and x-amz-…).
     expect(h.Authorization).toMatch(
-      /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\/20260601\/us-east-1\/s3\/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=[0-9a-f]{64}$/,
+      /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\/20260601\/us-east-1\/s3\/aws4_request, SignedHeaders=content-type;host;if-none-match;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=[0-9a-f]{64}$/,
     );
   });
 

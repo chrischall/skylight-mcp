@@ -76,39 +76,33 @@ Three engines; then approve/undo the drafts:
 - Device: `PUT /frames/{f}/devices/{id} { name, current_album_id, … remote settings }` (rename + album + remote settings).
 - **Reminder profile (global, not frame-scoped): `PUT /reminder_profile { interval_weeks }`**.
 
-## Photo upload (issue #12) — 2-step, needs AWS S3
+## Photo upload (issue #12) — SOLVED: single conditional PutObject + register
+
+Verified end-to-end live (upload → register → photo lands in the frame feed). It's a plain
+single-shot `PutObject` — **the trick is a signed `If-None-Match: *` header** (see below).
 
 1. `GET /api/messages/cloud_upload_credentials` → `{ data: { credentials:{access_key_id, secret_access_key, session_token}, region:"us-east-1", bucket, key_prefix, credentials_expire_at } }`.
    - NB: fields sit directly on `data` (no JSON:API `attributes` wrapper).
-2. Upload the image binary to S3 (`s3://{bucket}/{key_prefix}{uuid}.{ext}`, `key_prefix` already ends in `/`) with SigV4 using those temp STS creds → get the ETag.
-3. Register: `POST /api/messages/uploads { file_upload:{ bucket, key, etag }, frame_ids:[...], caption, ext }`.
-   - Verified-captured register body: `{"file_upload":{"bucket":"production-cloud-useruploads…","etag":"\"<md5>\"","key":"uploads/10730517/<uuid>.heic"},"frame_ids":["3435252"],"caption":"…","ext":"heic"}`.
+2. `PUT https://{bucket}.s3.{region}.amazonaws.com/{key}` where `key = {key_prefix}{uuid}.{ext}`
+   (`key_prefix` already ends in `/`), SigV4-signed with those temp STS creds. **Must include a signed
+   `if-none-match: *` header** (create-if-absent conditional write). Returns the object ETag (the file MD5).
+3. Register: `POST /api/messages/uploads { file_upload:{ bucket, key, etag }, frame_ids:[...], caption, ext }`
+   → `{ data: { message_ids:[id] } }`. The photo then transcodes server-side (feed shows it as
+   `type:"message_status" status:"processing"`) before becoming a real `message` (`asset_type:"photo"`,
+   moved to the `darkroom-production` bucket, served via CloudFront).
+   - Read the feed with pagination: `GET /frames/{f}/messages?page_token=__START__` (without `page_token`
+     it returns empty); subsequent polls use `?sync_token=…`.
 
-### Mechanism: it's a MULTIPART upload, not a single PutObject (2026-06-01)
-Probing exactly which S3 actions the `cloud_upload_credentials` role permits (creds are **valid** — STS
-`GetCallerIdentity` → 200, ARN `…ClientUploadRole2-…/message-upload-10730517`):
-
-| S3 action | Result |
-|---|---|
-| `PutObject` | ❌ AccessDenied (`no identity-based policy allows s3:PutObject`) |
-| **`CreateMultipartUpload`** | ✅ allowed |
-| **`UploadPart`** | ✅ allowed (part ETag is a plain MD5 — matches the captured register `etag`) |
-| `CompleteMultipartUpload` | ❌ AccessDenied (Complete needs `s3:PutObject`) |
-| `GetObject` / `HeadObject` / `ListObjectsV2` / `PutObjectTagging` | ❌ AccessDenied (`s3:ListBucket`) |
-
-So the client is scoped to **start a multipart upload and push parts only**; it cannot finalize it. The
-captured register `etag` (`"<32-hex md5>"`, no `-N` suffix) is the single **part** ETag, confirming this.
-This is **not a signing bug** — the official `@aws-sdk/client-s3` v3 reproduces every result above
-identically. Ruled out for the PutObject path: SSE/ACL/content-type/key-shape/unsigned-payload/CRC32/
-region/`?upload_type=` params.
-
-**Open question (needs a real-app capture of `*.amazonaws.com` + the register POST):** how the upload is
-*finalized*. The client can't `CompleteMultipartUpload`, so the Skylight server must complete it — but
-replaying `CreateMultipartUpload` + `UploadPart` + `POST /messages/uploads {file_upload:{bucket,key,etag}}`
-(with and without `upload_id`/`parts`) returns `{data:{message_ids:[id]}}` yet the photo never materializes
-(frame shows 0 messages/0 albums; the `message_id` 404s under `/frames/{f}/messages/{id}`). The missing
-piece is what the app sends that triggers server-side completion. The MCP signing code in `src/s3-upload.ts`
-is correct; `src/tools/photos.ts` needs to be re-pointed at the multipart flow once finalization is known.
+### Why the signed `If-None-Match: *` is the whole story (2026-06-01)
+Without it, `PutObject` returns **403 `no identity-based policy allows the s3:PutObject action`** — the
+bucket's IAM Allow for `s3:PutObject` is **conditioned on the conditional-create header**, so a plain PUT
+is an implicit deny. This sent me down a wrong path: the role *also* permits `CreateMultipartUpload` +
+`UploadPart` (but not `CompleteMultipartUpload`/`Get`/`List`), which looked like a "multipart-only, server
+finalizes" design — it isn't. The real app does a single `PUT …?x-id=PutObject` with
+`SignedHeaders=…;if-none-match;…` and gets `200`. Adding the one signed header flips our PUT from 403 → 200.
+Not a signing bug — the official `@aws-sdk/client-s3` v3 also 403s without the header (its `Upload` only
+adds `If-None-Match` when you pass `IfNoneMatch`). Implemented in `src/s3-upload.ts` / `src/tools/photos.ts`.
+User-Agent / checksum / SSE / ACL / content-type are all irrelevant to the authz.
 
 ## Still gated (not addable)
 
