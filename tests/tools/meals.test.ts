@@ -185,4 +185,63 @@ describe('meal tools', () => {
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/meals/recipes/1/add_to_grocery_list', { body: {} });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_plan_meal ──────────────────────────────────────────────────
+
+  it('plan_meal POSTs a sitting with compacted body and default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'meal_sitting', attributes: { summary: 'Tacos', date: '2026-06-02' } } });
+    const out = await tools.skylight_plan_meal({ meal_category_id: '2', date: '2026-06-02', summary: 'Tacos' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/meals/sittings', {
+      body: { meal_category_id: '2', date: '2026-06-02', summary: 'Tacos' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'meal_sitting', summary: 'Tacos', date: '2026-06-02' });
+  });
+
+  it('plan_meal sends all provided fields including a plain rrule string', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'meal_sitting', attributes: {} } });
+    await tools.skylight_plan_meal({
+      meal_category_id: 2,
+      date: '2026-06-02',
+      summary: 'Tacos',
+      description: 'Beef, tortillas',
+      meal_recipe_id: '5',
+      rrule: 'FREQ=DAILY;INTERVAL=1;UNTIL=20260626T235959Z',
+      note: 'family fav',
+      add_to_grocery_list: true,
+      saveToRecipeBox: false,
+    });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/meals/sittings', {
+      body: {
+        meal_recipe_id: '5',
+        meal_category_id: 2,
+        date: '2026-06-02',
+        rrule: 'FREQ=DAILY;INTERVAL=1;UNTIL=20260626T235959Z',
+        summary: 'Tacos',
+        description: 'Beef, tortillas',
+        note: 'family fav',
+        add_to_grocery_list: true,
+        saveToRecipeBox: false,
+      },
+    });
+  });
+
+  it('plan_meal drops undefined optionals via compact()', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'meal_sitting', attributes: {} } });
+    await tools.skylight_plan_meal({ meal_category_id: '2', date: '2026-06-02', summary: 'Tacos' });
+    const body = request.mock.calls[0][2].body;
+    expect(body).toEqual({ meal_category_id: '2', date: '2026-06-02', summary: 'Tacos' });
+    expect('rrule' in body).toBe(false);
+    expect('meal_recipe_id' in body).toBe(false);
+  });
+
+  it('plan_meal with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'meal_sitting', attributes: {} } });
+    await tools.skylight_plan_meal({ meal_category_id: '2', date: '2026-06-02', summary: 'Tacos', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/meals/sittings', expect.any(Object));
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

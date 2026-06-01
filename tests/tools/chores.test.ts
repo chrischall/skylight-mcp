@@ -82,6 +82,80 @@ describe('chore tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── skylight_create_recurring_chore ──────────────────────────────────────
+
+  it('create_recurring_chore POSTs create_multiple with recurrence_set array body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '20', type: 'chore', attributes: { summary: 'Dishes', recurring: true } }] });
+    const out = await tools.skylight_create_recurring_chore({
+      summary: 'Dishes',
+      recurrence: 'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE,FR',
+      category_ids: ['10901869'],
+      start: '2026-06-02',
+    });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/create_multiple', {
+      body: {
+        summary: 'Dishes',
+        category_ids: ['10901869'],
+        recurrence_set: ['RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE,FR'],
+        start: '2026-06-02',
+      },
+    });
+    // Response is { data: [...] } (array) — flattened to an array.
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '20', type: 'chore', summary: 'Dishes', recurring: true }]);
+  });
+
+  it('create_recurring_chore passes all optional fields (routine, up_for_grabs, etc.) through compact', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '21', type: 'chore', attributes: {} }] });
+    await tools.skylight_create_recurring_chore({
+      summary: 'Brush teeth',
+      recurrence: 'FREQ=DAILY;INTERVAL=1;BYHOUR=8',
+      start: '2026-06-02',
+      start_time: '08:00',
+      recurring_until: '2026-12-31T23:59:59.999Z',
+      reward_points: 2,
+      emoji_icon: '🪥',
+      description: 'Morning routine',
+      routine: true,
+      up_for_grabs: true,
+    });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/create_multiple', {
+      body: {
+        summary: 'Brush teeth',
+        recurrence_set: ['RRULE:FREQ=DAILY;INTERVAL=1;BYHOUR=8'],
+        start: '2026-06-02',
+        start_time: '08:00',
+        recurring_until: '2026-12-31T23:59:59.999Z',
+        reward_points: 2,
+        emoji_icon: '🪥',
+        description: 'Morning routine',
+        routine: true,
+        up_for_grabs: true,
+      },
+    });
+  });
+
+  it('create_recurring_chore omits undefined optional fields (compact)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '22', type: 'chore', attributes: {} }] });
+    await tools.skylight_create_recurring_chore({ summary: 'X', recurrence: 'FREQ=DAILY', start: '2026-06-02' });
+    const body = request.mock.calls[0][2].body;
+    expect(body).not.toHaveProperty('category_ids');
+    expect(body).not.toHaveProperty('start_time');
+    expect(body).not.toHaveProperty('routine');
+    expect(body).not.toHaveProperty('up_for_grabs');
+    expect(body.recurrence_set).toEqual(['RRULE:FREQ=DAILY']);
+  });
+
+  it('create_recurring_chore with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [{ id: '23', type: 'chore', attributes: {} }] });
+    await tools.skylight_create_recurring_chore({ summary: 'X', recurrence: 'FREQ=DAILY', start: '2026-06-02', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/chores/create_multiple', expect.any(Object));
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
   // ── skylight_complete_chore ──────────────────────────────────────────────
 
   it('complete_chore PUTs {status:complete} to the completions endpoint (default frame)', async () => {
@@ -142,6 +216,39 @@ describe('chore tools', () => {
     expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5', {
       body: { summary: 'Vacuum', category_id: 42, start: '2026-06-01', description: 'All rooms', reward_points: 3, apply_to: 'this_and_future' },
     });
+  });
+
+  it('update_chore maps recurrence to recurrence_set array and passes new fields through', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await tools.skylight_update_chore({
+      id: '5',
+      summary: 'Dishes',
+      recurrence: 'FREQ=WEEKLY;INTERVAL=1;BYDAY=TU',
+      start: '2026-06-02',
+      start_time: '17:00',
+      recurring_until: '2026-12-31T23:59:59.999Z',
+      emoji_icon: '🍽️',
+    });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5', {
+      body: {
+        summary: 'Dishes',
+        start: '2026-06-02',
+        start_time: '17:00',
+        emoji_icon: '🍽️',
+        recurrence_set: ['RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TU'],
+        recurring_until: '2026-12-31T23:59:59.999Z',
+      },
+    });
+  });
+
+  it('update_chore omits recurrence_set when recurrence is not provided', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await tools.skylight_update_chore({ id: '5', summary: 'Dishes' });
+    const body = request.mock.calls[0][2].body;
+    expect(body).not.toHaveProperty('recurrence_set');
+    expect(body).not.toHaveProperty('recurring_until');
   });
 
   it('update_chore with explicit frameId uses it and skips resolveFrameId', async () => {
@@ -206,6 +313,92 @@ describe('chore tools', () => {
     request.mockResolvedValue(undefined);
     const out = await tools.skylight_uncomplete_chore({ id: '5' });
     expect(JSON.parse(out.content[0].text)).toEqual({ uncompleted: '5' });
+  });
+
+  // ── skylight_delete_chore ────────────────────────────────────────────────
+
+  it('delete_chore DELETEs without query when apply_to is omitted', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_delete_chore({ id: '5' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/chores/5', {});
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '5' });
+  });
+
+  it('delete_chore passes apply_to as a query param when provided', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_chore({ id: '5', apply_to: 'all' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/chores/5', { query: { apply_to: 'all' } });
+  });
+
+  it('delete_chore flattens a returned body when the API provides one', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'deleted' } } });
+    const out = await tools.skylight_delete_chore({ id: '5', apply_to: 'one' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/chores/5', { query: { apply_to: 'one' } });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'deleted' });
+  });
+
+  it('delete_chore with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_chore({ id: '5', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/chores/5', {});
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_search_chores ───────────────────────────────────────────────
+
+  it('search_chores GETs the search endpoint with just search_query by default', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '30', type: 'chore', attributes: { summary: 'Dishes' } }] });
+    const out = await tools.skylight_search_chores({ search_query: 'dish' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/chores/search', {
+      query: { search_query: 'dish' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '30', type: 'chore', summary: 'Dishes' }]);
+  });
+
+  it('search_chores passes booleans and numbers through (incl. false / 0)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_search_chores({
+      search_query: 'dish',
+      include_up_for_grabs: false,
+      limit: 0,
+      ended_chore_lookback_days: 30,
+    });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/chores/search', {
+      query: { search_query: 'dish', include_up_for_grabs: 'false', limit: 0, ended_chore_lookback_days: 30 },
+    });
+  });
+
+  it('search_chores includes include_up_for_grabs true', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_search_chores({ search_query: 'dish', include_up_for_grabs: true, limit: 5 });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/chores/search', {
+      query: { search_query: 'dish', include_up_for_grabs: 'true', limit: 5 },
+    });
+  });
+
+  it('search_chores omits undefined query keys', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_search_chores({ search_query: 'dish' });
+    const query = request.mock.calls[0][2].query;
+    expect(query).not.toHaveProperty('include_up_for_grabs');
+    expect(query).not.toHaveProperty('limit');
+    expect(query).not.toHaveProperty('ended_chore_lookback_days');
+  });
+
+  it('search_chores with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_search_chores({ search_query: 'dish', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/chores/search', expect.any(Object));
+    expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
   // ── skylight_list_rewards ────────────────────────────────────────────────

@@ -41,6 +41,15 @@ describe('reward tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '8', type: 'reward', name: 'Movie' });
   });
 
+  it('create_reward passes description and respawn_on_redemption through', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: { name: 'Movie' } } });
+    await tools.skylight_create_reward({ name: 'Movie', description: 'Pick a film', point_value: 50, respawn_on_redemption: true, category_ids: ['1', 2] });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/rewards', {
+      body: { name: 'Movie', description: 'Pick a film', point_value: 50, respawn_on_redemption: true, category_ids: ['1', 2] },
+    });
+  });
+
   it('create_reward with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: {} } });

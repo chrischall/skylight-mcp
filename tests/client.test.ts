@@ -26,6 +26,7 @@ describe('SkylightClient.request', () => {
     const [url, init] = httpFetch.mock.calls[0];
     expect(url).toBe('https://app.ourskylight.com/api/frames/3/lists');
     expect((init.headers as Record<string,string>).Authorization).toBe('Bearer AT');
+    expect((init.headers as Record<string,string>)['skylight-api-version']).toBe('2026-05-01');
     expect(out).toEqual({ data: [{ id: '1' }] });
   });
 

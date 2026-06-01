@@ -134,4 +134,22 @@ describe('frame tools', () => {
     });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_rename_device ───────────────────────────────────────────────
+
+  it('rename_device PUTs name to the device (default frame)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '12', type: 'device', attributes: { name: 'Kitchen Frame' } } });
+    const out = await tools.skylight_rename_device({ id: '12', name: 'Kitchen Frame' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/devices/12', { body: { name: 'Kitchen Frame' } });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '12', type: 'device', name: 'Kitchen Frame' });
+  });
+
+  it('rename_device with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '12', type: 'device', attributes: {} } });
+    await tools.skylight_rename_device({ id: 12, name: 'Den', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/devices/12', { body: { name: 'Den' } });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

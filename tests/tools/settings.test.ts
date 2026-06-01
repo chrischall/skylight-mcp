@@ -135,4 +135,15 @@ describe('settings tools', () => {
     expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/household_config', { body: { disney_profile_pictures: true } });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_set_reminder_profile ────────────────────────────────────────
+
+  it('set_reminder_profile PUTs /reminder_profile with no frame resolution', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'reminder_profile', attributes: { interval_weeks: 2 } } });
+    const out = await tools.skylight_set_reminder_profile({ interval_weeks: 2 });
+    expect(request).toHaveBeenCalledWith('PUT', '/reminder_profile', { body: { interval_weeks: 2 } });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'reminder_profile', interval_weeks: 2 });
+  });
 });

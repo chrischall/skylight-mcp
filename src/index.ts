@@ -13,6 +13,7 @@ import { registerMealTools } from './tools/meals.js';
 import { registerMessageTools } from './tools/messages.js';
 import { registerTaskTools } from './tools/tasks.js';
 import { registerRewardTools } from './tools/rewards.js';
+import { registerAiTools } from './tools/ai.js';
 
 await loadDotenvSafely();
 
@@ -51,5 +52,6 @@ await runMcp<typeof getClient>({
     registerMessageTools,
     registerTaskTools,
     registerRewardTools,
+    registerAiTools,
   ],
 });
