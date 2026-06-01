@@ -71,7 +71,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'Reverse a reward redemption.',
     {
       id: z.string(),
-      category_id: idParam.optional().describe('Member redeeming, if required.'),
+      category_id: idParam.optional().describe('Member who redeemed, if required to identify the redemption to reverse.'),
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {

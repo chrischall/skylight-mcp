@@ -51,7 +51,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
+      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
       return textContent(doc ? flattenJsonApi(doc) : { default: id });
     }));
 

@@ -55,7 +55,7 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ## Tool surface
 
-86 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write), `settings.ts` (4 frame-settings writes), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (6 people/category tools). Counts: 8 frame + 4 settings + 10 calendar + 6 member, 10 event tools (incl. both notification-settings read+write), 11 list tools (2R+9W), 7 chore tools (2R+5W), 7 reward write tools, 7 meal tools (3R+4W), 12 message/album tools (3R+9W), 4 task-box tools (1R+3W).
+86 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write), `settings.ts` (4 frame-settings writes), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (6 people/category tools). Counts: 8 frame + 4 settings + 10 calendar + 6 member, 10 event tools (incl. both notification-settings read+write), 11 list tools (2R+9W), 7 chore tools (2R+5W), 7 reward tools (1R+6W), 7 meal tools (3R+4W), 12 message/album tools (3R+9W), 4 task-box tools (1R+3W).
 
 | Module | Tools |
 |---|---|

@@ -65,7 +65,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     id: z.string(),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/messages/${id}/likes`);
+    const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/messages/${id}/likes`);
     return textContent(doc ? flattenJsonApi(doc) : { liked: id });
   }));
 

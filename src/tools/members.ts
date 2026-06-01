@@ -33,7 +33,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_approve_user', 'Approve a pending frame user.',
     { id: z.string(), frameId: z.string().optional() },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/users/${id}/approve`);
+      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/users/${id}/approve`);
       return textContent(doc ? flattenJsonApi(doc) : { approved: id });
     }));
 
