@@ -1,3 +1,5 @@
+import { readEnvVar } from '@chrischall/mcp-utils';
+
 export interface SessionAccount {
   mode: 'session';
   name: string;
@@ -11,8 +13,6 @@ export interface SessionAccount {
 }
 
 export type Account = SessionAccount;
-
-import { readEnvVar } from '@chrischall/mcp-utils';
 
 const DEFAULT_BASE_URL = 'https://app.ourskylight.com/api';
 const NO_CONFIG = 'Missing Skylight auth config. Set SKYLIGHT_EMAIL + SKYLIGHT_PASSWORD.';

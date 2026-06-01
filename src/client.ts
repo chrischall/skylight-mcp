@@ -57,15 +57,12 @@ export class SkylightClient {
   }
 
   async request<T = unknown>(method: string, path: string, opts: RequestOpts = {}): Promise<T> {
-    // TokenManager.withAuth handles both the proactive skew refresh (via
-    // getAccessToken) and the reactive single-401-replay path.
     const res = await this.tokens.withAuth((accessToken) =>
       this.send(method, path, opts, accessToken),
     );
     if (res.status < 200 || res.status >= 300) {
       const text = await res.text().catch(() => '');
-      // truncateErrorMessage redacts bearer tokens/JWTs then caps length, so an
-      // upstream body that echoes the request can't leak credentials into a tool result.
+      // prevents credentials leaking into tool results via upstream error echo
       throw new Error(`Skylight API ${method} ${path} failed (HTTP ${res.status}): ${truncateErrorMessage(text, 300)}`);
     }
     if (res.status === 204) return undefined as T;

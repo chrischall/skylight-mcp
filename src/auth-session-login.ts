@@ -52,8 +52,7 @@ function cookieHeader(jar: CookieJar): string {
 // ---------------------------------------------------------------------------
 
 function normalizeTokenResponse(status: number, json: unknown): Tokens {
-  // truncateErrorMessage redacts any tokens/JWTs in the echoed body and caps length
-  // before it reaches a thrown message (and thus a tool result).
+  // prevents credentials leaking into tool results via upstream error echo
   if (status < 200 || status >= 300) {
     throw new Error(`Skylight token request failed (HTTP ${status}): ${truncateErrorMessage(JSON.stringify(json))}`);
   }
