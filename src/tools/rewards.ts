@@ -13,15 +13,17 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
 
   server.tool(
     'skylight_create_reward',
-    'Create a reward (live-verified fields: name + point_value + category_ids).',
+    'Create a reward (live-verified fields: name + description + point_value + respawn_on_redemption + category_ids).',
     {
       name: z.string().describe('Reward name.'),
+      description: z.string().optional(),
       point_value: z.number().describe('Points required to redeem (required).'),
+      respawn_on_redemption: z.boolean().optional().describe('If true, the reward can be redeemed repeatedly (respawns after redemption).'),
       category_ids: idArrayParam.describe('Family-member category ids this reward applies to (required).'),
       frameId: z.string().optional(),
     },
-    frameScoped(getClient, async (c, f, { name, point_value, category_ids }: { name: string; point_value: number; category_ids: Array<string | number>; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/rewards`, { body: { name, point_value, category_ids } });
+    frameScoped(getClient, async (c, f, { name, description, point_value, respawn_on_redemption, category_ids }: { name: string; description?: string; point_value: number; respawn_on_redemption?: boolean; category_ids: Array<string | number>; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/rewards`, { body: compact({ name, description, point_value, respawn_on_redemption, category_ids }) });
       return textContent(flattenJsonApi(doc));
     }),
   );

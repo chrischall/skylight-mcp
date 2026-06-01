@@ -138,6 +138,24 @@ describe('list tools', () => {
     });
   });
 
+  it('update_list_item includes section when provided', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: { label: 'Eggs', section: 'Dairy' } } });
+    await tools.skylight_update_list_item({ listId: '7', itemId: '55', label: 'Eggs', section: 'Dairy' });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/lists/7/list_items/55', {
+      body: { label: 'Eggs', section: 'Dairy' },
+    });
+  });
+
+  it('update_list_item sends section null to clear it', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: {} } });
+    await tools.skylight_update_list_item({ listId: '7', itemId: '55', section: null });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/lists/7/list_items/55', {
+      body: { section: null },
+    });
+  });
+
   it('update_list_item with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '55', type: 'list_item', attributes: {} } });
@@ -249,15 +267,16 @@ describe('list tools', () => {
 
   // ── skylight_clear_list ─────────────────────────────────────────────────
 
-  it('clear_list GETs items then DELETEs one per item, returning the count', async () => {
+  it('clear_list GETs items then issues one bulk DELETE with {ids}', async () => {
     const { tools, request } = harness();
     request.mockResolvedValueOnce({ data: [{ id: '101' }, { id: '102' }] });
     request.mockResolvedValue(undefined);
     const out = await tools.skylight_clear_list({ listId: '7' });
     expect(request).toHaveBeenNthCalledWith(1, 'GET', '/frames/3435252/lists/7/list_items');
-    expect(request).toHaveBeenNthCalledWith(2, 'DELETE', '/frames/3435252/lists/7/list_items/101');
-    expect(request).toHaveBeenNthCalledWith(3, 'DELETE', '/frames/3435252/lists/7/list_items/102');
-    expect(request).toHaveBeenCalledTimes(3);
+    expect(request).toHaveBeenNthCalledWith(2, 'DELETE', '/frames/3435252/lists/7/list_items/bulk_destroy', {
+      body: { ids: ['101', '102'] },
+    });
+    expect(request).toHaveBeenCalledTimes(2);
     expect(JSON.parse(out.content[0].text)).toEqual({ cleared: '7', removed: 2 });
   });
 
@@ -284,7 +303,31 @@ describe('list tools', () => {
     request.mockResolvedValue(undefined);
     await tools.skylight_clear_list({ listId: '7', frameId: '99' });
     expect(request).toHaveBeenNthCalledWith(1, 'GET', '/frames/99/lists/7/list_items');
-    expect(request).toHaveBeenNthCalledWith(2, 'DELETE', '/frames/99/lists/7/list_items/101');
+    expect(request).toHaveBeenNthCalledWith(2, 'DELETE', '/frames/99/lists/7/list_items/bulk_destroy', {
+      body: { ids: ['101'] },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_delete_list_items ──────────────────────────────────────────
+
+  it('delete_list_items bulk-deletes the given ids and returns the count (default frame)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_delete_list_items({ listId: '7', item_ids: ['101', 102] });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/lists/7/list_items/bulk_destroy', {
+      body: { ids: ['101', 102] },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: 2 });
+  });
+
+  it('delete_list_items with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_list_items({ listId: '7', item_ids: ['101'], frameId: '99' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/lists/7/list_items/bulk_destroy', {
+      body: { ids: ['101'] },
+    });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 

@@ -1,6 +1,8 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 86 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 88 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
+
+Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
 ## Auth
 
@@ -51,7 +53,8 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_approve_user` | W | Approve a pending frame user |
 | frames | `skylight_remove_user` | W | Remove a user from the frame |
 | frames | `skylight_delete_category` | W | Delete a category / family member (optional `reassign_to_category_id`, inferred) |
-| frames | `skylight_update_family_member` | W | Update a family member's profile — name, birthday (inferred) |
+| frames | `skylight_update_family_member` | W | Update a family member's profile — birthday, dietary preferences (the name is the category label; set via `skylight_update_category`) |
+| frames | `skylight_update_category` | W | Update a category — rename/recolor, or convert a label into a family-member profile (`linked_to_profile`) |
 | frames | `skylight_set_device_album` | W | Set which photo album a device displays (inferred) |
 | events | `skylight_list_events` | R | List calendar events within a date range |
 | events | `skylight_get_event` | R | Get details for a specific event |
@@ -68,10 +71,11 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | lists | `skylight_update_list` | W | Update a list's name, color, or type |
 | lists | `skylight_delete_list` | W | Delete a shared list |
 | lists | `skylight_add_list_item` | W | Add an item to a shared list |
-| lists | `skylight_update_list_item` | W | Rename a list item or check/uncheck it |
+| lists | `skylight_update_list_item` | W | Rename a list item, check/uncheck it, or set its section |
 | lists | `skylight_delete_list_item` | W | Delete an item from a shared list |
+| lists | `skylight_delete_list_items` | W | Bulk-delete specific list items |
 | lists | `skylight_move_list_item` | W | Reorder a list item |
-| lists | `skylight_clear_list` | W | Remove all items from a list |
+| lists | `skylight_clear_list` | W | Remove all items from a list (single bulk delete) |
 | lists | `skylight_set_list_item_section` | W | Move list items into a named section (or clear it) |
 | chores | `skylight_list_chores` | R | List chores within a date range |
 | chores | `skylight_create_chore` | W | Create a new chore (summary + category) |
@@ -81,7 +85,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | chores | `skylight_complete_chore_instance` | W | Mark a specific recurring-chore occurrence complete |
 | chores | `skylight_list_rewards` | R | List rewards configured for a frame |
 | rewards | `skylight_get_reward` | R | Get one reward |
-| rewards | `skylight_create_reward` | W | Create a reward (name + point_value + category_ids) |
+| rewards | `skylight_create_reward` | W | Create a reward (name + description + point_value + respawn_on_redemption + category_ids) |
 | rewards | `skylight_update_reward` | W | Update a reward |
 | rewards | `skylight_delete_reward` | W | Delete a reward |
 | rewards | `skylight_redeem_reward` | W | Redeem a reward |

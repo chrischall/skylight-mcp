@@ -56,16 +56,30 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       return textContent({ deleted: id });
     }));
 
-  // NOTE: family_member field set (name/birthday) inferred from the app bundle, not live-verified.
-  server.tool('skylight_update_family_member', "Update a family member's profile (name, birthday).",
+  server.tool('skylight_update_family_member', "Update a family member's profile (birthday, dietary preferences). The member's name is the category label — set it via skylight_update_category.",
     {
       id: idParam.describe('Category/member id.'),
-      name: z.string().optional(),
       birthday: z.string().optional().describe('YYYY-MM-DD'),
+      dietary_preferences: z.string().optional(),
       frameId: z.string().optional(),
     },
-    frameScoped(getClient, async (c, f, { id, name, birthday }: { id: string | number; name?: string; birthday?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}/family_member`, { body: compact({ name, birthday }) });
+    frameScoped(getClient, async (c, f, { id, birthday, dietary_preferences }: { id: string | number; birthday?: string; dietary_preferences?: string; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}/family_member`, { body: compact({ birthday, dietary_preferences }) });
+      return textContent(flattenJsonApi(doc));
+    }));
+
+  server.tool('skylight_update_category', 'Update a category — rename/recolor, or convert a label into a family-member profile (linked_to_profile).',
+    {
+      id: idParam.describe('Category id.'),
+      label: z.string().optional().describe('Display name.'),
+      color: z.string().optional().describe('Hex color.'),
+      linked_to_profile: z.boolean().optional().describe('Set true to convert a basic label into a full family-member profile.'),
+      selected_for_chore_chart: z.boolean().optional(),
+      avatar_id: idParam.optional(),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { id, label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { id: string | number; label?: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { body: compact({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
       return textContent(flattenJsonApi(doc));
     }));
 }

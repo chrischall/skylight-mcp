@@ -38,10 +38,11 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     itemId: z.string(),
     label: z.string().optional(),
     checked: z.boolean().optional().describe('true marks the item completed, false reopens it.'),
+    section: z.string().nullable().optional().describe('Section name (null to clear).'),
     frameId: z.string().optional(),
-  }, frameScoped(getClient, async (c, f, { listId, itemId, label, checked }: { listId: string; itemId: string; label?: string; checked?: boolean; frameId?: string }) => {
+  }, frameScoped(getClient, async (c, f, { listId, itemId, label, checked, section }: { listId: string; itemId: string; label?: string; checked?: boolean; section?: string | null; frameId?: string }) => {
     const status = checked === undefined ? undefined : (checked ? 'completed' : 'pending');
-    const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: compact({ label, status }) });
+    const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: compact({ label, status, section }) });
     return textContent(flattenJsonApi(doc));
   }));
 
@@ -83,18 +84,25 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     return doc ? textContent(flattenJsonApi(doc)) : textContent({ moved: itemId });
   }));
 
-  // The bulk_destroy endpoint returns 422 with no usable body shape; delete per-item
-  // instead — fetch the current items, then DELETE each one individually.
+  // LIVE-VERIFIED: bulk_destroy takes a flat { ids: [...] } body. Fetch the
+  // current item ids, then issue a single bulk DELETE.
   server.tool('skylight_clear_list', 'Remove all items from a list.', {
     listId: z.string(),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
     const doc = await c.request<{ data?: Array<{ id: string }> }>('GET', `/frames/${f}/lists/${listId}/list_items`);
-    const items = doc?.data ?? [];
-    for (const it of items) {
-      await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/${it.id}`);
-    }
-    return textContent({ cleared: listId, removed: items.length });
+    const ids = (doc?.data ?? []).map((i) => i.id);
+    if (ids.length) await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids } });
+    return textContent({ cleared: listId, removed: ids.length });
+  }));
+
+  server.tool('skylight_delete_list_items', 'Bulk-delete specific list items.', {
+    listId: z.string(),
+    item_ids: idArrayParam.describe('List-item ids to delete.'),
+    frameId: z.string().optional(),
+  }, frameScoped(getClient, async (c, f, { listId, item_ids }: { listId: string; item_ids: Array<string | number>; frameId?: string }) => {
+    await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids: item_ids } });
+    return textContent({ deleted: item_ids.length });
   }));
 
   // LIVE-VERIFIED: bulk_update_section moves list items into a named section (200).

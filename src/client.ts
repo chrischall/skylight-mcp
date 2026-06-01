@@ -76,7 +76,7 @@ export class SkylightClient {
     for (const [k, v] of Object.entries(opts.query ?? {})) {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
-    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' };
+    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'skylight-api-version': '2026-05-01' };
     const init: RequestInit = { method, headers };
     if (opts.body !== undefined) {
       headers['Content-Type'] = 'application/json';
