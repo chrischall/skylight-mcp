@@ -171,6 +171,42 @@ describe('ai auto-creation tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── skylight_list_auto_creation_intents ─────────────────────────────────
+
+  it('list_auto_creation_intents fetches all intents with the default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '16', type: 'auto_creation_intent', attributes: { status: 'pending', engine: 'meal_sittings_generator' } }] });
+    const out = await tools.skylight_list_auto_creation_intents({});
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/auto_creation_intents');
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '16', type: 'auto_creation_intent', status: 'pending', engine: 'meal_sittings_generator' }]);
+  });
+
+  it('list_auto_creation_intents with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_auto_creation_intents({ frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/auto_creation_intents');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_list_auto_creation_items ───────────────────────────────────
+
+  it('list_auto_creation_items fetches created_items (meal/activity drafts) with the default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '77', type: 'created_item', attributes: { summary: 'Tacos' } }] });
+    const out = await tools.skylight_list_auto_creation_items({ id: '16' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/auto_creation_intents/16/created_items');
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '77', type: 'created_item', summary: 'Tacos' }]);
+  });
+
+  it('list_auto_creation_items with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_auto_creation_items({ id: '16', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/auto_creation_intents/16/created_items');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
   // ── skylight_approve_auto_creation ──────────────────────────────────────
 
   it('approve_auto_creation bulk-approves drafts and returns flattened doc when present', async () => {
