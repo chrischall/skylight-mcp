@@ -44,6 +44,9 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_update_calendar` | W | Set which sub-calendars of a connected account are active |
 | frames | `skylight_delete_source_calendar` | W | Remove a connected source calendar (incl. webcal subscriptions) |
 | frames | `skylight_set_default_calendar` | W | Set the default source calendar for new events |
+| frames | `skylight_link_apple_calendar` | W | Link an Apple/iCloud calendar using an app-specific password |
+| frames | `skylight_categorize_source_calendar` | W | Attribute a source calendar's events to one or more family members |
+| frames | `skylight_create_source_calendar` | W | Create a source calendar from raw provider attributes (advanced) |
 | frames | `skylight_invite_user` | W | Invite a user to the frame by email |
 | frames | `skylight_approve_user` | W | Approve a pending frame user |
 | frames | `skylight_remove_user` | W | Remove a user from the frame |

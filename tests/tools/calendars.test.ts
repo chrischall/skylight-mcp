@@ -148,4 +148,70 @@ describe('calendar tools', () => {
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/source_calendars/set_default_for_new_events', { body: { id: '7' } });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_link_apple_calendar ─────────────────────────────────────────
+
+  it('link_apple_calendar POSTs email + app-specific password with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: { name: 'iCloud' } } });
+    const out = await tools.skylight_link_apple_calendar({ email: 'a@b.com', app_specific_password: 'xxxx-xxxx' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/calendars/apple', {
+      body: { email: 'a@b.com', app_specific_password: 'xxxx-xxxx' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'calendar', name: 'iCloud' });
+  });
+
+  it('link_apple_calendar with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: {} } });
+    await tools.skylight_link_apple_calendar({ email: 'a@b.com', app_specific_password: 'xxxx-xxxx', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/calendars/apple', {
+      body: { email: 'a@b.com', app_specific_password: 'xxxx-xxxx' },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_categorize_source_calendar ──────────────────────────────────
+
+  it('categorize_source_calendar PUTs categorizations with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'source_calendar', attributes: { name: 'Work' } } });
+    const out = await tools.skylight_categorize_source_calendar({ id: '7', category_ids: ['10901869', 7] });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/source_calendars/7/source_calendar_categorizations', {
+      body: { categorizations: [{ category_id: '10901869' }, { category_id: 7 }] },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'source_calendar', name: 'Work' });
+  });
+
+  it('categorize_source_calendar with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'source_calendar', attributes: {} } });
+    await tools.skylight_categorize_source_calendar({ id: 8, category_ids: ['10901869', 7], frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/source_calendars/8/source_calendar_categorizations', {
+      body: { categorizations: [{ category_id: '10901869' }, { category_id: 7 }] },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_create_source_calendar ──────────────────────────────────────
+
+  it('create_source_calendar POSTs raw attributes with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '9', type: 'source_calendar', attributes: { provider: 'custom' } } });
+    const out = await tools.skylight_create_source_calendar({ attributes: { provider: 'custom', sync_url: 'x' } });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/source_calendars', {
+      body: { attributes: { provider: 'custom', sync_url: 'x' } },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '9', type: 'source_calendar', provider: 'custom' });
+  });
+
+  it('create_source_calendar with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '9', type: 'source_calendar', attributes: {} } });
+    await tools.skylight_create_source_calendar({ attributes: { provider: 'custom' }, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/source_calendars', {
+      body: { attributes: { provider: 'custom' } },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

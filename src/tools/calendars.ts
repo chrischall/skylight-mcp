@@ -54,4 +54,38 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
       return textContent(doc ? flattenJsonApi(doc) : { default: id });
     }));
+
+  server.tool('skylight_link_apple_calendar', 'Link an Apple/iCloud calendar to the frame using an app-specific password.',
+    {
+      email: z.string().describe('Apple ID email.'),
+      app_specific_password: z.string().describe('An app-specific password generated at appleid.apple.com (NOT your normal Apple password).'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { email, app_specific_password }: { email: string; app_specific_password: string; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/calendars/apple`, { body: { email, app_specific_password } });
+      return textContent(flattenJsonApi(doc));
+    }));
+
+  server.tool('skylight_categorize_source_calendar', "Attribute a source calendar's events to one or more family members.",
+    {
+      id: idParam.describe('Source-calendar id (from skylight_list_source_calendars / skylight_list_calendars).'),
+      category_ids: idArrayParam.describe("Family-member category ids whose members this calendar's events are attributed to."),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { id, category_ids }: { id: string | number; category_ids: Array<string | number>; frameId?: string }) => {
+      const categorizations = category_ids.map((cid) => ({ category_id: cid }));
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/source_calendars/${id}/source_calendar_categorizations`, { body: { categorizations } });
+      return textContent(flattenJsonApi(doc));
+    }));
+
+  server.tool('skylight_create_source_calendar', 'Create a source calendar from raw provider attributes (advanced).',
+    {
+      attributes: z.record(z.string(), z.unknown()).describe('Provider-specific source-calendar attributes.'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { attributes }: { attributes: Record<string, unknown>; frameId?: string }) => {
+      // NOTE: generic passthrough; attribute shape is provider-specific.
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/source_calendars`, { body: { attributes } });
+      return textContent(flattenJsonApi(doc));
+    }));
 }
