@@ -113,39 +113,25 @@ describe('frame tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
-  // ── skylight_list_calendars ──────────────────────────────────────────────
+  // ── skylight_set_device_album ────────────────────────────────────────────
 
-  it('list_calendars fetches calendars with default frame', async () => {
+  it('set_device_album PUTs current_album_id to the device (default frame)', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: [{ id: '1', type: 'calendar', attributes: { name: 'Google' } }] });
-    const out = await tools.skylight_list_calendars({});
-    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/calendars');
-    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', type: 'calendar', name: 'Google' }]);
+    request.mockResolvedValue({ data: { id: '12', type: 'device', attributes: { current_album_id: '88' } } });
+    const out = await tools.skylight_set_device_album({ id: '12', current_album_id: '88' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/devices/12', {
+      body: { current_album_id: '88' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '12', type: 'device', current_album_id: '88' });
   });
 
-  it('list_calendars with explicit frameId uses it and skips resolveFrameId', async () => {
+  it('set_device_album with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue({ data: [] });
-    await tools.skylight_list_calendars({ frameId: '99' });
-    expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendars');
-    expect(resolveFrameId).not.toHaveBeenCalled();
-  });
-
-  // ── skylight_get_event_notification_settings ─────────────────────────────
-
-  it('get_event_notification_settings fetches settings with default frame', async () => {
-    const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: { enabled: true } } });
-    const out = await tools.skylight_get_event_notification_settings({});
-    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/event_notification_settings');
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'event_notification_setting', enabled: true });
-  });
-
-  it('get_event_notification_settings with explicit frameId uses it and skips resolveFrameId', async () => {
-    const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: {} } });
-    await tools.skylight_get_event_notification_settings({ frameId: '99' });
-    expect(request).toHaveBeenCalledWith('GET', '/frames/99/event_notification_settings');
+    request.mockResolvedValue({ data: { id: '12', type: 'device', attributes: {} } });
+    await tools.skylight_set_device_album({ id: 12, current_album_id: 88, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/devices/12', {
+      body: { current_album_id: 88 },
+    });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 });

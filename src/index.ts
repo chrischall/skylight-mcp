@@ -3,12 +3,16 @@ import { runMcp, loadDotenvSafely } from '@chrischall/mcp-utils';
 import { resolveAuth } from './auth.js';
 import type { SkylightClient } from './client.js';
 import { registerFrameTools } from './tools/frames.js';
+import { registerSettingsTools } from './tools/settings.js';
+import { registerCalendarTools } from './tools/calendars.js';
+import { registerMemberTools } from './tools/members.js';
 import { registerEventTools } from './tools/events.js';
 import { registerListTools } from './tools/lists.js';
 import { registerChoreTools } from './tools/chores.js';
 import { registerMealTools } from './tools/meals.js';
 import { registerMessageTools } from './tools/messages.js';
 import { registerTaskTools } from './tools/tasks.js';
+import { registerRewardTools } from './tools/rewards.js';
 
 await loadDotenvSafely();
 
@@ -37,11 +41,15 @@ await runMcp<typeof getClient>({
   deps: getClient,
   tools: [
     registerFrameTools,
+    registerSettingsTools,
+    registerCalendarTools,
+    registerMemberTools,
     registerEventTools,
     registerListTools,
     registerChoreTools,
     registerMealTools,
     registerMessageTools,
     registerTaskTools,
+    registerRewardTools,
   ],
 });

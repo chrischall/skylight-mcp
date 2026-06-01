@@ -109,6 +109,14 @@ describe('event tools', () => {
     expect('ends_at' in body).toBe(false);
   });
 
+  it('create_event includes category_ids for member assignment', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
+    await tools.skylight_create_event({ summary: 'Dentist', category_ids: ['10901869'] });
+    const body = request.mock.calls[0][2].body;
+    expect(body.category_ids).toEqual(['10901869']);
+  });
+
   it('create_event with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'calendar_event', attributes: {} } });
@@ -157,6 +165,14 @@ describe('event tools', () => {
     expect(body.timezone).toBe('America/Denver');
     expect(body.invited_emails).toEqual(['bob@example.com']);
     expect(body.rrule).toBe('FREQ=DAILY');
+  });
+
+  it('update_event includes category_ids for member assignment', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
+    await tools.skylight_update_event({ id: '5', category_ids: ['10901869'] });
+    const body = request.mock.calls[0][2].body;
+    expect(body.category_ids).toEqual(['10901869']);
   });
 
   // ── skylight_delete_event ───────────────────────────────────────────────
@@ -228,6 +244,54 @@ describe('event tools', () => {
     request.mockResolvedValue({ data: [] });
     await tools.skylight_list_recent_invited_emails({ frameId: '99' });
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendar_events/recent_invited_emails');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_get_event_notification_settings ─────────────────────────────
+
+  it('get_event_notification_settings fetches settings with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: { enabled: true } } });
+    const out = await tools.skylight_get_event_notification_settings({});
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/event_notification_settings');
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'event_notification_setting', enabled: true });
+  });
+
+  it('get_event_notification_settings with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: {} } });
+    await tools.skylight_get_event_notification_settings({ frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/event_notification_settings');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_update_event_notification_settings ──────────────────────────
+
+  it('update_event_notification_settings PUTs compacted body with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: { on_time: true } } });
+    const out = await tools.skylight_update_event_notification_settings({ on_time: true, early: false, early_minutes_before: 15 });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/event_notification_settings', {
+      body: { on_time: true, early: false, early_minutes_before: 15 },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'event_notification_setting', on_time: true });
+  });
+
+  it('update_event_notification_settings compacts undefined fields', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: {} } });
+    await tools.skylight_update_event_notification_settings({ on_time: true });
+    const body = request.mock.calls[0][2].body;
+    expect(body).toEqual({ on_time: true });
+    expect('early' in body).toBe(false);
+    expect('early_minutes_before' in body).toBe(false);
+  });
+
+  it('update_event_notification_settings with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'event_notification_setting', attributes: {} } });
+    await tools.skylight_update_event_notification_settings({ early: true, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/event_notification_settings', { body: { early: true } });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 });
