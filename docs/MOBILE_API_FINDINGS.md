@@ -84,20 +84,31 @@ Three engines; then approve/undo the drafts:
 3. Register: `POST /api/messages/uploads { file_upload:{ bucket, key, etag }, frame_ids:[...], caption, ext }`.
    - Verified-captured register body: `{"file_upload":{"bucket":"production-cloud-useruploads…","etag":"\"<md5>\"","key":"uploads/10730517/<uuid>.heic"},"frame_ids":["3435252"],"caption":"…","ext":"heic"}`.
 
-### ⚠️ Live blocker (2026-06-01): S3 PutObject returns 403 AccessDenied
-The STS creds returned by `cloud_upload_credentials` are **valid** (STS `GetCallerIdentity` → 200,
-ARN `…assumed-role/Production-Cloud-UserUploadsBucketClientUploadRole2-…/message-upload-10730517`)
-but currently **deny `s3:PutObject`** on their own `key_prefix`:
-`"… is not authorized to perform: s3:PutObject … because no identity-based policy allows the s3:PutObject action"`.
+### Mechanism: it's a MULTIPART upload, not a single PutObject (2026-06-01)
+Probing exactly which S3 actions the `cloud_upload_credentials` role permits (creds are **valid** — STS
+`GetCallerIdentity` → 200, ARN `…ClientUploadRole2-…/message-upload-10730517`):
 
-This is **not a client/signing bug** — the official `@aws-sdk/client-s3` v3 `PutObjectCommand` produces the
-*identical* AccessDenied with the same creds. Ruled out (none change the result): SSE (AES256/kms), ACL,
-content-type (image/png, octet-stream), key shape (uuid/heic/no-`uploads/`-prefix), unsigned-payload,
-CRC32 checksum, region (bucket confirmed us-east-1), and `?upload_type=` params on the creds endpoint.
-The role's identity policy appears to grant PutObject only under a condition the app supplies that isn't
-reproducible headlessly (or the server-side role scoping changed since the capture). The MCP code (SigV4
-in `src/s3-upload.ts`, orchestration in `src/tools/photos.ts`) is correct and fully unit-tested; only the
-**live** PutObject is blocked. Manual re-check: `npx tsx scripts/live-photo-test.ts <image>`.
+| S3 action | Result |
+|---|---|
+| `PutObject` | ❌ AccessDenied (`no identity-based policy allows s3:PutObject`) |
+| **`CreateMultipartUpload`** | ✅ allowed |
+| **`UploadPart`** | ✅ allowed (part ETag is a plain MD5 — matches the captured register `etag`) |
+| `CompleteMultipartUpload` | ❌ AccessDenied (Complete needs `s3:PutObject`) |
+| `GetObject` / `HeadObject` / `ListObjectsV2` / `PutObjectTagging` | ❌ AccessDenied (`s3:ListBucket`) |
+
+So the client is scoped to **start a multipart upload and push parts only**; it cannot finalize it. The
+captured register `etag` (`"<32-hex md5>"`, no `-N` suffix) is the single **part** ETag, confirming this.
+This is **not a signing bug** — the official `@aws-sdk/client-s3` v3 reproduces every result above
+identically. Ruled out for the PutObject path: SSE/ACL/content-type/key-shape/unsigned-payload/CRC32/
+region/`?upload_type=` params.
+
+**Open question (needs a real-app capture of `*.amazonaws.com` + the register POST):** how the upload is
+*finalized*. The client can't `CompleteMultipartUpload`, so the Skylight server must complete it — but
+replaying `CreateMultipartUpload` + `UploadPart` + `POST /messages/uploads {file_upload:{bucket,key,etag}}`
+(with and without `upload_id`/`parts`) returns `{data:{message_ids:[id]}}` yet the photo never materializes
+(frame shows 0 messages/0 albums; the `message_id` 404s under `/frames/{f}/messages/{id}`). The missing
+piece is what the app sends that triggers server-side completion. The MCP signing code in `src/s3-upload.ts`
+is correct; `src/tools/photos.ts` needs to be re-pointed at the multipart flow once finalization is known.
 
 ## Still gated (not addable)
 
