@@ -162,7 +162,7 @@ describe('frame tools', () => {
     });
     const out = await tools.skylight_resolve_member({ name: 'mo' });
     expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/categories');
-    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', label: 'Mom' }]);
+    expect(JSON.parse(out.content[0].text)).toEqual({ matched: true, members: [{ id: '1', label: 'Mom' }] });
   });
 
   it('resolve_member returns all categories when none match', async () => {
@@ -175,11 +175,15 @@ describe('frame tools', () => {
       ],
     });
     const out = await tools.skylight_resolve_member({ name: 'zzz' });
-    expect(JSON.parse(out.content[0].text)).toEqual([
-      { id: '1', label: 'Mom' },
-      { id: '2', label: 'Dad' },
-      { id: '3' },
-    ]);
+    expect(JSON.parse(out.content[0].text)).toEqual({
+      matched: false,
+      members: [
+        { id: '1', label: 'Mom' },
+        { id: '2', label: 'Dad' },
+        { id: '3' },
+      ],
+      note: 'No name match; returning all members.',
+    });
   });
 
   it('resolve_member with explicit frameId uses it and skips resolveFrameId', async () => {

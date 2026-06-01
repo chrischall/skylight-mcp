@@ -55,7 +55,7 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ## Tool surface
 
-79 tools total. 24 frame/device/account settings + calendar + member-management tools (12R+12W), 9 event tools (incl. notification-settings write), 10 list tools (2R+8W), 6 chore tools (1R+5W), 7 reward write tools, 7 meal tools (3R+4W), 12 message/album tools (3R+9W), 4 task-box tools (1R+3W). The frames and messages modules are now read+write.
+79 tools total. 24 frame/device/account settings + calendar + member-management tools (12R+12W), 9 event tools (incl. notification-settings write), 10 list tools (2R+8W), 6 chore tools (2R+4W), 7 reward write tools, 7 meal tools (3R+4W), 12 message/album tools (3R+9W), 4 task-box tools (1R+3W). The frames and messages modules are now read+write.
 
 | Module | Tools |
 |---|---|

@@ -1,20 +1,14 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { SkylightClient } from '../client.js';
-import { textContent, flattenJsonApi, compact, type JsonApiDoc } from './_shared.js';
-
-type GetClient = () => Promise<SkylightClient>;
+import { textContent, flattenJsonApi, compact, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerRewardTools(server: McpServer, getClient: GetClient) {
   server.tool(
     'skylight_get_reward',
     'Get one reward.',
     { id: z.string(), frameId: z.string().optional() },
-    async ({ id, frameId }) => {
-      const c = await getClient();
-      const f = frameId ?? (await c.resolveFrameId());
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/rewards/${id}`)));
-    },
+    frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/rewards/${id}`)))),
   );
 
   server.tool(
@@ -23,15 +17,13 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     {
       name: z.string().describe('Reward name.'),
       point_value: z.number().describe('Points required to redeem (required).'),
-      category_ids: z.array(z.union([z.string(), z.number()])).describe('Family-member category ids this reward applies to (required).'),
+      category_ids: idArrayParam.describe('Family-member category ids this reward applies to (required).'),
       frameId: z.string().optional(),
     },
-    async ({ name, point_value, category_ids, frameId }) => {
-      const c = await getClient();
-      const f = frameId ?? (await c.resolveFrameId());
+    frameScoped(getClient, async (c, f, { name, point_value, category_ids }: { name: string; point_value: number; category_ids: Array<string | number>; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/rewards`, { body: { name, point_value, category_ids } });
       return textContent(flattenJsonApi(doc));
-    },
+    }),
   );
 
   server.tool(
@@ -41,27 +33,23 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       id: z.string(),
       name: z.string().optional(),
       point_value: z.number().optional(),
-      category_ids: z.array(z.union([z.string(), z.number()])).optional(),
+      category_ids: idArrayParam.optional(),
       frameId: z.string().optional(),
     },
-    async ({ id, name, point_value, category_ids, frameId }) => {
-      const c = await getClient();
-      const f = frameId ?? (await c.resolveFrameId());
+    frameScoped(getClient, async (c, f, { id, name, point_value, category_ids }: { id: string; name?: string; point_value?: number; category_ids?: Array<string | number>; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/rewards/${id}`, { body: compact({ name, point_value, category_ids }) });
       return textContent(flattenJsonApi(doc));
-    },
+    }),
   );
 
   server.tool(
     'skylight_delete_reward',
     'Delete a reward.',
     { id: z.string(), frameId: z.string().optional() },
-    async ({ id, frameId }) => {
-      const c = await getClient();
-      const f = frameId ?? (await c.resolveFrameId());
+    frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/rewards/${id}`);
       return textContent({ deleted: id });
-    },
+    }),
   );
 
   server.tool(
@@ -69,15 +57,13 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'Redeem a reward.',
     {
       id: z.string(),
-      category_id: z.union([z.string(), z.number()]).optional().describe('Member redeeming, if required.'),
+      category_id: idParam.optional().describe('Member redeeming, if required.'),
       frameId: z.string().optional(),
     },
-    async ({ id, category_id, frameId }) => {
-      const c = await getClient();
-      const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('POST', `/frames/${f}/rewards/${id}/redeem`, { body: compact({ category_id }) });
-      return doc ? textContent(flattenJsonApi(doc as any)) : textContent({ redeemed: id });
-    },
+    frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/rewards/${id}/redeem`, { body: compact({ category_id }) });
+      return doc ? textContent(flattenJsonApi(doc)) : textContent({ redeemed: id });
+    }),
   );
 
   server.tool(
@@ -85,30 +71,26 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'Reverse a reward redemption.',
     {
       id: z.string(),
-      category_id: z.union([z.string(), z.number()]).optional().describe('Member redeeming, if required.'),
+      category_id: idParam.optional().describe('Member redeeming, if required.'),
       frameId: z.string().optional(),
     },
-    async ({ id, category_id, frameId }) => {
-      const c = await getClient();
-      const f = frameId ?? (await c.resolveFrameId());
-      const doc = await c.request('POST', `/frames/${f}/rewards/${id}/unredeem`, { body: compact({ category_id }) });
-      return doc ? textContent(flattenJsonApi(doc as any)) : textContent({ unredeemed: id });
-    },
+    frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/rewards/${id}/unredeem`, { body: compact({ category_id }) });
+      return doc ? textContent(flattenJsonApi(doc)) : textContent({ unredeemed: id });
+    }),
   );
 
   server.tool(
     'skylight_add_reward_points',
     'Grant (or deduct) reward points to family members.',
     {
-      category_ids: z.array(z.union([z.string(), z.number()])).describe('Member category ids to grant points to.'),
+      category_ids: idArrayParam.describe('Member category ids to grant points to.'),
       points: z.number().describe('Points to add (can be negative to deduct).'),
       frameId: z.string().optional(),
     },
-    async ({ category_ids, points, frameId }) => {
-      const c = await getClient();
-      const f = frameId ?? (await c.resolveFrameId());
+    frameScoped(getClient, async (c, f, { category_ids, points }: { category_ids: Array<string | number>; points: number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/reward_points`, { body: { category_ids, points } });
       return textContent(flattenJsonApi(doc));
-    },
+    }),
   );
 }
