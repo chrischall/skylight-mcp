@@ -78,9 +78,26 @@ Three engines; then approve/undo the drafts:
 
 ## Photo upload (issue #12) — 2-step, needs AWS S3
 
-1. `GET /api/messages/cloud_upload_credentials` → `{ credentials:{access_key_id, secret_access_key, session_token}, region:"us-east-1", bucket, key_prefix, credentials_expire_at }`.
-2. Upload the image binary to S3 (`s3://{bucket}/{key_prefix}/{uuid}.{ext}`) with SigV4 using those temp STS creds → get the ETag.
+1. `GET /api/messages/cloud_upload_credentials` → `{ data: { credentials:{access_key_id, secret_access_key, session_token}, region:"us-east-1", bucket, key_prefix, credentials_expire_at } }`.
+   - NB: fields sit directly on `data` (no JSON:API `attributes` wrapper).
+2. Upload the image binary to S3 (`s3://{bucket}/{key_prefix}{uuid}.{ext}`, `key_prefix` already ends in `/`) with SigV4 using those temp STS creds → get the ETag.
 3. Register: `POST /api/messages/uploads { file_upload:{ bucket, key, etag }, frame_ids:[...], caption, ext }`.
+   - Verified-captured register body: `{"file_upload":{"bucket":"production-cloud-useruploads…","etag":"\"<md5>\"","key":"uploads/10730517/<uuid>.heic"},"frame_ids":["3435252"],"caption":"…","ext":"heic"}`.
+
+### ⚠️ Live blocker (2026-06-01): S3 PutObject returns 403 AccessDenied
+The STS creds returned by `cloud_upload_credentials` are **valid** (STS `GetCallerIdentity` → 200,
+ARN `…assumed-role/Production-Cloud-UserUploadsBucketClientUploadRole2-…/message-upload-10730517`)
+but currently **deny `s3:PutObject`** on their own `key_prefix`:
+`"… is not authorized to perform: s3:PutObject … because no identity-based policy allows the s3:PutObject action"`.
+
+This is **not a client/signing bug** — the official `@aws-sdk/client-s3` v3 `PutObjectCommand` produces the
+*identical* AccessDenied with the same creds. Ruled out (none change the result): SSE (AES256/kms), ACL,
+content-type (image/png, octet-stream), key shape (uuid/heic/no-`uploads/`-prefix), unsigned-payload,
+CRC32 checksum, region (bucket confirmed us-east-1), and `?upload_type=` params on the creds endpoint.
+The role's identity policy appears to grant PutObject only under a condition the app supplies that isn't
+reproducible headlessly (or the server-side role scoping changed since the capture). The MCP code (SigV4
+in `src/s3-upload.ts`, orchestration in `src/tools/photos.ts`) is correct and fully unit-tested; only the
+**live** PutObject is blocked. Manual re-check: `npx tsx scripts/live-photo-test.ts <image>`.
 
 ## Still gated (not addable)
 
