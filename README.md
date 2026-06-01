@@ -1,6 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 44 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read), messages and albums (read), and frame/device info (read).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 53 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read), messages and albums (read), and frame/device info (read).
 
 ## Auth
 
@@ -57,7 +57,16 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | chores | `skylight_list_chores` | R | List chores within a date range |
 | chores | `skylight_create_chore` | W | Create a new chore (summary + category) |
 | chores | `skylight_complete_chore` | W | Mark a chore complete |
+| chores | `skylight_update_chore` | W | Update a chore (supports recurring `apply_to`) |
+| chores | `skylight_complete_chore_instance` | W | Mark a specific recurring-chore occurrence complete |
 | chores | `skylight_list_rewards` | R | List rewards configured for a frame |
+| rewards | `skylight_get_reward` | R | Get one reward |
+| rewards | `skylight_create_reward` | W | Create a reward (name + point_value + category_ids) |
+| rewards | `skylight_update_reward` | W | Update a reward |
+| rewards | `skylight_delete_reward` | W | Delete a reward |
+| rewards | `skylight_redeem_reward` | W | Redeem a reward |
+| rewards | `skylight_unredeem_reward` | W | Reverse a reward redemption |
+| rewards | `skylight_add_reward_points` | W | Grant or deduct reward points to members |
 | meals | `skylight_list_recipes` | R | List meal recipes for the frame |
 | meals | `skylight_list_meal_categories` | R | List meal categories for the frame |
 | meals | `skylight_get_recipe` | R | Get one meal recipe |

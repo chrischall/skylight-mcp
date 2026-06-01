@@ -111,6 +111,74 @@ describe('chore tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual({ completed: '5' });
   });
 
+  // ── skylight_update_chore ────────────────────────────────────────────────
+
+  it('update_chore PUTs compacted body (drops undefined)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { summary: 'Dishes done' } } });
+    const out = await tools.skylight_update_chore({ id: '5', summary: 'Dishes done' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5', {
+      body: { summary: 'Dishes done' },
+    });
+    const body = request.mock.calls[0][2].body;
+    expect(body).not.toHaveProperty('category_id');
+    expect(body).not.toHaveProperty('start');
+    expect(body).not.toHaveProperty('apply_to');
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', summary: 'Dishes done' });
+  });
+
+  it('update_chore passes apply_to and all fields through', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await tools.skylight_update_chore({
+      id: '5',
+      summary: 'Vacuum',
+      category_id: 42,
+      start: '2026-06-01',
+      description: 'All rooms',
+      reward_points: 3,
+      apply_to: 'this_and_future',
+    });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5', {
+      body: { summary: 'Vacuum', category_id: 42, start: '2026-06-01', description: 'All rooms', reward_points: 3, apply_to: 'this_and_future' },
+    });
+  });
+
+  it('update_chore with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await tools.skylight_update_chore({ id: '5', summary: 'X', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/chores/5', expect.any(Object));
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_complete_chore_instance ─────────────────────────────────────
+
+  it('complete_chore_instance PUTs {status, instance_date, category_id} and returns flattened doc', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'completed' } } });
+    const out = await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', category_id: '42' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5/completions', {
+      body: { status: 'completed', instance_date: '2026-06-01', category_id: '42' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'completed' });
+  });
+
+  it('complete_chore_instance returns { completed, instance_date } when API returns no body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', category_id: 42 });
+    expect(JSON.parse(out.content[0].text)).toEqual({ completed: '5', instance_date: '2026-06-01' });
+  });
+
+  it('complete_chore_instance with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', category_id: '42', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/99/chores/5/completions', expect.any(Object));
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
   // ── skylight_list_rewards ────────────────────────────────────────────────
 
   it('list_rewards passes explicit redeemed_at_min/max directly', async () => {

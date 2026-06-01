@@ -60,6 +60,45 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   );
 
   server.tool(
+    'skylight_update_chore',
+    'Update a chore.',
+    {
+      id: z.string(),
+      summary: z.string().optional(),
+      category_id: z.union([z.string(), z.number()]).optional(),
+      start: z.string().optional(),
+      description: z.string().optional(),
+      reward_points: z.number().optional(),
+      apply_to: z.enum(['this', 'this_and_future', 'all']).optional().describe('For recurring chores: which occurrences to update.'),
+      frameId: z.string().optional(),
+    },
+    async ({ id, summary, category_id, start, description, reward_points, apply_to, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/chores/${id}`, { body: compact({ summary, category_id, start, description, reward_points, apply_to }) });
+      return textContent(flattenJsonApi(doc));
+    },
+  );
+
+  // NOTE: instance completion status value inferred ('completed'); whole-chore completion uses 'complete'.
+  server.tool(
+    'skylight_complete_chore_instance',
+    'Mark a specific occurrence of a recurring chore complete.',
+    {
+      id: z.string(),
+      instance_date: z.string().describe('YYYY-MM-DD occurrence date (required).'),
+      category_id: z.union([z.string(), z.number()]).describe('Member completing it (required).'),
+      frameId: z.string().optional(),
+    },
+    async ({ id, instance_date, category_id, frameId }) => {
+      const c = await getClient();
+      const f = frameId ?? (await c.resolveFrameId());
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: compact({ status: 'completed', instance_date, category_id }) });
+      return doc ? textContent(flattenJsonApi(doc)) : textContent({ completed: id, instance_date });
+    },
+  );
+
+  server.tool(
     'skylight_list_rewards',
     'List redeemed rewards for a Skylight frame, defaulting to the last 30 days.',
     {
