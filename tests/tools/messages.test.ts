@@ -246,4 +246,58 @@ describe('message tools', () => {
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/messages/1');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_update_album ───────────────────────────────────────────────
+
+  it('update_album PATCHes compacted body with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'album', attributes: { title: 'Trip', exclude_from_slideshow: true } } });
+    const out = await tools.skylight_update_album({ id: '5', title: 'Trip', exclude_from_slideshow: true });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/albums/5', {
+      body: { title: 'Trip', exclude_from_slideshow: true },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'album', title: 'Trip', exclude_from_slideshow: true });
+  });
+
+  it('update_album compacts undefined fields', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'album', attributes: {} } });
+    await tools.skylight_update_album({ id: '5', title: 'Trip' });
+    const body = request.mock.calls[0][2].body;
+    expect(body).toEqual({ title: 'Trip' });
+    expect('exclude_from_slideshow' in body).toBe(false);
+  });
+
+  it('update_album with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'album', attributes: {} } });
+    await tools.skylight_update_album({ id: 5, exclude_from_slideshow: false, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/albums/5', { body: { exclude_from_slideshow: false } });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_delete_messages ────────────────────────────────────────────
+
+  it('delete_messages DELETEs with a repeated message_ids[] query string', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_delete_messages({ message_ids: ['1', 2, '3'] });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/messages/destroy_multiple?message_ids[]=1&message_ids[]=2&message_ids[]=3');
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: 3 });
+  });
+
+  it('delete_messages url-encodes ids', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_messages({ message_ids: ['a b'] });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/messages/destroy_multiple?message_ids[]=a%20b');
+  });
+
+  it('delete_messages with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_messages({ message_ids: [7], frameId: '99' });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/messages/destroy_multiple?message_ids[]=7');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });

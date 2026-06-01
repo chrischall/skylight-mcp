@@ -1,6 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 97 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 102 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -42,6 +42,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_rename_frame` | W | Rename a frame |
 | frames | `skylight_update_profile` | W | Update the frame profile (name, birthday) |
 | frames | `skylight_update_household_config` | W | Update household configuration |
+| frames | `skylight_set_reminder_profile` | W | Set the global reminder cadence (interval_weeks) |
 | frames | `skylight_add_webcal` | W | Subscribe the frame to a webcal/ICS calendar URL |
 | frames | `skylight_update_calendar` | W | Set which sub-calendars of a connected account are active |
 | frames | `skylight_delete_source_calendar` | W | Remove a connected source calendar (incl. webcal subscriptions) |
@@ -56,6 +57,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_update_family_member` | W | Update a family member's profile — birthday, dietary preferences (the name is the category label; set via `skylight_update_category`) |
 | frames | `skylight_update_category` | W | Update a category — rename/recolor, or convert a label into a family-member profile (`linked_to_profile`) |
 | frames | `skylight_set_device_album` | W | Set which photo album a device displays (inferred) |
+| frames | `skylight_rename_device` | W | Rename a Skylight device |
 | events | `skylight_list_events` | R | List calendar events within a date range |
 | events | `skylight_get_event` | R | Get details for a specific event |
 | events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members) |
@@ -101,10 +103,12 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | meals | `skylight_update_recipe` | W | Update a meal recipe |
 | meals | `skylight_delete_recipe` | W | Delete a meal recipe |
 | meals | `skylight_add_recipe_to_grocery_list` | W | Add a recipe's ingredients to a grocery list |
+| meals | `skylight_plan_meal` | W | Plan a meal on a date (optionally repeating, link a recipe, add to grocery list) |
 | messages | `skylight_list_messages` | R | List messages posted to the frame |
 | messages | `skylight_list_albums` | R | List photo albums on the frame |
 | messages | `skylight_get_message` | R | Get one frame message |
 | messages | `skylight_create_album` | W | Create a photo album |
+| messages | `skylight_update_album` | W | Update a photo album (rename, hide from slideshow) |
 | messages | `skylight_delete_album` | W | Delete a photo album |
 | messages | `skylight_add_to_album` | W | Add messages/photos to albums |
 | messages | `skylight_remove_from_album` | W | Remove messages/photos from albums |
@@ -113,6 +117,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | messages | `skylight_like_message` | W | Like a frame message/photo |
 | messages | `skylight_unlike_message` | W | Remove a like from a message/photo |
 | messages | `skylight_delete_message` | W | Delete a frame message/photo |
+| messages | `skylight_delete_messages` | W | Bulk-delete messages/photos from the frame |
 | tasks | `skylight_list_tasks` | R | List task-box items |
 | tasks | `skylight_create_task` | W | Create a task-box item |
 | tasks | `skylight_update_task` | W | Update a task-box item |

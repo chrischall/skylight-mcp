@@ -45,4 +45,15 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/devices/${id}`, { body: { current_album_id } });
       return textContent(flattenJsonApi(doc));
     }));
+
+  server.tool('skylight_rename_device', 'Rename a Skylight device.',
+    {
+      id: idParam.describe('Device id (from skylight_list_devices).'),
+      name: z.string().describe('New device name.'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { id, name }: { id: string | number; name: string; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/devices/${id}`, { body: { name } });
+      return textContent(flattenJsonApi(doc));
+    }));
 }

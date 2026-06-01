@@ -48,4 +48,11 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
       const body = compact({ disney_profile_pictures, disney_screensaver });
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', `/frames/${f}/household_config`, { body })));
     }));
+
+  server.tool('skylight_set_reminder_profile', 'Set the global reminder cadence (how often Skylight nudges about reminders).',
+    { interval_weeks: z.number().describe('How many weeks between reminder nudges.') },
+    async ({ interval_weeks }) => {
+      const c = await getClient();
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/reminder_profile`, { body: { interval_weeks } })));
+    });
 }
