@@ -1,6 +1,6 @@
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 91 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 97 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -117,6 +117,12 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | tasks | `skylight_create_task` | W | Create a task-box item |
 | tasks | `skylight_update_task` | W | Update a task-box item |
 | tasks | `skylight_delete_task` | W | Delete a task-box item |
+| ai | `skylight_generate_meal_plan` | W | Generate an AI meal plan for given dates (draft meal sittings — async) |
+| ai | `skylight_generate_activity_ideas` | W | Generate AI activity/event ideas for a location + time range (draft events — async) |
+| ai | `skylight_get_auto_creation_intent` | R | Get an AI auto-creation intent (status + draft results) |
+| ai | `skylight_list_auto_creation_drafts` | R | List the events an AI intent drafted (review before approving) |
+| ai | `skylight_approve_auto_creation` | W | Approve AI-drafted events into real calendar events |
+| ai | `skylight_undo_auto_creation` | W | Undo/discard an AI auto-creation intent and its drafts |
 
 ## Configuration
 
