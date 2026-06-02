@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { readFile } from 'node:fs/promises';
+import { openAsBlob } from 'node:fs';
 import { extname } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, compact, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
@@ -88,10 +88,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, image_path }: { id: string | number; image_path: string; frameId?: string }) => {
-      const bytes = await readFile(image_path);
       const ext = extname(image_path).slice(1).toLowerCase() || 'png';
       const formData = new FormData();
-      formData.append('profile_picture', new Blob([bytes], { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
+      // Stream the file off disk (file-backed Blob) instead of buffering it.
+      formData.append('profile_picture', await openAsBlob(image_path, { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { formData });
       return textContent(flattenJsonApi(doc));
     }));
