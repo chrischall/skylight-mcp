@@ -79,11 +79,44 @@ Three engines; then approve/undo the drafts:
 - Device: `PUT /frames/{f}/devices/{id} { name, current_album_id, … remote settings }` (rename + album + remote settings).
 - **Reminder profile (global, not frame-scoped): `PUT /reminder_profile { interval_weeks }`**.
 
-## Photo upload (issue #12) — 2-step, needs AWS S3
+## Photo upload (issue #12) — SOLVED: MULTIPART upload + register
 
-1. `GET /api/messages/cloud_upload_credentials` → `{ credentials:{access_key_id, secret_access_key, session_token}, region:"us-east-1", bucket, key_prefix, credentials_expire_at }`.
-2. Upload the image binary to S3 (`s3://{bucket}/{key_prefix}/{uuid}.{ext}`) with SigV4 using those temp STS creds → get the ETag.
-3. Register: `POST /api/messages/uploads { file_upload:{ bucket, key, etag }, frame_ids:[...], caption, ext }`.
+Verified end-to-end live (upload → register → photo reaches `downloaded` on the frame). It must be a
+**multipart upload completed with a signed `If-None-Match: *`** — a single `PutObject` does NOT work
+(see "two gotchas" below).
+
+1. `GET /api/messages/cloud_upload_credentials` → `{ data: { credentials:{access_key_id, secret_access_key, session_token}, region:"us-east-1", bucket, key_prefix, credentials_expire_at } }`.
+   - NB: fields sit directly on `data` (no JSON:API `attributes` wrapper).
+2. Multipart-upload the bytes to `https://{bucket}.s3.{region}.amazonaws.com/{key}` where
+   `key = {key_prefix}{uuid}.{ext}` (`key_prefix` already ends in `/`), SigV4-signed with the temp STS creds:
+   - `POST …/{key}?uploads` → `<UploadId>` (sign `content-type`).
+   - `PUT …/{key}?partNumber=N&uploadId=…` per ≥5 MiB chunk → part `ETag` (response header).
+   - `POST …/{key}?uploadId=…` with the `<CompleteMultipartUpload>` part list, **signing
+     `if-none-match: *`** → final object `ETag` (`"…-N"`). S3 may return HTTP 200 with an `<Error>` body.
+3. Register: `POST /api/messages/uploads { file_upload:{ bucket, key, etag }, frame_ids:[...], caption, ext }`
+   → `{ data: { message_ids:[id] } }`. The photo transcodes server-side (feed shows it as
+   `type:"message_status" status:"processing"` → `awaiting_download` → `downloaded`), moved to the
+   `darkroom-production` bucket and served via CloudFront.
+   - Read the feed with pagination: `GET /frames/{f}/messages?page_token=__START__` (without `page_token`
+     it returns empty); subsequent polls use `?sync_token=…`. A message is only deletable once it leaves
+     `processing` (DELETE 404s while processing).
+
+### Two gotchas, both verified the hard way (2026-06-01)
+1. **It must be multipart, not `PutObject`.** A single `PutObject` (even with `If-None-Match`) lands the
+   object and register returns a `message_id`, but it **sticks in `processing` forever** — Skylight's
+   image processing is triggered by the S3 `CompleteMultipartUpload` event, which a plain PUT never fires.
+   `CreateMultipartUpload` + `UploadPart` + `CompleteMultipartUpload` reaches `downloaded` in seconds.
+2. **`If-None-Match: *` must be signed** on the create operation. Without it, `s3:PutObject` (which
+   `CompleteMultipartUpload` also requires) is denied — `no identity-based policy allows the s3:PutObject
+   action` — because the bucket IAM Allow is conditioned on the conditional-create header.
+
+Not a signing bug — the official `@aws-sdk/client-s3` reproduces both (`Upload` only sends `If-None-Match`
+when you pass `IfNoneMatch`, and uses `PutObject` for sub-5 MiB bodies, which then stick). Implemented
+hand-rolled (no SDK dep) in `src/s3-upload.ts` / `src/tools/photos.ts`.
+
+> Debugging note: the original mitmproxy capture addon hard-filtered to `ourskylight.com`, silently
+> dropping every S3 request — which is why the mechanism stayed hidden. `/tmp/skylight_capture2.py`
+> captures the S3/Cloudinary hosts and response bodies.
 
 ## Still gated (not addable)
 
