@@ -34,6 +34,10 @@ async function uploadFile(
   // upload-credential fields sit directly on `data` (no JSON:API `attributes`
   // wrapper). Tolerate an attributes wrapper and a flat doc just in case.
   const cc = (credsDoc.data?.attributes ?? credsDoc.data ?? credsDoc) as unknown as CloudCreds;
+  // Fail fast at the boundary if the shape drifts, rather than throwing deep in SigV4.
+  if (!cc?.credentials || !cc.bucket || !cc.key_prefix) {
+    throw new Error('Unexpected cloud_upload_credentials response shape (missing credentials/bucket/key_prefix).');
+  }
   const key = `${cc.key_prefix}${randomUUID()}.${ext}`;
   const etag = await s3Upload({ creds: cc.credentials, region: cc.region, bucket: cc.bucket, key, body, contentType });
   return { bucket: cc.bucket, key, etag, ext };
@@ -63,7 +67,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
 
   server.tool(
     'skylight_import_events_from_photo',
-    "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Uploads the photo, then kicks off an auto-creation intent — poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
+    "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Best-effort/UNVERIFIED: uploads the photo to S3 then posts an event_importer intent that references the latest upload (the server-side photo↔intent link is inferred from captured traffic, not confirmed). Poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
     {
       image_path: z.string().describe('Absolute path to a local image of the events to import.'),
       category_ids: idArrayParam.optional().describe('Family-member category ids to assign the imported events to.'),

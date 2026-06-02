@@ -147,6 +147,14 @@ describe('photo tools', () => {
     expect(s3UploadMock.mock.calls[0][0].key).toMatch(/^uploads\/9\//);
   });
 
+  it('upload_photo: throws a clear error when the credentials response shape is unexpected', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValueOnce({ data: {} }); // no credentials/bucket/key_prefix
+    await expect(tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg' }))
+      .rejects.toThrow(/Unexpected cloud_upload_credentials response shape/);
+    expect(s3UploadMock).not.toHaveBeenCalled();
+  });
+
   // ── skylight_import_events_from_photo ───────────────────────────────────
 
   it('import_events_from_photo: uploads then kicks off an event_importer intent', async () => {
