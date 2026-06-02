@@ -46,7 +46,7 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `src/auth.ts` — `resolveAuth()`: credentials → authorization-code login → `SkylightClient`.
 - `src/auth-session-login.ts` — `login()`: headless four-step authorization-code flow.
 - `src/config.ts` — `loadAccount()`: env-var resolution, exposes `baseUrl` and `authBaseUrl`.
-- `src/client.ts` — `SkylightClient`: HTTP client with proactive + reactive token refresh via `refreshFn`, JSON:API response flattening, `resolveFrameId()` for frame auto-discovery.
+- `src/client.ts` — `SkylightClient`: a thin wrapper over the shared `createApiClient` (`@chrischall/mcp-utils`) wired to the fleet `TokenManager` (`/session`). The shared client owns 429-retry, 401 mapping, redacted error formatting, and 204/empty handling; the `TokenManager` owns proactive (~60 s skew) + reactive (401-replay) refresh. Skylight-specific bits: the `skylight-api-version` `baseHeaders` and `resolveFrameId()` frame auto-discovery. Multipart uploads (avatars/photos) go through `RequestOpts.formData`.
 - `src/index.ts` — entry point. Boots `McpServer`, wires lazy `getClient`, registers the thirteen tool modules.
 - `src/tools/` — one file per domain: `frames.ts`, `settings.ts`, `calendars.ts`, `members.ts`, `events.ts`, `lists.ts`, `chores.ts`, `rewards.ts`, `meals.ts`, `messages.ts`, `tasks.ts`, `ai.ts`, `photos.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers. `src/s3-upload.ts` holds the dependency-free SigV4 multipart S3 upload used by `photos.ts`.
 - `tests/` — mirrors `src/`. Tool tests are in `tests/tools/<name>.test.ts`.

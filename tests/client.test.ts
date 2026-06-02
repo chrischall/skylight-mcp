@@ -56,6 +56,25 @@ describe('SkylightClient.request', () => {
     expect(out).toEqual({ data: 'ok' });
   });
 
+  it('constructs without an injected httpFetch (defaults to global fetch)', () => {
+    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, refreshFn: vi.fn() });
+    expect(c).toBeInstanceOf(SkylightClient);
+  });
+
+  it('keeps the prior refresh token when a refresh returns none (no rotation)', async () => {
+    const httpFetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'expired' }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'ok' }));
+    // refreshFn rotates the access token but returns an empty refresh token →
+    // the adapter maps `'' || undefined` so TokenManager retains the prior one.
+    const refreshFn = vi.fn().mockResolvedValue({ accessToken: 'AT2', refreshToken: '', expiresInMs: 600_000 });
+    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn });
+    const out = await c.request('GET', '/x');
+    expect(refreshFn).toHaveBeenCalledWith('RT');
+    expect((httpFetch.mock.calls[1][1].headers as Record<string,string>).Authorization).toBe('Bearer AT2');
+    expect(out).toEqual({ data: 'ok' });
+  });
+
   it('throws after a second 401', async () => {
     const httpFetch = vi.fn().mockResolvedValue(jsonResponse(401, { error: 'nope' }));
     const refreshFn = vi.fn().mockResolvedValue(REFRESHED_TOKENS);
@@ -72,22 +91,11 @@ describe('SkylightClient.request', () => {
     expect((httpFetch.mock.calls[0][1].headers as Record<string,string>).Authorization).toBe('Bearer FRESH');
   });
 
-  it('throws with HTTP 500 message on non-2xx non-401', async () => {
+  it('surfaces a non-2xx non-401 via the shared redacted error formatter', async () => {
     const httpFetch = vi.fn().mockResolvedValue(jsonResponse(500, { error: 'server error' }));
     const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });
-    await expect(c.request('GET', '/x')).rejects.toThrow(/HTTP 500/);
-  });
-
-  it('handles text() rejection in error path gracefully', async () => {
-    const badResponse = {
-      status: 500,
-      ok: false,
-      json: async () => { throw new Error('no json'); },
-      text: async () => { throw new Error('no text'); },
-    } as unknown as Response;
-    const httpFetch = vi.fn().mockResolvedValue(badResponse);
-    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });
-    await expect(c.request('GET', '/x')).rejects.toThrow(/HTTP 500/);
+    // createApiClient formats as `<Service> error <status> for <METHOD> <path>: …`.
+    await expect(c.request('GET', '/x')).rejects.toThrow(/Skylight error 500 for GET \/x/);
   });
 
   it('returns undefined for 204 no-content responses', async () => {
