@@ -68,8 +68,8 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
 
   // LIVE-VERIFIED: complete_chore is PUT /frames/{f}/chores/{id}/completions with {status:'complete'}
   // (the old POST /complete was 404 and the PATCH /frames/{f}/chores/{id} was a no-op — status stayed
-  // pending). Completing a specific recurring *instance* (via instance_date + category_id) is
-  // intentionally not exposed; this is the simple whole-chore completion.
+  // pending). This is the whole-chore completion; for a single recurring occurrence use
+  // skylight_complete_chore_instance.
   server.tool(
     'skylight_complete_chore',
     'Mark a chore complete.',
@@ -108,31 +108,42 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     }),
   );
 
-  // NOTE: instance completion status value inferred ('completed'); whole-chore completion uses 'complete'.
+  // LIVE-VERIFIED: a recurring occurrence is completed with PUT /chores/{id}/completions
+  // body { status: 'complete', instance_date } — status is 'complete' (NOT 'completed'),
+  // and category_id must be OMITTED for a normally-assigned chore (sending it returns
+  // 422 "category_id must be blank"); it's only supplied for an up-for-grabs/shared chore
+  // to record who grabbed it. instance_time selects a specific time-of-day routine occurrence.
   server.tool(
     'skylight_complete_chore_instance',
     'Mark a specific occurrence of a recurring chore complete.',
     {
       id: z.string(),
       instance_date: z.string().describe('YYYY-MM-DD occurrence date (required).'),
-      category_id: idParam.describe('Member completing it (required).'),
+      instance_time: z.string().optional().describe('HH:MM — only for a time-of-day routine with multiple daily occurrences.'),
+      category_id: idParam.optional().describe('Only for an up-for-grabs/shared chore: which member completed it. Omit for a normally-assigned chore (sending it 422s).'),
       frameId: z.string().optional(),
     },
-    frameScoped(getClient, async (c, f, { id, instance_date, category_id }: { id: string; instance_date: string; category_id: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: compact({ status: 'completed', instance_date, category_id }) });
+    frameScoped(getClient, async (c, f, { id, instance_date, instance_time, category_id }: { id: string; instance_date: string; instance_time?: string; category_id?: string | number; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: compact({ status: 'complete', instance_date, instance_time, category_id }) });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ completed: id, instance_date });
     }),
   );
 
-  // LIVE-VERIFIED: uncomplete reverses a completion — PUT the completions endpoint
-  // with {status:'pending'} reopens a chore that `complete` had marked complete.
+  // LIVE-VERIFIED: uncomplete reverses a completion — PUT the completions endpoint with
+  // {status:'pending'} reopens a whole chore; add instance_date (+ instance_time) to reopen
+  // a single recurring occurrence.
   server.tool(
     'skylight_uncomplete_chore',
-    'Reopen (un-complete) a chore.',
-    { id: z.string(), frameId: z.string().optional() },
-    frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: { status: 'pending' } });
-      return doc ? textContent(flattenJsonApi(doc)) : textContent({ uncompleted: id });
+    'Reopen (un-complete) a chore, or a single occurrence of a recurring chore (pass instance_date).',
+    {
+      id: z.string(),
+      instance_date: z.string().optional().describe('YYYY-MM-DD — reopen just this recurring occurrence instead of the whole chore.'),
+      instance_time: z.string().optional().describe('HH:MM — for a time-of-day routine occurrence.'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { id, instance_date, instance_time }: { id: string; instance_date?: string; instance_time?: string; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: compact({ status: 'pending', instance_date, instance_time }) });
+      return doc ? textContent(flattenJsonApi(doc)) : textContent(compact({ uncompleted: id, instance_date }));
     }),
   );
 

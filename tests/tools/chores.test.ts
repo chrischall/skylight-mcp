@@ -261,34 +261,52 @@ describe('chore tools', () => {
 
   // ── skylight_complete_chore_instance ─────────────────────────────────────
 
-  it('complete_chore_instance PUTs {status, instance_date, category_id} and returns flattened doc', async () => {
+  it('complete_chore_instance PUTs {status:complete, instance_date} with NO category_id by default', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'completed' } } });
-    const out = await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', category_id: '42' });
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'complete' } } });
+    const out = await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01' });
+    // status is 'complete' (live-verified), and category_id is omitted — sending it 422s
+    // ("category_id must be blank") for a normally-assigned chore.
     expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5/completions', {
-      body: { status: 'completed', instance_date: '2026-06-01', category_id: '42' },
+      body: { status: 'complete', instance_date: '2026-06-01' },
     });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'completed' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'complete' });
+  });
+
+  it('complete_chore_instance includes category_id only when given (up-for-grabs chore)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', category_id: 42 });
+    expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5/completions', {
+      body: { status: 'complete', instance_date: '2026-06-01', category_id: 42 },
+    });
+  });
+
+  it('complete_chore_instance includes instance_time for a time-of-day routine occurrence', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', instance_time: '14:00' });
+    expect(request.mock.calls[0][2].body).toEqual({ status: 'complete', instance_date: '2026-06-01', instance_time: '14:00' });
   });
 
   it('complete_chore_instance returns { completed, instance_date } when API returns no body', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
-    const out = await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', category_id: 42 });
+    const out = await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01' });
     expect(JSON.parse(out.content[0].text)).toEqual({ completed: '5', instance_date: '2026-06-01' });
   });
 
   it('complete_chore_instance with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue(undefined);
-    await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', category_id: '42', frameId: '99' });
+    await tools.skylight_complete_chore_instance({ id: '5', instance_date: '2026-06-01', frameId: '99' });
     expect(request).toHaveBeenCalledWith('PUT', '/frames/99/chores/5/completions', expect.any(Object));
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
   // ── skylight_uncomplete_chore ────────────────────────────────────────────
 
-  it('uncomplete_chore PUTs {status:pending} to the completions endpoint (default frame)', async () => {
+  it('uncomplete_chore PUTs {status:pending} to the completions endpoint (whole chore)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { status: 'pending' } } });
     const out = await tools.skylight_uncomplete_chore({ id: '5' });
@@ -296,6 +314,13 @@ describe('chore tools', () => {
       body: { status: 'pending' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', status: 'pending' });
+  });
+
+  it('uncomplete_chore reopens a specific occurrence when instance_date/instance_time given', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await tools.skylight_uncomplete_chore({ id: '5', instance_date: '2026-06-01', instance_time: '14:00' });
+    expect(request.mock.calls[0][2].body).toEqual({ status: 'pending', instance_date: '2026-06-01', instance_time: '14:00' });
   });
 
   it('uncomplete_chore with explicit frameId uses it and skips resolveFrameId', async () => {
@@ -313,6 +338,13 @@ describe('chore tools', () => {
     request.mockResolvedValue(undefined);
     const out = await tools.skylight_uncomplete_chore({ id: '5' });
     expect(JSON.parse(out.content[0].text)).toEqual({ uncompleted: '5' });
+  });
+
+  it('uncomplete_chore no-body fallback keeps instance_date when reopening an occurrence', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_uncomplete_chore({ id: '5', instance_date: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ uncompleted: '5', instance_date: '2026-06-01' });
   });
 
   // ── skylight_delete_chore ────────────────────────────────────────────────
