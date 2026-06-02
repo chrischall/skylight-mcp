@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.0](https://github.com/chrischall/skylight-mcp/compare/v0.3.0...v0.4.0) (2026-06-02)
+
+
+### Features
+
+* 0.4.0 — recurring chores, routines, AI auto-creation, meals/rewards/album fixes (mobile-app surface) ([#24](https://github.com/chrischall/skylight-mcp/issues/24)) ([7847f57](https://github.com/chrischall/skylight-mcp/commit/7847f5778955b86f8b9f9e18a6263e7f271fa904))
+* create_category + list_avatars ([#10](https://github.com/chrischall/skylight-mcp/issues/10)) ([#26](https://github.com/chrischall/skylight-mcp/issues/26)) ([d318067](https://github.com/chrischall/skylight-mcp/commit/d318067371ffb2fef30d77aba637b06e2863753f))
+* custom-photo member avatars via multipart upload ([#10](https://github.com/chrischall/skylight-mcp/issues/10)) ([#30](https://github.com/chrischall/skylight-mcp/issues/30)) ([51825f3](https://github.com/chrischall/skylight-mcp/commit/51825f34ffab1ae0dd93a69e58091eee9cc6ac3f))
+* list_auto_creation_intents + list_auto_creation_items ([#15](https://github.com/chrischall/skylight-mcp/issues/15)) ([#27](https://github.com/chrischall/skylight-mcp/issues/27)) ([0c80bc4](https://github.com/chrischall/skylight-mcp/commit/0c80bc4889866e916b3a28ae13bf84bda483895d))
+* photo/video upload to the frame ([#12](https://github.com/chrischall/skylight-mcp/issues/12)) ([#28](https://github.com/chrischall/skylight-mcp/issues/28)) ([5252f15](https://github.com/chrischall/skylight-mcp/commit/5252f159a66edf1406c3bfe75ba9ab564a204a38))
+
+
+### Bug Fixes
+
+* per-instance chore completion ([#13](https://github.com/chrischall/skylight-mcp/issues/13)) ([#29](https://github.com/chrischall/skylight-mcp/issues/29)) ([fdd66ff](https://github.com/chrischall/skylight-mcp/commit/fdd66ffc1422f069a909863b80642496d49dce6c))
+
+
+### Performance
+
+* stream avatar upload from disk instead of buffering it ([#32](https://github.com/chrischall/skylight-mcp/issues/32)) ([bf2cbea](https://github.com/chrischall/skylight-mcp/commit/bf2cbea13c9f1b2e9897136bd470577fe68e4e63))
+
+
+### Refactor
+
+* adopt mcp-utils 0.4.0 fileBlob for the avatar upload + enforce coverage ([#34](https://github.com/chrischall/skylight-mcp/issues/34)) ([21e990c](https://github.com/chrischall/skylight-mcp/commit/21e990cfed9ef98ce2699cd1c2e4e42379f7de06))
+* SkylightClient onto shared createApiClient + TokenManager ([#31](https://github.com/chrischall/skylight-mcp/issues/31)) ([a6861e8](https://github.com/chrischall/skylight-mcp/commit/a6861e86fe97d7b9e07ed0c12595152b5758d8e9))
+
 ## [0.3.0](https://github.com/chrischall/skylight-mcp/compare/v0.2.2...v0.3.0) (2026-06-01)
 
 
