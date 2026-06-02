@@ -1,10 +1,10 @@
-import { truncateErrorMessage } from '@chrischall/mcp-utils';
+import { createApiClient, type ApiClient, type RequestOptions } from '@chrischall/mcp-utils';
 import { TokenManager } from '@chrischall/mcp-utils/session';
 import type { Account } from './config.js';
 import type { Tokens } from './auth-session-login.js';
 
 export type { Tokens };
-export type HttpFetch = (url: string, init: RequestInit) => Promise<Response>;
+export type HttpFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 export interface SkylightClientOpts {
   account: Account;
@@ -15,29 +15,28 @@ export interface SkylightClientOpts {
   httpFetch?: HttpFetch;
 }
 
-export interface RequestOpts {
-  query?: Record<string, string | number | undefined>;
-  body?: unknown;
-  /** Multipart body (e.g. an image upload). Sent verbatim; fetch sets the boundary. */
-  formData?: FormData;
-}
+/** Per-request options forwarded to the shared client (query, JSON body, or multipart). */
+export type RequestOpts = Pick<RequestOptions, 'query' | 'body' | 'formData'>;
 
 /** Refresh this many ms before the access token actually expires. */
 const REFRESH_SKEW_MS = 60_000;
+/** Mobile-app API version header — gates version-locked features. */
+const API_VERSION = '2026-05-01';
 
+/**
+ * Thin Skylight wrapper over the shared `createApiClient` (429-retry, 401 mapping,
+ * redacted error formatting) wired to the fleet `TokenManager` (proactive skew
+ * refresh + reactive 401-replay + single-flight). Skylight-specific bits: the
+ * `skylight-api-version` header and frame auto-discovery.
+ */
 export class SkylightClient {
-  private account: Account;
-  private tokens: TokenManager;
-  private httpFetch: HttpFetch;
+  private readonly api: ApiClient;
   private frameId?: string;
 
   constructor(opts: SkylightClientOpts) {
-    this.account = opts.account;
-    // TokenManager owns the bearer-token lifecycle: proactive skew refresh,
-    // reactive 401-replay, and single-flight coalescing. Skylight's refreshFn
-    // returns a RELATIVE `expiresInMs`; adapt it to TokenManager's absolute
-    // `expiresAt` (epoch ms). Default skew is 5 min, so pass 60s explicitly.
-    this.tokens = new TokenManager({
+    // TokenManager owns the bearer-token lifecycle. Skylight's refreshFn returns a
+    // RELATIVE `expiresInMs`; adapt it to TokenManager's absolute `expiresAt`.
+    const tokens = new TokenManager({
       initial: {
         accessToken: opts.tokens.accessToken,
         refreshToken: opts.tokens.refreshToken,
@@ -54,40 +53,22 @@ export class SkylightClient {
       },
       skewMs: REFRESH_SKEW_MS,
     });
-    this.httpFetch = opts.httpFetch ?? ((url, init) => fetch(url, init));
+    // Adapt the (url: string, init) transport to the `typeof fetch` shape;
+    // omitting it (undefined) lets createApiClient fall back to global fetch.
+    const transport = opts.httpFetch;
+    this.api = createApiClient({
+      baseUrl: opts.account.baseUrl,
+      serviceName: 'Skylight',
+      baseHeaders: { 'skylight-api-version': API_VERSION },
+      tokenManager: tokens,
+      fetchImpl: transport ? (input, init) => transport(String(input), init) : undefined,
+    });
     this.frameId = opts.account.frameId;
   }
 
-  async request<T = unknown>(method: string, path: string, opts: RequestOpts = {}): Promise<T> {
-    const res = await this.tokens.withAuth((accessToken) =>
-      this.send(method, path, opts, accessToken),
-    );
-    if (res.status < 200 || res.status >= 300) {
-      const text = await res.text().catch(() => '');
-      // prevents credentials leaking into tool results via upstream error echo
-      throw new Error(`Skylight API ${method} ${path} failed (HTTP ${res.status}): ${truncateErrorMessage(text, 300)}`);
-    }
-    if (res.status === 204) return undefined as T;
-    const text = await res.text();
-    if (!text) return undefined as T;
-    return JSON.parse(text) as T;
-  }
-
-  private send(method: string, path: string, opts: RequestOpts, accessToken: string): Promise<Response> {
-    const url = new URL(this.account.baseUrl + path);
-    for (const [k, v] of Object.entries(opts.query ?? {})) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'skylight-api-version': '2026-05-01' };
-    const init: RequestInit = { method, headers };
-    if (opts.formData !== undefined) {
-      // Don't set Content-Type — fetch adds the multipart boundary for us.
-      init.body = opts.formData;
-    } else if (opts.body !== undefined) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(opts.body);
-    }
-    return this.httpFetch(url.toString(), init);
+  /** Authenticated JSON request → parsed body (or `undefined` for 204/empty). */
+  request<T = unknown>(method: string, path: string, opts: RequestOpts = {}): Promise<T> {
+    return this.api.fetchJson<T>(method, path, opts);
   }
 
   async resolveFrameId(): Promise<string> {

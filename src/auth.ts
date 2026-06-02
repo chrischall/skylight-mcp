@@ -7,7 +7,7 @@ export interface ResolvedAuth {
   source: 'env';
 }
 
-function defaultFetch(url: string, init: RequestInit): Promise<Response> {
+function defaultFetch(url: string, init?: RequestInit): Promise<Response> {
   return fetch(url, init);
 }
 
