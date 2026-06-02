@@ -30,6 +30,19 @@ describe('SkylightClient.request', () => {
     expect(out).toEqual({ data: [{ id: '1' }] });
   });
 
+  it('sends a FormData body as multipart (no JSON Content-Type override)', async () => {
+    const httpFetch = vi.fn().mockResolvedValue(jsonResponse(200, { data: { id: '3' } }));
+    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });
+    const fd = new FormData();
+    fd.append('profile_picture', new Blob([Buffer.from('img')], { type: 'image/png' }), 'a.png');
+    await c.request('PUT', '/frames/3/categories/9', { formData: fd });
+    const [, init] = httpFetch.mock.calls[0];
+    expect(init.body).toBe(fd); // passed through verbatim
+    // Content-Type is NOT set — fetch derives the multipart boundary itself.
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer AT');
+  });
+
   it('refreshes once on a 401 then retries', async () => {
     const httpFetch = vi.fn()
       .mockResolvedValueOnce(jsonResponse(401, { error: 'expired' }))
