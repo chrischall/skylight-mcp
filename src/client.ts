@@ -18,6 +18,8 @@ export interface SkylightClientOpts {
 export interface RequestOpts {
   query?: Record<string, string | number | undefined>;
   body?: unknown;
+  /** Multipart body (e.g. an image upload). Sent verbatim; fetch sets the boundary. */
+  formData?: FormData;
 }
 
 /** Refresh this many ms before the access token actually expires. */
@@ -78,7 +80,10 @@ export class SkylightClient {
     }
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'skylight-api-version': '2026-05-01' };
     const init: RequestInit = { method, headers };
-    if (opts.body !== undefined) {
+    if (opts.formData !== undefined) {
+      // Don't set Content-Type — fetch adds the multipart boundary for us.
+      init.body = opts.formData;
+    } else if (opts.body !== undefined) {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(opts.body);
     }

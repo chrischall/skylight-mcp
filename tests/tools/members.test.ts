@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerMemberTools } from '../../src/tools/members.js';
 import { makeClient } from './_setup.js';
+import { readFile } from 'node:fs/promises';
+
+vi.mock('node:fs/promises', () => ({ readFile: vi.fn() }));
+const readFileMock = vi.mocked(readFile);
+beforeEach(() => readFileMock.mockReset().mockResolvedValue(Buffer.from('imgbytes')));
 
 function harness() {
   const tools: Record<string, (args: any) => Promise<any>> = {};
@@ -266,5 +271,48 @@ describe('member tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual([
       { id: '79', type: 'avatar', name: 'cake', image_url: 'https://x/cake.png', kind: 'emoji' },
     ]);
+  });
+
+  // ── skylight_set_member_avatar ───────────────────────────────────────────
+
+  it('set_member_avatar PUTs the image as multipart profile_picture (default frame)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: { profile_picture_urls: { original: 'https://cdn/x.png' } } } });
+    const out = await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.png' });
+
+    expect(readFileMock).toHaveBeenCalledWith('/tmp/face.png');
+    const [method, path, opts] = request.mock.calls[0];
+    expect(method).toBe('PUT');
+    expect(path).toBe('/frames/3435252/categories/9');
+    expect(opts.formData).toBeInstanceOf(FormData);
+    const file = opts.formData.get('profile_picture') as File;
+    expect(file).toBeInstanceOf(Blob);
+    expect(file.type).toBe('image/png');
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '9', type: 'category', profile_picture_urls: { original: 'https://cdn/x.png' } });
+  });
+
+  it('set_member_avatar derives content-type from the extension (jpg) and respects frameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
+    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.JPG', frameId: '99' });
+    expect(request.mock.calls[0][1]).toBe('/frames/99/categories/9');
+    expect((request.mock.calls[0][2].formData.get('profile_picture') as File).type).toBe('image/jpeg');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  it('set_member_avatar defaults an extensionless path to a png part', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
+    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/rawface' });
+    const file = request.mock.calls[0][2].formData.get('profile_picture') as File;
+    expect(file.type).toBe('image/png');
+    expect(file.name).toBe('avatar.png');
+  });
+
+  it('set_member_avatar uses octet-stream for an unrecognized extension', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
+    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.bmp' });
+    expect((request.mock.calls[0][2].formData.get('profile_picture') as File).type).toBe('application/octet-stream');
   });
 });

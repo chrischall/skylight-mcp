@@ -1,6 +1,12 @@
 import { z } from 'zod';
+import { readFile } from 'node:fs/promises';
+import { extname } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, compact, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+
+const AVATAR_MIME: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', gif: 'image/gif', webp: 'image/webp',
+};
 
 export function registerMemberTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_resolve_member', 'Resolve a family-member name to its category id (used by chores/rewards). On a name match returns { matched: true, members }; if nothing matches it returns { matched: false, members, note } listing all members.',
@@ -72,7 +78,25 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
     {},
     async () => textContent(flattenJsonApi(await (await getClient()).request<JsonApiDoc>('GET', '/avatars'))));
 
-  server.tool('skylight_create_category', 'Create a category / family member on the frame. Set linked_to_profile + selected_for_chore_chart to make it a full chore-chart member; pick avatar_id from skylight_list_avatars. (Custom photo avatars require an image upload that is not yet supported.)',
+  // LIVE-VERIFIED: a custom photo avatar is a multipart/form-data PUT to the category with a
+  // `profile_picture` file part (NOT the S3 cloud-upload flow); the server pushes it to Cloudinary
+  // and fills in `profile_picture_urls`. Preset emoji avatars use `avatar_id` instead (no upload).
+  server.tool('skylight_set_member_avatar', "Set a family member's avatar to a custom photo from a local image file (uploaded as multipart/form-data). For a preset emoji avatar, use skylight_list_avatars + the avatar_id on create/update instead.",
+    {
+      id: idParam.describe('Category/member id.'),
+      image_path: z.string().describe('Absolute path to a local image file (jpg, png, heic, …).'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { id, image_path }: { id: string | number; image_path: string; frameId?: string }) => {
+      const bytes = await readFile(image_path);
+      const ext = extname(image_path).slice(1).toLowerCase() || 'png';
+      const formData = new FormData();
+      formData.append('profile_picture', new Blob([bytes], { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { formData });
+      return textContent(flattenJsonApi(doc));
+    }));
+
+  server.tool('skylight_create_category', 'Create a category / family member on the frame. Set linked_to_profile + selected_for_chore_chart to make it a full chore-chart member; pick avatar_id from skylight_list_avatars, or set a custom photo afterward with skylight_set_member_avatar.',
     {
       label: z.string().describe('Display name for the member/category.'),
       color: z.string().optional().describe('Hex color, e.g. "#82D7DD".'),
