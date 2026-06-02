@@ -1,11 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerMemberTools } from '../../src/tools/members.js';
 import { makeClient } from './_setup.js';
-import { readFile } from 'node:fs/promises';
+import { openAsBlob } from 'node:fs';
 
-vi.mock('node:fs/promises', () => ({ readFile: vi.fn() }));
-const readFileMock = vi.mocked(readFile);
-beforeEach(() => readFileMock.mockReset().mockResolvedValue(Buffer.from('imgbytes')));
+// Partial-mock node:fs so only openAsBlob is stubbed (avatar upload streams the
+// file via a file-backed Blob); the mock returns a Blob carrying the requested type.
+vi.mock('node:fs', async (orig) => ({
+  ...(await orig<typeof import('node:fs')>()),
+  openAsBlob: vi.fn(),
+}));
+const openAsBlobMock = vi.mocked(openAsBlob);
+beforeEach(() =>
+  openAsBlobMock
+    .mockReset()
+    .mockImplementation(async (_path: unknown, opts?: { type?: string }) =>
+      new Blob([Buffer.from('imgbytes')], opts),
+    ),
+);
 
 function harness() {
   const tools: Record<string, (args: any) => Promise<any>> = {};
@@ -280,7 +291,7 @@ describe('member tools', () => {
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: { profile_picture_urls: { original: 'https://cdn/x.png' } } } });
     const out = await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.png' });
 
-    expect(readFileMock).toHaveBeenCalledWith('/tmp/face.png');
+    expect(openAsBlobMock).toHaveBeenCalledWith('/tmp/face.png', { type: 'image/png' });
     const [method, path, opts] = request.mock.calls[0];
     expect(method).toBe('PUT');
     expect(path).toBe('/frames/3435252/categories/9');
