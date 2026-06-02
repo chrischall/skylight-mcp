@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { openAsBlob } from 'node:fs';
 import { extname } from 'node:path';
+import { fileBlob } from '@chrischall/mcp-utils';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, compact, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
@@ -90,8 +90,8 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
     frameScoped(getClient, async (c, f, { id, image_path }: { id: string | number; image_path: string; frameId?: string }) => {
       const ext = extname(image_path).slice(1).toLowerCase() || 'png';
       const formData = new FormData();
-      // Stream the file off disk (file-backed Blob) instead of buffering it.
-      formData.append('profile_picture', await openAsBlob(image_path, { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
+      // fileBlob streams the file off disk (file-backed Blob) instead of buffering it.
+      formData.append('profile_picture', await fileBlob(image_path, { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { formData });
       return textContent(flattenJsonApi(doc));
     }));
