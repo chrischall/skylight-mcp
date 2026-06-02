@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerPhotoTools } from '../../src/tools/photos.js';
 import { makeClient } from './_setup.js';
 import { readFile } from 'node:fs/promises';
-import { s3Put } from '../../src/s3-upload.js';
+import { s3Upload } from '../../src/s3-upload.js';
 
 vi.mock('node:fs/promises', () => ({ readFile: vi.fn() }));
-vi.mock('../../src/s3-upload.js', () => ({ s3Put: vi.fn() }));
+vi.mock('../../src/s3-upload.js', () => ({ s3Upload: vi.fn() }));
 
 const readFileMock = vi.mocked(readFile);
-const s3PutMock = vi.mocked(s3Put);
+const s3UploadMock = vi.mocked(s3Upload);
 
 const CREDS = {
   access_key_id: 'AKID', secret_access_key: 'secret', session_token: 'tok',
@@ -34,7 +34,7 @@ function harness() {
 
 beforeEach(() => {
   readFileMock.mockReset().mockResolvedValue(Buffer.from('imgbytes'));
-  s3PutMock.mockReset().mockResolvedValue('"etag-xyz"');
+  s3UploadMock.mockReset().mockResolvedValue('"etag-xyz"');
 });
 
 const UUID_RE = /^uploads\/10730517\/[0-9a-f-]{36}\.jpg$/;
@@ -53,8 +53,8 @@ describe('photo tools', () => {
     expect(readFileMock).toHaveBeenCalledWith('/tmp/pic.jpg');
     expect(request).toHaveBeenNthCalledWith(1, 'GET', '/messages/cloud_upload_credentials');
 
-    // s3Put got the credentials, region, bucket, a uuid key, the bytes + mime.
-    const putArgs = s3PutMock.mock.calls[0][0];
+    // s3Upload got the credentials, region, bucket, a uuid key, the bytes + mime.
+    const putArgs = s3UploadMock.mock.calls[0][0];
     expect(putArgs.creds).toEqual(CREDS);
     expect(putArgs.region).toBe('us-east-1');
     expect(putArgs.bucket).toBe('prod-bucket');
@@ -94,8 +94,8 @@ describe('photo tools', () => {
 
     await tools.skylight_upload_photo({ image_path: '/tmp/clip.MP4' });
 
-    expect(s3PutMock.mock.calls[0][0].contentType).toBe('video/mp4');
-    expect(s3PutMock.mock.calls[0][0].key).toMatch(/\.mp4$/);
+    expect(s3UploadMock.mock.calls[0][0].contentType).toBe('video/mp4');
+    expect(s3UploadMock.mock.calls[0][0].key).toMatch(/\.mp4$/);
     expect(request.mock.calls[1][2].body.ext).toBe('mp4');
   });
 
@@ -107,7 +107,7 @@ describe('photo tools', () => {
 
     await tools.skylight_upload_photo({ image_path: '/tmp/rawphoto' });
 
-    expect(s3PutMock.mock.calls[0][0].contentType).toBe('image/jpeg');
+    expect(s3UploadMock.mock.calls[0][0].contentType).toBe('image/jpeg');
     expect(request.mock.calls[1][2].body.ext).toBe('jpg');
   });
 
@@ -119,7 +119,7 @@ describe('photo tools', () => {
 
     await tools.skylight_upload_photo({ image_path: '/tmp/scan.xyz' });
 
-    expect(s3PutMock.mock.calls[0][0].contentType).toBe('application/octet-stream');
+    expect(s3UploadMock.mock.calls[0][0].contentType).toBe('application/octet-stream');
     expect(request.mock.calls[1][2].body.ext).toBe('xyz');
   });
 
@@ -131,8 +131,8 @@ describe('photo tools', () => {
 
     await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg' });
 
-    expect(s3PutMock.mock.calls[0][0].bucket).toBe('wrapped-bucket');
-    expect(s3PutMock.mock.calls[0][0].key).toMatch(/^uploads\/7\//);
+    expect(s3UploadMock.mock.calls[0][0].bucket).toBe('wrapped-bucket');
+    expect(s3UploadMock.mock.calls[0][0].key).toMatch(/^uploads\/7\//);
   });
 
   it('upload_photo: reads credentials from a flat (non-JSON:API) response too', async () => {
@@ -143,8 +143,8 @@ describe('photo tools', () => {
 
     await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg' });
 
-    expect(s3PutMock.mock.calls[0][0].bucket).toBe('flat-bucket');
-    expect(s3PutMock.mock.calls[0][0].key).toMatch(/^uploads\/9\//);
+    expect(s3UploadMock.mock.calls[0][0].bucket).toBe('flat-bucket');
+    expect(s3UploadMock.mock.calls[0][0].key).toMatch(/^uploads\/9\//);
   });
 
   // ── skylight_import_events_from_photo ───────────────────────────────────
@@ -157,7 +157,7 @@ describe('photo tools', () => {
 
     const out = await tools.skylight_import_events_from_photo({ image_path: '/tmp/flyer.jpg', category_ids: ['5'] });
 
-    expect(s3PutMock).toHaveBeenCalledOnce();
+    expect(s3UploadMock).toHaveBeenCalledOnce();
     expect(request).toHaveBeenNthCalledWith(2, 'POST', '/frames/3435252/auto_creation_intents', {
       body: { ext: 'jpg', engine: 'event_importer', category_ids: ['5'], created_via: 'app_photo_picker' },
     });

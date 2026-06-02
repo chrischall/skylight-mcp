@@ -4,7 +4,7 @@ import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, compact, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
-import { s3Put, type S3Credentials } from '../s3-upload.js';
+import { s3Upload, type S3Credentials } from '../s3-upload.js';
 
 const MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic',
@@ -35,7 +35,7 @@ async function uploadFile(
   // wrapper). Tolerate an attributes wrapper and a flat doc just in case.
   const cc = (credsDoc.data?.attributes ?? credsDoc.data ?? credsDoc) as unknown as CloudCreds;
   const key = `${cc.key_prefix}${randomUUID()}.${ext}`;
-  const etag = await s3Put({ creds: cc.credentials, region: cc.region, bucket: cc.bucket, key, body, contentType });
+  const etag = await s3Upload({ creds: cc.credentials, region: cc.region, bucket: cc.bucket, key, body, contentType });
   return { bucket: cc.bucket, key, etag, ext };
 }
 
