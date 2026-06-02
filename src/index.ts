@@ -38,7 +38,7 @@ const getClient = async (): Promise<SkylightClient> => {
 
 await runMcp<typeof getClient>({
   name: 'skylight-mcp',
-  version: '0.3.0', // x-release-please-version
+  version: '0.4.0', // x-release-please-version
   banner: 'skylight-mcp ready',
   deps: getClient,
   tools: [

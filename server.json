@@ -6,12 +6,12 @@
     "url": "https://github.com/chrischall/skylight-mcp",
     "source": "github"
   },
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "skylight-mcp",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "transport": {
         "type": "stdio"
       },
