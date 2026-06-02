@@ -68,6 +68,24 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       return textContent(flattenJsonApi(doc));
     }));
 
+  server.tool('skylight_list_avatars', "List the preset avatar library (emoji/icon images). Use an avatar id with skylight_create_category / skylight_update_category to set a member's avatar without uploading a custom photo.",
+    {},
+    async () => textContent(flattenJsonApi(await (await getClient()).request<JsonApiDoc>('GET', '/avatars'))));
+
+  server.tool('skylight_create_category', 'Create a category / family member on the frame. Set linked_to_profile + selected_for_chore_chart to make it a full chore-chart member; pick avatar_id from skylight_list_avatars. (Custom photo avatars require an image upload that is not yet supported.)',
+    {
+      label: z.string().describe('Display name for the member/category.'),
+      color: z.string().optional().describe('Hex color, e.g. "#82D7DD".'),
+      linked_to_profile: z.boolean().optional().describe('Make this a full family-member profile (vs a basic label).'),
+      selected_for_chore_chart: z.boolean().optional().describe('Show this member on the chore chart.'),
+      avatar_id: idParam.optional().describe('Preset avatar id from skylight_list_avatars.'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { label: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/categories`, { body: compact({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
+      return textContent(flattenJsonApi(doc));
+    }));
+
   server.tool('skylight_update_category', 'Update a category — rename/recolor, or convert a label into a family-member profile (linked_to_profile).',
     {
       id: idParam.describe('Category id.'),

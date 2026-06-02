@@ -218,4 +218,53 @@ describe('member tools', () => {
     });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_create_category ─────────────────────────────────────────────
+
+  it('create_category POSTs a compacted body with the default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'category', attributes: { label: 'Grandma', color: '#82D7DD' } } });
+    const out = await tools.skylight_create_category({
+      label: 'Grandma', color: '#82D7DD', linked_to_profile: true, selected_for_chore_chart: true, avatar_id: '79',
+    });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/categories', {
+      body: { label: 'Grandma', color: '#82D7DD', linked_to_profile: true, selected_for_chore_chart: true, avatar_id: '79' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'category', label: 'Grandma', color: '#82D7DD' });
+  });
+
+  it('create_category omits undefined fields (compact) — label only', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'category', attributes: {} } });
+    await tools.skylight_create_category({ label: 'Sitter' });
+    const body = request.mock.calls[0][2].body;
+    expect(body).toEqual({ label: 'Sitter' });
+    expect(body).not.toHaveProperty('color');
+    expect(body).not.toHaveProperty('avatar_id');
+  });
+
+  it('create_category with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'category', attributes: {} } });
+    await tools.skylight_create_category({ label: 'Dog', color: '#A2845E', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/categories', {
+      body: { label: 'Dog', color: '#A2845E' },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_list_avatars ────────────────────────────────────────────────
+
+  it('list_avatars GETs the global /avatars library and flattens it', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({
+      data: [{ id: '79', type: 'avatar', attributes: { name: 'cake', image_url: 'https://x/cake.png', kind: 'emoji' } }],
+    });
+    const out = await tools.skylight_list_avatars({});
+    expect(request).toHaveBeenCalledWith('GET', '/avatars');
+    expect(resolveFrameId).not.toHaveBeenCalled();
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '79', type: 'avatar', name: 'cake', image_url: 'https://x/cake.png', kind: 'emoji' },
+    ]);
+  });
 });

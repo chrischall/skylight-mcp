@@ -45,8 +45,11 @@ Base: `https://app.ourskylight.com/api`. All requests carry header
 
 ## Members / categories (fixes — label↔profile)
 
+- **Create category: `POST /frames/{f}/categories { label, color, linked_to_profile, selected_for_chore_chart, avatar_id }`** (verified live; returns the new category with `profile_picture_urls`). `DELETE /frames/{f}/categories/{id}` removes it.
 - Update category (JSON, NOT multipart): `PUT /frames/{f}/categories/{id} { label, color, avatar_id, profile_picture, linked_to_profile, selected_for_chore_chart }`.
   - Convert a label → profile: set `linked_to_profile:true` (+ usually `selected_for_chore_chart:true`).
+- **Preset avatars: `GET /avatars`** (global, not frame-scoped) → 62 `{ id, name, image_url, kind:"emoji" }`. Assign one via `avatar_id` on create/update — no upload needed.
+  - Custom-photo avatars use `profile_picture` / `profile_picture_urls`, which require the same blocked S3 image-upload flow as #12 (not yet supported).
 - **Update family member real fields: `PUT /frames/{f}/categories/{id}/family_member { birthday, dietary_preferences }`** (current tool wrongly sends `{name, birthday}`; name is the category `label`).
 
 ## Albums / messages

@@ -69,11 +69,27 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
   );
 
   server.tool(
+    'skylight_list_auto_creation_intents',
+    'List all AI auto-creation intents on the frame (find pending/completed drafting jobs and their ids).',
+    { frameId: z.string().optional() },
+    frameScoped(getClient, async (c, f) =>
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/auto_creation_intents`)))),
+  );
+
+  server.tool(
     'skylight_list_auto_creation_drafts',
-    'List the events an AI intent drafted (for review before approving).',
+    'List the events an AI intent drafted (for review before approving). For meal/activity engines the drafts are items, not events — use skylight_list_auto_creation_items instead.',
     { id: idParam, frameId: z.string().optional() },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/auto_creation_intents/${id}/created_events`)))),
+  );
+
+  server.tool(
+    'skylight_list_auto_creation_items',
+    'List the draft items an AI intent created (the general draft reader — meal sittings, activities, list items, etc., which the event-only draft list does not surface).',
+    { id: idParam, frameId: z.string().optional() },
+    frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/auto_creation_intents/${id}/created_items`)))),
   );
 
   server.tool(
