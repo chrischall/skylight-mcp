@@ -61,20 +61,6 @@ describe('SkylightClient.request', () => {
     expect(c).toBeInstanceOf(SkylightClient);
   });
 
-  it('keeps the prior refresh token when a refresh returns none (no rotation)', async () => {
-    const httpFetch = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(401, { error: 'expired' }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: 'ok' }));
-    // refreshFn rotates the access token but returns an empty refresh token →
-    // the adapter maps `'' || undefined` so TokenManager retains the prior one.
-    const refreshFn = vi.fn().mockResolvedValue({ accessToken: 'AT2', refreshToken: '', expiresInMs: 600_000 });
-    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn });
-    const out = await c.request('GET', '/x');
-    expect(refreshFn).toHaveBeenCalledWith('RT');
-    expect((httpFetch.mock.calls[1][1].headers as Record<string,string>).Authorization).toBe('Bearer AT2');
-    expect(out).toEqual({ data: 'ok' });
-  });
-
   it('throws after a second 401', async () => {
     const httpFetch = vi.fn().mockResolvedValue(jsonResponse(401, { error: 'nope' }));
     const refreshFn = vi.fn().mockResolvedValue(REFRESHED_TOKENS);
@@ -159,16 +145,28 @@ describe('SkylightClient.request', () => {
     expect(mockFetch).toHaveBeenCalledOnce();
   });
 
-  it('keeps old refreshToken when refresh response omits it (empty string)', async () => {
+  it('keeps the prior refresh token across cycles when a refresh omits it (empty string)', async () => {
+    // Two 401→refresh→retry cycles. The first refresh returns an empty refreshToken,
+    // so the adapter maps `'' || undefined` and TokenManager must RETAIN the original
+    // RT — proven by the second refresh still being called with OLDRT (not '').
     const httpFetch = vi.fn()
       .mockResolvedValueOnce(jsonResponse(401, { error: 'expired' }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: 'ok' }));
-    // refreshFn returns empty refreshToken — client should keep old RT
-    const refreshFn = vi.fn().mockResolvedValue({ accessToken: 'AT2', refreshToken: '', expiresInMs: 600_000 });
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'ok1' }))
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'expired' }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'ok2' }));
+    const refreshFn = vi.fn()
+      .mockResolvedValueOnce({ accessToken: 'AT2', refreshToken: '', expiresInMs: 600_000 })
+      .mockResolvedValueOnce({ accessToken: 'AT3', refreshToken: 'NEWRT', expiresInMs: 600_000 });
     const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'OLDRT', expiresInMs: 999999 }, httpFetch, refreshFn });
-    await c.request('GET', '/x');
-    // After refresh, new token AT2 should be used
+
+    expect(await c.request('GET', '/a')).toEqual({ data: 'ok1' });
     expect((httpFetch.mock.calls[1][1].headers as Record<string,string>).Authorization).toBe('Bearer AT2');
+
+    expect(await c.request('GET', '/b')).toEqual({ data: 'ok2' });
+    // Retention proof: the empty RT from cycle 1 did NOT overwrite OLDRT.
+    expect(refreshFn).toHaveBeenNthCalledWith(1, 'OLDRT');
+    expect(refreshFn).toHaveBeenNthCalledWith(2, 'OLDRT');
+    expect((httpFetch.mock.calls[3][1].headers as Record<string,string>).Authorization).toBe('Bearer AT3');
   });
 
   it('coalesces concurrent refresh calls into a single token request', async () => {
