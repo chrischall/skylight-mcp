@@ -340,6 +340,13 @@ describe('chore tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual({ uncompleted: '5' });
   });
 
+  it('uncomplete_chore no-body fallback keeps instance_date when reopening an occurrence', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_uncomplete_chore({ id: '5', instance_date: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ uncompleted: '5', instance_date: '2026-06-01' });
+  });
+
   // ── skylight_delete_chore ────────────────────────────────────────────────
 
   it('delete_chore DELETEs without query when apply_to is omitted', async () => {

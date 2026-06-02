@@ -68,8 +68,8 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
 
   // LIVE-VERIFIED: complete_chore is PUT /frames/{f}/chores/{id}/completions with {status:'complete'}
   // (the old POST /complete was 404 and the PATCH /frames/{f}/chores/{id} was a no-op — status stayed
-  // pending). Completing a specific recurring *instance* (via instance_date + category_id) is
-  // intentionally not exposed; this is the simple whole-chore completion.
+  // pending). This is the whole-chore completion; for a single recurring occurrence use
+  // skylight_complete_chore_instance.
   server.tool(
     'skylight_complete_chore',
     'Mark a chore complete.',
@@ -143,7 +143,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time }: { id: string; instance_date?: string; instance_time?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: compact({ status: 'pending', instance_date, instance_time }) });
-      return doc ? textContent(flattenJsonApi(doc)) : textContent({ uncompleted: id });
+      return doc ? textContent(flattenJsonApi(doc)) : textContent(compact({ uncompleted: id, instance_date }));
     }),
   );
 
