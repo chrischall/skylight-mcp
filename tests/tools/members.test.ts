@@ -1,19 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerMemberTools } from '../../src/tools/members.js';
 import { makeClient } from './_setup.js';
-import { openAsBlob } from 'node:fs';
+import { fileBlob } from '@chrischall/mcp-utils';
 
-// Partial-mock node:fs so only openAsBlob is stubbed (avatar upload streams the
-// file via a file-backed Blob); the mock returns a Blob carrying the requested type.
-vi.mock('node:fs', async (orig) => ({
-  ...(await orig<typeof import('node:fs')>()),
-  openAsBlob: vi.fn(),
+// Partial-mock @chrischall/mcp-utils so only fileBlob is stubbed (avatar upload
+// streams the file via a file-backed Blob); the mock returns a Blob carrying the
+// requested type. Everything else (textResult, flattenJsonApi, …) stays real.
+vi.mock('@chrischall/mcp-utils', async (orig) => ({
+  ...(await orig<typeof import('@chrischall/mcp-utils')>()),
+  fileBlob: vi.fn(),
 }));
-const openAsBlobMock = vi.mocked(openAsBlob);
+const fileBlobMock = vi.mocked(fileBlob);
 beforeEach(() =>
-  openAsBlobMock
+  fileBlobMock
     .mockReset()
-    .mockImplementation(async (_path: unknown, opts?: { type?: string }) =>
+    .mockImplementation(async (_path: string, opts?: { type?: string }) =>
       new Blob([Buffer.from('imgbytes')], opts),
     ),
 );
@@ -291,7 +292,7 @@ describe('member tools', () => {
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: { profile_picture_urls: { original: 'https://cdn/x.png' } } } });
     const out = await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.png' });
 
-    expect(openAsBlobMock).toHaveBeenCalledWith('/tmp/face.png', { type: 'image/png' });
+    expect(fileBlobMock).toHaveBeenCalledWith('/tmp/face.png', { type: 'image/png' });
     const [method, path, opts] = request.mock.calls[0];
     expect(method).toBe('PUT');
     expect(path).toBe('/frames/3435252/categories/9');
