@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { runMcp, loadDotenvSafely } from '@chrischall/mcp-utils';
-import { resolveAuth } from './auth.js';
-import type { SkylightClient } from './client.js';
+import { makeGetClient } from './get-client.js';
 import { registerFrameTools } from './tools/frames.js';
 import { registerSettingsTools } from './tools/settings.js';
 import { registerCalendarTools } from './tools/calendars.js';
@@ -19,22 +18,10 @@ import { registerPhotoTools } from './tools/photos.js';
 await loadDotenvSafely();
 
 // Deferred-config-error pattern: the server boots before credentials exist so
-// the host's first `tools/list` always succeeds. `getClient` resolves auth
-// lazily on the first tool call and caches the (one-time) config error so every
-// later call surfaces the same actionable message instead of re-running login.
-let client: SkylightClient | undefined;
-let configError: string | undefined;
-const getClient = async (): Promise<SkylightClient> => {
-  if (client) return client;
-  if (configError) throw new Error(configError);
-  try {
-    ({ client } = await resolveAuth());
-    return client!;
-  } catch (e) {
-    configError = e instanceof Error ? e.message : String(e);
-    throw new Error(configError);
-  }
-};
+// the host's first `tools/list` always succeeds. `makeGetClient` resolves auth
+// lazily on the first tool call, caches only genuine missing-config errors
+// (transient login failures are retried), and single-flights concurrent logins.
+const getClient = makeGetClient();
 
 await runMcp<typeof getClient>({
   name: 'skylight-mcp',

@@ -22,6 +22,8 @@ export type RequestOpts = Pick<RequestOptions, 'query' | 'body' | 'formData'>;
 const REFRESH_SKEW_MS = 60_000;
 /** Mobile-app API version header — gates version-locked features. */
 const API_VERSION = '2026-05-01';
+/** Per-attempt request timeout so a hung upstream can't stall a tool call forever. */
+const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * Thin Skylight wrapper over the shared `createApiClient` (429-retry, 401 mapping,
@@ -62,6 +64,7 @@ export class SkylightClient {
       baseHeaders: { 'skylight-api-version': API_VERSION },
       tokenManager: tokens,
       fetchImpl: transport ? (input, init) => transport(String(input), init) : undefined,
+      timeout: REQUEST_TIMEOUT_MS,
     });
     this.frameId = opts.account.frameId;
   }

@@ -77,6 +77,15 @@ describe('SkylightClient.request', () => {
     expect((httpFetch.mock.calls[0][1].headers as Record<string,string>).Authorization).toBe('Bearer FRESH');
   });
 
+  it('bounds every request with a timeout (passes an AbortSignal to fetch)', async () => {
+    const httpFetch = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });
+    await c.request('GET', '/x');
+    const [, init] = httpFetch.mock.calls[0];
+    // createApiClient only sets a signal when its `timeout` option is configured.
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('surfaces a non-2xx non-401 via the shared redacted error formatter', async () => {
     const httpFetch = vi.fn().mockResolvedValue(jsonResponse(500, { error: 'server error' }));
     const c = new SkylightClient({ account, tokens: { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 999999 }, httpFetch, refreshFn: vi.fn() });

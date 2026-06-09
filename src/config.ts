@@ -15,7 +15,10 @@ export interface SessionAccount {
 export type Account = SessionAccount;
 
 const DEFAULT_BASE_URL = 'https://app.ourskylight.com/api';
-const NO_CONFIG = 'Missing Skylight auth config. Set SKYLIGHT_EMAIL + SKYLIGHT_PASSWORD.';
+// Shared prefix of every config error — getClient() caches errors carrying it
+// as permanent (vs transient login failures, which are retried per call).
+const NO_CONFIG_MARKER = 'Missing Skylight auth config';
+const NO_CONFIG = `${NO_CONFIG_MARKER}. Set SKYLIGHT_EMAIL + SKYLIGHT_PASSWORD.`;
 
 /**
  * Read an env var, treating empty/placeholder values as unset. Some MCP hosts
@@ -30,7 +33,7 @@ function readVar(env: Record<string, string | undefined>, key: string): string |
   return readEnvVar(key, { env });
 }
 
-export const NO_ENV_CONFIG_MARKER = NO_CONFIG;
+export const NO_ENV_CONFIG_MARKER = NO_CONFIG_MARKER;
 
 export function loadAccount(env: Record<string, string | undefined> = process.env): Account {
   const email = readVar(env, 'SKYLIGHT_EMAIL');
@@ -39,7 +42,7 @@ export function loadAccount(env: Record<string, string | undefined> = process.en
   if (!email && !password) throw new Error(NO_CONFIG);
   if (!email || !password) {
     const missing = email ? 'SKYLIGHT_PASSWORD' : 'SKYLIGHT_EMAIL';
-    throw new Error(`Incomplete Skylight config — missing: ${missing}. Set both SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD.`);
+    throw new Error(`${NO_CONFIG_MARKER} — missing: ${missing}. Set both SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD.`);
   }
 
   const baseUrl = (readVar(env, 'SKYLIGHT_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/$/, '');
