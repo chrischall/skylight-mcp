@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeGetClient } from '../src/get-client.js';
+import { makeGetClient, isSessionExpired } from '../src/get-client.js';
 import { NO_ENV_CONFIG_MARKER } from '../src/config.js';
 import type { SkylightClient } from '../src/client.js';
 
@@ -69,5 +69,11 @@ describe('makeGetClient', () => {
 
   it('defaults to the real resolveAuth when no resolver is injected', () => {
     expect(makeGetClient()).toBeTypeOf('function');
+  });
+
+  it('never treats a response as an expired session (token refresh is owned by the client)', () => {
+    // Skylight has no cookie-expiry/replay path at this layer, so the manager's
+    // isExpired callback is a constant `false`.
+    expect(isSessionExpired()).toBe(false);
   });
 });
