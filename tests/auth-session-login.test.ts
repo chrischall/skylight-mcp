@@ -36,6 +36,7 @@ function redirectResponse(location: string, cookies: string[] = []): Response {
 function jsonResponse(status: number, body: unknown, cookies: string[] = []): Response {
   return {
     status,
+    statusText: status === 401 ? 'Unauthorized' : status === 200 ? 'OK' : '',
     ok: status >= 200 && status < 300,
     headers: {
       get: (key: string) => key.toLowerCase() === 'location' ? null : null,
@@ -290,6 +291,36 @@ describe('login', () => {
     expect(step2Headers?.Cookie).toContain('csrf=CSRF2');
   });
 
+  it('drops a cookie when a later Set-Cookie carries a deletion marker (stateful jar)', async () => {
+    let callIndex = 0;
+    const httpFetch: HttpFetch = vi.fn().mockImplementation(async () => {
+      callIndex++;
+      if (callIndex === 1) {
+        return {
+          status: 200,
+          headers: {
+            get: () => null,
+            getSetCookie: () => ['session=SESS; Path=/', 'tmp=GONE_SOON; Path=/'],
+          },
+          text: async () => '<input name="authenticity_token" value="T">',
+          json: async () => { throw new Error('no'); },
+        } as unknown as Response;
+      }
+      if (callIndex === 2) {
+        // Step 2 deletes `tmp` via Max-Age=0
+        return redirectResponse(`${AUTH_BASE}/auth/session/success`, ['tmp=; Max-Age=0; Path=/']);
+      }
+      if (callIndex === 3) return redirectResponse('https://ourskylight.com/welcome?code=DEL1');
+      return jsonResponse(200, TOKEN_BODY);
+    });
+    const tokens = await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+    expect(tokens.accessToken).toBe('AT');
+    // Step 3 Cookie header keeps `session` but not the deleted `tmp`
+    const step3Headers = (httpFetch as ReturnType<typeof vi.fn>).mock.calls[2][1]?.headers as Record<string, string>;
+    expect(step3Headers?.Cookie).toContain('session=SESS');
+    expect(step3Headers?.Cookie).not.toContain('tmp=');
+  });
+
   it('follows up to 3 redirects to find the code in step 3', async () => {
     // First redirect goes to an intermediate URL without code, then final has code
     let callIndex = 0;
@@ -447,6 +478,19 @@ describe('login', () => {
     expect(tokens.expiresInMs).toBe(604800 * 1000);
   });
 
+  it('throws with the HTTP status (and a redacted body) when step-4 returns non-2xx', async () => {
+    let callIndex = 0;
+    const httpFetch: HttpFetch = vi.fn().mockImplementation(async () => {
+      callIndex++;
+      if (callIndex === 1) return htmlResponse('<input name="authenticity_token" value="T">');
+      if (callIndex === 2) return redirectResponse(`${AUTH_BASE}/auth/session/success`);
+      if (callIndex === 3) return redirectResponse('https://ourskylight.com/welcome?code=C');
+      return jsonResponse(401, { error: 'invalid_grant' });
+    });
+    await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
+      .rejects.toThrow(/HTTP 401/);
+  });
+
   it('uses empty string for refreshToken when absent from token response', async () => {
     let callIndex = 0;
     const httpFetch: HttpFetch = vi.fn().mockImplementation(async () => {
@@ -485,12 +529,42 @@ describe('refresh', () => {
     expect(params.get('refresh_token')).toBe('RT');
   });
 
-  it('throws on non-2xx response', async () => {
+  it('throws on non-2xx response, including the HTTP status', async () => {
     const httpFetch: HttpFetch = vi.fn().mockResolvedValue(
       jsonResponse(401, { error: 'invalid_token' }),
     );
     await expect(refresh({ authBaseUrl: AUTH_BASE, refreshToken: 'BAD' }, httpFetch))
       .rejects.toThrow(/401/);
+  });
+
+  it('redacts bearer tokens echoed in a token-endpoint error body (no regression vs truncateErrorMessage)', async () => {
+    const leakedJwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsZWFrIn0.c2lnbmF0dXJlLXNpZ25hdHVyZQ';
+    const httpFetch: HttpFetch = vi.fn().mockResolvedValue(
+      jsonResponse(400, { error: 'invalid_grant', echo: `Bearer ${leakedJwt}` }),
+    );
+    let thrown: Error | undefined;
+    try {
+      await refresh({ authBaseUrl: AUTH_BASE, refreshToken: 'RT' }, httpFetch);
+    } catch (e) {
+      thrown = e as Error;
+    }
+    expect(thrown).toBeDefined();
+    expect(thrown!.message).toMatch(/400/);
+    expect(thrown!.message).not.toContain(leakedJwt);
+  });
+
+  it('caps an oversized token-endpoint error body', async () => {
+    const httpFetch: HttpFetch = vi.fn().mockResolvedValue(
+      jsonResponse(500, { error: 'boom', detail: 'x'.repeat(5000) }),
+    );
+    let thrown: Error | undefined;
+    try {
+      await refresh({ authBaseUrl: AUTH_BASE, refreshToken: 'RT' }, httpFetch);
+    } catch (e) {
+      thrown = e as Error;
+    }
+    expect(thrown).toBeDefined();
+    expect(thrown!.message.length).toBeLessThan(1000);
   });
 
   it('throws when access_token is missing in refresh response', async () => {
@@ -499,6 +573,16 @@ describe('refresh', () => {
     );
     await expect(refresh({ authBaseUrl: AUTH_BASE, refreshToken: 'RT' }, httpFetch))
       .rejects.toThrow(/no access_token/);
+  });
+
+  it('defaults expires_in to 7 days and refreshToken to empty when absent', async () => {
+    const httpFetch: HttpFetch = vi.fn().mockResolvedValue(
+      jsonResponse(200, { access_token: 'AT3' }),
+    );
+    const tokens = await refresh({ authBaseUrl: AUTH_BASE, refreshToken: 'RT' }, httpFetch);
+    expect(tokens.accessToken).toBe('AT3');
+    expect(tokens.refreshToken).toBe('');
+    expect(tokens.expiresInMs).toBe(604800 * 1000);
   });
 
   it('uses default global fetch when httpFetch not provided', async () => {

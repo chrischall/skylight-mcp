@@ -1,4 +1,4 @@
-import { truncateErrorMessage } from '@chrischall/mcp-utils';
+import { CookieJar, createOAuth2Refresher, truncateErrorMessage } from '@chrischall/mcp-utils';
 
 export type HttpFetch = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -28,27 +28,7 @@ const DEVICE_PARAMS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Internal cookie-jar helpers
-// ---------------------------------------------------------------------------
-
-type CookieJar = Map<string, string>;
-
-function collectCookies(res: Response, jar: CookieJar): void {
-  const raw: string[] = res.headers.getSetCookie?.() ?? [];
-  for (const cookie of raw) {
-    const [kv] = cookie.split(';');
-    const eqIdx = kv.indexOf('=');
-    if (eqIdx < 0) continue;
-    jar.set(kv.slice(0, eqIdx).trim(), kv.slice(eqIdx + 1).trim());
-  }
-}
-
-function cookieHeader(jar: CookieJar): string {
-  return Array.from(jar.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
-}
-
-// ---------------------------------------------------------------------------
-// Token normalization (shared by login and refresh)
+// Token normalization (login step 4)
 // ---------------------------------------------------------------------------
 
 function normalizeTokenResponse(status: number, json: unknown): Tokens {
@@ -93,11 +73,13 @@ export async function login(
   const { authBaseUrl, email, password } = opts;
   const deviceFingerprint = opts.deviceFingerprint ?? crypto.randomUUID();
 
-  const jar: CookieJar = new Map();
+  // Stateful jar from mcp-utils: accumulates Set-Cookie across the 4 login
+  // steps (later wins, deletion markers remove), rendered via .header().
+  const jar = new CookieJar();
 
   function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
     const h: Record<string, string> = { 'User-Agent': USER_AGENT, ...extra };
-    const cookieStr = cookieHeader(jar);
+    const cookieStr = jar.header();
     if (cookieStr) h['Cookie'] = cookieStr;
     return h;
   }
@@ -109,7 +91,7 @@ export async function login(
     redirect: 'manual',
     headers: buildHeaders(),
   });
-  collectCookies(step1, jar);
+  jar.absorb(step1.headers);
 
   const html = await step1.text();
   const tokenMatch = html.match(/name="authenticity_token"\s+value="([^"]+)"/);
@@ -140,7 +122,7 @@ export async function login(
     }),
     body: step2Body,
   });
-  collectCookies(step2, jar);
+  jar.absorb(step2.headers);
 
   const step2Location = step2.headers.get('location') ?? '';
   if (step2Location.includes('/auth/session/new')) {
@@ -167,7 +149,7 @@ export async function login(
       redirect: 'manual',
       headers: buildHeaders(),
     });
-    collectCookies(step3, jar);
+    jar.absorb(step3.headers);
     const loc = step3.headers.get('location') ?? '';
     const locParams = new URL(loc, authBaseUrl).searchParams;
     code = locParams.get('code');
@@ -222,20 +204,24 @@ export async function refresh(
   opts: { authBaseUrl: string; refreshToken: string },
   httpFetch: HttpFetch = globalFetch,
 ): Promise<Tokens> {
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: CLIENT_ID,
-    refresh_token: opts.refreshToken,
-  }).toString();
-
-  const res = await httpFetch(`${opts.authBaseUrl}/oauth/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-    },
-    body,
+  // Shared refresh_token-grant skeleton from mcp-utils. It posts the
+  // form-encoded grant, redacts + truncates upstream error bodies
+  // (truncateErrorMessage), and single-flights concurrent exchanges.
+  // The refresher is built per call because Skylight rotates refresh tokens —
+  // TokenManager passes the *current* token each time; it also owns the
+  // cross-call single-flight, so nothing is lost by not reusing the refresher.
+  const doRefresh = createOAuth2Refresher({
+    endpoint: `${opts.authBaseUrl}/oauth/token`,
+    refreshToken: opts.refreshToken,
+    params: { client_id: CLIENT_ID },
+    // The refresher always supplies an init (method/headers/body), so the
+    // cast is safe — no fallback branch needed.
+    fetchImpl: (input, init) => httpFetch(String(input), init as RequestInit),
   });
-  const json = await res.json();
-  return normalizeTokenResponse(res.status, json);
+  const result = await doRefresh();
+  return {
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken ?? '',
+    expiresInMs: (result.expiresIn ?? 604800) * 1000,
+  };
 }
