@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.1](https://github.com/chrischall/skylight-mcp/compare/v0.4.0...v0.4.1) (2026-06-10)
+
+
+### Bug Fixes
+
+* retry transient login failures, single-flight first login, add request timeout ([#38](https://github.com/chrischall/skylight-mcp/issues/38)) ([a2df459](https://github.com/chrischall/skylight-mcp/commit/a2df459d166da48404411180423240f4404fabba))
+
+
+### Refactor
+
+* adopt CookieSessionManager for lazy login + config-error caching ([#41](https://github.com/chrischall/skylight-mcp/issues/41)) ([4e95a53](https://github.com/chrischall/skylight-mcp/commit/4e95a530b9d64f0970725c7da672cd5818847b0c))
+* adopt createOAuth2Refresher and stateful CookieJar from mcp-utils 0.7.0 ([#40](https://github.com/chrischall/skylight-mcp/issues/40)) ([abdc462](https://github.com/chrischall/skylight-mcp/commit/abdc46251744832f7091804e4a6f56912987c406))
+* drop isExpired stub now that mcp-utils 0.9.0 makes it optional ([#42](https://github.com/chrischall/skylight-mcp/issues/42)) ([bcace28](https://github.com/chrischall/skylight-mcp/commit/bcace2877f7573d3a7653789d70a0da897a4e9a9))
+
 ## [0.4.0](https://github.com/chrischall/skylight-mcp/compare/v0.3.0...v0.4.0) (2026-06-02)
 
 
