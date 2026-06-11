@@ -1,5 +1,9 @@
 # skylight-mcp
 
+[![CI](https://github.com/chrischall/skylight-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/chrischall/skylight-mcp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/skylight-mcp)](https://www.npmjs.com/package/skylight-mcp)
+[![license](https://img.shields.io/npm/l/skylight-mcp)](LICENSE)
+
 MCP server for [Skylight Calendar](https://www.ourskylight.com) — 102 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
