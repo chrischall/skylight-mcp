@@ -1,7 +1,7 @@
 {
   "dxt_version": "0.1",
   "name": "skylight-mcp",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Skylight Calendar MCP — read/write family calendar events, chores, rewards, and shared lists via Claude. Auth via email+password.",
   "author": {
     "name": "Claude Code (AI)"

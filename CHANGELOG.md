@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.2](https://github.com/chrischall/skylight-mcp/compare/v0.4.1...v0.4.2) (2026-06-13)
+
+
+### Bug Fixes
+
+* bot PRs bypass the CI gate unconditionally ([#46](https://github.com/chrischall/skylight-mcp/issues/46)) ([42cb0b4](https://github.com/chrischall/skylight-mcp/commit/42cb0b43c01aec1e0d53be1059e0570e25ac0998))
+
+
+### Documentation
+
+* add MIT LICENSE file and README badges ([#43](https://github.com/chrischall/skylight-mcp/issues/43)) ([d63e452](https://github.com/chrischall/skylight-mcp/commit/d63e4522fc5f8e4ee50b7cd5e026f4062172151d))
+
 ## [0.4.1](https://github.com/chrischall/skylight-mcp/compare/v0.4.0...v0.4.1) (2026-06-10)
 
 
