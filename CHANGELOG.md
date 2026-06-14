@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/chrischall/skylight-mcp/compare/v0.4.2...v0.4.3) (2026-06-14)
+
+
+### Documentation
+
+* require Conventional Commit PR titles for release-please ([#51](https://github.com/chrischall/skylight-mcp/issues/51)) ([7fa2bf2](https://github.com/chrischall/skylight-mcp/commit/7fa2bf2597eeb81db68db1bc5849351f11a78588))
+
 ## [0.4.2](https://github.com/chrischall/skylight-mcp/compare/v0.4.1...v0.4.2) (2026-06-13)
 
 
