@@ -130,6 +130,7 @@ The other description fields (`manifest.json`) have no published length constrai
 
 Version appears in several places — all must match: `package.json`, `package-lock.json`, `src/index.ts` (the `McpServer` constructor call, annotated with `// x-release-please-version`), `manifest.json`, `server.json`. The `tests/version-sync.test.ts` file asserts this. Don't bump manually unless explicitly asked — versioning is automated via release-please.
 
+<!-- pr-workflow:v2 -->
 ## Pull requests & release notes
 
 **Default workflow: branch + PR, even for solo work.** Direct pushes to `main` skip review and auto-generated release notes.
@@ -148,6 +149,8 @@ For every PR, apply exactly one label:
 | `ci` / `github_actions` | CI & Build |
 | *(none / unmatched)* | Other Changes |
 | `ignore-for-release` | Hidden from notes |
+
+The **PR title MUST be a Conventional Commit**, written user-facing (`fix(scope): …`, `feat(scope): …`), not internal shorthand. Because the repo squash-merges, the PR title *becomes the squash commit's subject line* — the only thing release-please parses to pick the version bump and changelog section. Only `feat` (minor), `fix` (patch), and `!`/`BREAKING CHANGE` (major) cut a release; `perf`/`refactor`/`docs` show in the changelog without bumping; `ci`/`test`/`build`/`chore` are recognised but hidden (see `release-please-config.json` → `changelog-sections`). A title without a conventional type is invisible to release-please — no bump, no changelog line. Prefixes in *individual commits* don't help; squash keeps only the title.
 
 ### How PRs merge
 
