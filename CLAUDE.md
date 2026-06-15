@@ -28,7 +28,7 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `src/config.ts` — `loadAccount()`: reads `SKYLIGHT_EMAIL`, `SKYLIGHT_PASSWORD`, optional `SKYLIGHT_FRAME_ID`, `SKYLIGHT_NAME`, `SKYLIGHT_BASE_URL` from env. Exposes both `baseUrl` (the `/api` base) and `authBaseUrl` (the origin). Returns an `Account` or throws with an actionable message. No partial-config fallthrough — both email and password are required.
 - `src/client.ts` — `SkylightClient`: accepts a `refreshFn` (POST `/oauth/token` grant_type=refresh_token) for proactive (~60 s before expiry) and reactive (on 401, one retry) token refresh. All API calls are Node-direct. Note: the refresh grant follows the standard Doorkeeper contract; it was not live-verified due to login rate-limiting during testing.
 
-**No env vars → clean start:** `resolveAuth()` is called lazily (on first tool invocation). Missing credentials are deferred to tool-call time via a `configError` sentinel in `src/index.ts` — the server starts without error so MCP hosts can list tools before credentials are configured.
+**No env vars → clean start:** `resolveAuth()` is called lazily (on first tool invocation). The deferred-config-error pattern lives in `src/get-client.ts` (`makeGetClient`): a `CookieSessionManager` (`@chrischall/mcp-utils/session`) runs `resolveAuth()` once on the first tool call, caches a genuine missing-config error (message carrying `NO_ENV_CONFIG_MARKER` from `src/config.ts`) via `isPermanentError`, and single-flights concurrent first calls. The server starts without error so MCP hosts can list tools before credentials are configured; transient login failures (network/5xx/rate-limit) are not cached and retry on the next call.
 
 ## Commands
 
@@ -47,7 +47,8 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `src/auth-session-login.ts` — `login()`: headless four-step authorization-code flow.
 - `src/config.ts` — `loadAccount()`: env-var resolution, exposes `baseUrl` and `authBaseUrl`.
 - `src/client.ts` — `SkylightClient`: a thin wrapper over the shared `createApiClient` (`@chrischall/mcp-utils`) wired to the fleet `TokenManager` (`/session`). The shared client owns 429-retry, 401 mapping, redacted error formatting, and 204/empty handling; the `TokenManager` owns proactive (~60 s skew) + reactive (401-replay) refresh. Skylight-specific bits: the `skylight-api-version` `baseHeaders` and `resolveFrameId()` frame auto-discovery. Multipart uploads (avatars/photos) go through `RequestOpts.formData`.
-- `src/index.ts` — entry point. Boots `McpServer`, wires lazy `getClient`, registers the thirteen tool modules.
+- `src/get-client.ts` — `makeGetClient()`: the lazy `getClient` factory. Wraps `resolveAuth()` in a `CookieSessionManager` for single-flight first login + permanent-vs-transient (`NO_ENV_CONFIG_MARKER`) caching — see "No env vars → clean start" above.
+- `src/index.ts` — entry point. Boots the MCP server via `runMcp` (`@chrischall/mcp-utils`), wires `getClient` from `makeGetClient()`, registers the thirteen tool modules.
 - `src/tools/` — one file per domain: `frames.ts`, `settings.ts`, `calendars.ts`, `members.ts`, `events.ts`, `lists.ts`, `chores.ts`, `rewards.ts`, `meals.ts`, `messages.ts`, `tasks.ts`, `ai.ts`, `photos.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers. `src/s3-upload.ts` holds the dependency-free SigV4 multipart S3 upload used by `photos.ts`.
 - `tests/` — mirrors `src/`. Tool tests are in `tests/tools/<name>.test.ts`.
 
@@ -128,7 +129,7 @@ The other description fields (`manifest.json`) have no published length constrai
 
 ## Versioning
 
-Version appears in several places — all must match: `package.json`, `package-lock.json`, `src/index.ts` (the `McpServer` constructor call, annotated with `// x-release-please-version`), `manifest.json`, `server.json`. The `tests/version-sync.test.ts` file asserts this. Don't bump manually unless explicitly asked — versioning is automated via release-please.
+Version appears in several places — all must match: `package.json`, `package-lock.json`, `src/index.ts` (the `runMcp({ version })` call, annotated with `// x-release-please-version`), `manifest.json`, `server.json`. The `tests/version-sync.test.ts` file asserts this. Don't bump manually unless explicitly asked — versioning is automated via release-please.
 
 <!-- pr-workflow:v2 -->
 ## Pull requests & release notes
@@ -156,7 +157,7 @@ The **PR title MUST be a Conventional Commit**, written user-facing (`fix(scope)
 
 **Don't run `gh pr merge` yourself.** The automation does it:
 
-1. `pr-auto-review.yml` runs a Claude review on every PR (except release PRs). On a `pass` verdict it adds `ready-to-merge`.
+1. `pr-auto-review.yml` runs a Claude review on every PR (except release PRs) via the `chrischall/workflows` reusable pipeline. A `pass` **or** `warn` verdict arms `ready-to-merge`; `warn` and `fail` also open/update an `auto-review-followup` issue (see below). Only `fail` blocks the merge.
 2. `auto-merge.yml` arms `gh pr merge --auto --squash` on `ready-to-merge`. The moment CI is green the PR squash-merges itself.
 
 Only open a PR when the feature is genuinely complete — PRs auto-merge as soon as auto-review passes, so there's no draft-PR safety net for half-baked work (unless you use `gh pr create --draft`).
@@ -164,6 +165,19 @@ Only open a PR when the feature is genuinely complete — PRs auto-merge as soon
 **Release PRs** are the one manual touch — release-please opens them; add `ready-to-merge` yourself when ready to ship.
 
 The repo allows squash-merge only — `--merge` and `--rebase` are blocked.
+
+### Auto-review follow-up issues
+
+When a PR's auto-review verdict is `warn` or `fail`, the `chrischall/workflows` pipeline opens or updates a single `auto-review-followup` issue ("Auto-review follow-ups for PR #N") whose checklist captures every finding, and links it from the PR's `<!-- auto-review-verdict -->` comment (`📋 Tracking follow-ups: #N`). `warn` (nits only) still auto-merges — the issue carries the nits forward, so most nits are fixed in a *later* PR; `fail` blocks until the important findings are addressed on the PR itself.
+
+When asked to address the auto-review comments / review findings on a PR:
+
+1. Read the verdict comment, open the linked `auto-review-followup` issue, and treat its checklist as the work list (alongside any inline review comments).
+2. Resolve each item, checking off only what you've **verified** is genuinely fixed.
+3. If every item is resolved on the current PR, add `Closes #<issue>` to that PR's body so the merge closes it; if some are deferred, check off only the resolved ones and leave the issue open.
+4. For nits whose `warn` PR already auto-merged, address them in a follow-up PR that references `Closes #<issue>`.
+
+(Mirrors the fleet-wide convention in `~/.claude/CLAUDE.md`.)
 
 ## What to not do
 
