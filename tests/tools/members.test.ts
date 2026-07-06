@@ -21,7 +21,9 @@ beforeEach(() =>
 
 function harness() {
   const tools: Record<string, (args: any) => Promise<any>> = {};
-  const server = { tool: (name: string, _desc: string, _schema: any, cb: any) => { tools[name] = cb; } } as any;
+  // Tools register with an optional annotations arg before the callback
+  // (server.tool(name, desc, schema[, annotations], cb)); the handler is always last.
+  const server = { tool: (name: string, ...rest: any[]) => { tools[name] = rest[rest.length - 1]; } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerMemberTools(server, async () => client);
   return { tools, request, resolveFrameId };
@@ -287,10 +289,21 @@ describe('member tools', () => {
 
   // ── skylight_set_member_avatar ───────────────────────────────────────────
 
+  it('set_member_avatar without confirm returns a dry-run preview and makes NO network/file call', async () => {
+    const { tools, request } = harness();
+    const out = await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/secret.png' });
+    expect(fileBlobMock).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    const preview = JSON.parse(out.content[0].text);
+    expect(preview.dryRun).toBe(true);
+    expect(preview.willSend).toEqual({ image_path: '/tmp/secret.png', mime: 'image/png' });
+    expect(preview.note).toMatch(/confirm: true/);
+  });
+
   it('set_member_avatar PUTs the image as multipart profile_picture (default frame)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: { profile_picture_urls: { original: 'https://cdn/x.png' } } } });
-    const out = await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.png' });
+    const out = await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.png', confirm: true });
 
     expect(fileBlobMock).toHaveBeenCalledWith('/tmp/face.png', { type: 'image/png' });
     const [method, path, opts] = request.mock.calls[0];
@@ -306,7 +319,7 @@ describe('member tools', () => {
   it('set_member_avatar derives content-type from the extension (jpg) and respects frameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
-    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.JPG', frameId: '99' });
+    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.JPG', frameId: '99', confirm: true });
     expect(request.mock.calls[0][1]).toBe('/frames/99/categories/9');
     expect((request.mock.calls[0][2].formData.get('profile_picture') as File).type).toBe('image/jpeg');
     expect(resolveFrameId).not.toHaveBeenCalled();
@@ -315,7 +328,7 @@ describe('member tools', () => {
   it('set_member_avatar defaults an extensionless path to a png part', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
-    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/rawface' });
+    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/rawface', confirm: true });
     const file = request.mock.calls[0][2].formData.get('profile_picture') as File;
     expect(file.type).toBe('image/png');
     expect(file.name).toBe('avatar.png');
@@ -324,7 +337,7 @@ describe('member tools', () => {
   it('set_member_avatar uses octet-stream for an unrecognized extension', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
-    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.bmp' });
+    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.bmp', confirm: true });
     expect((request.mock.calls[0][2].formData.get('profile_picture') as File).type).toBe('application/octet-stream');
   });
 });

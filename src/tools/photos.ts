@@ -4,6 +4,7 @@ import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, compact, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
 import { s3Upload, type S3Credentials } from '../s3-upload.js';
 
 const MIME: Record<string, string> = {
@@ -44,43 +45,59 @@ async function uploadFile(
 }
 
 export function registerPhotoTools(server: McpServer, getClient: GetClient) {
+  const uploadPhoto = frameScoped(getClient, async (c, f, { image_path, caption, frame_ids }: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string }) => {
+    const { bucket, key, etag, ext } = await uploadFile(c, image_path);
+    const frames = frame_ids && frame_ids.length ? frame_ids : [f];
+    // Register returns `{ data: { message_ids: [...] } }`; the photo then transcodes
+    // server-side (status "processing") before it shows on the frame.
+    const doc = await c.request<{ data?: { message_ids?: Array<string | number> } }>('POST', '/messages/uploads', {
+      body: compact({ file_upload: { bucket, key, etag }, frame_ids: frames, caption, ext }),
+    });
+    return textContent({ message_ids: doc.data?.message_ids ?? [], key, frame_ids: frames, status: 'processing' });
+  });
+
   server.tool(
     'skylight_upload_photo',
-    'Upload a photo or video from a local file to the Skylight frame (it appears in the slideshow). Two-step: signs an S3 upload with temporary credentials, then registers it as a frame message.',
+    'Upload a photo or video from a local file to the Skylight frame (it appears in the slideshow). Two-step: signs an S3 upload with temporary credentials, then registers it as a frame message. Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO S3/network call; with confirm:true it uploads.',
     {
       image_path: z.string().describe('Absolute path to a local image/video file (jpg, png, heic, mp4, …).'),
       caption: z.string().optional().describe('Caption shown with the photo.'),
       frame_ids: idArrayParam.optional().describe('Frame ids to post to; defaults to the resolved frame.'),
       frameId: z.string().optional(),
+      confirm: schemaConfirm,
     },
-    frameScoped(getClient, async (c, f, { image_path, caption, frame_ids }: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string }) => {
-      const { bucket, key, etag, ext } = await uploadFile(c, image_path);
-      const frames = frame_ids && frame_ids.length ? frame_ids : [f];
-      // Register returns `{ data: { message_ids: [...] } }`; the photo then transcodes
-      // server-side (status "processing") before it shows on the frame.
-      const doc = await c.request<{ data?: { message_ids?: Array<string | number> } }>('POST', '/messages/uploads', {
-        body: compact({ file_upload: { bucket, key, etag }, frame_ids: frames, caption, ext }),
-      });
-      return textContent({ message_ids: doc.data?.message_ids ?? [], key, frame_ids: frames, status: 'processing' });
-    }),
+    { destructiveHint: true },
+    async (args: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string; confirm?: boolean }) => {
+      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, 'Upload a local file to the Skylight frame (S3)', 'POST', '/messages/uploads', MIME, 'jpg');
+      if (gate) return gate;
+      return uploadPhoto(args);
+    },
   );
+
+  const importEvents = frameScoped(getClient, async (c, f, { image_path, category_ids }: { image_path: string; category_ids?: Array<string | number>; frameId?: string }) => {
+    const { ext } = await uploadFile(c, image_path);
+    // NOTE: the event_importer intent references the just-uploaded photo (created_via app_photo_picker);
+    // the exact server-side linkage to the upload is inferred from captured traffic.
+    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
+      body: compact({ ext, engine: 'event_importer', category_ids, created_via: 'app_photo_picker' }),
+    });
+    return textContent(flattenJsonApi(doc));
+  });
 
   server.tool(
     'skylight_import_events_from_photo',
-    "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Best-effort/UNVERIFIED: uploads the photo to S3 then posts an event_importer intent that references the latest upload (the server-side photo↔intent link is inferred from captured traffic, not confirmed). Poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
+    "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Best-effort/UNVERIFIED: uploads the photo to S3 then posts an event_importer intent that references the latest upload (the server-side photo↔intent link is inferred from captured traffic, not confirmed). Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO S3/network call; with confirm:true it uploads. Poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
     {
       image_path: z.string().describe('Absolute path to a local image of the events to import.'),
       category_ids: idArrayParam.optional().describe('Family-member category ids to assign the imported events to.'),
       frameId: z.string().optional(),
+      confirm: schemaConfirm,
     },
-    frameScoped(getClient, async (c, f, { image_path, category_ids }: { image_path: string; category_ids?: Array<string | number>; frameId?: string }) => {
-      const { ext } = await uploadFile(c, image_path);
-      // NOTE: the event_importer intent references the just-uploaded photo (created_via app_photo_picker);
-      // the exact server-side linkage to the upload is inferred from captured traffic.
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
-        body: compact({ ext, engine: 'event_importer', category_ids, created_via: 'app_photo_picker' }),
-      });
-      return textContent(flattenJsonApi(doc));
-    }),
+    { destructiveHint: true },
+    async (args: { image_path: string; category_ids?: Array<string | number>; frameId?: string; confirm?: boolean }) => {
+      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, 'Upload a local photo to the Skylight frame (S3) and start an event_importer intent', 'POST', '/frames/{frame}/auto_creation_intents', MIME, 'jpg');
+      if (gate) return gate;
+      return importEvents(args);
+    },
   );
 }

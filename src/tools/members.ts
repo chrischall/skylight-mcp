@@ -3,6 +3,7 @@ import { extname } from 'node:path';
 import { fileBlob } from '@chrischall/mcp-utils';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, compact, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 const AVATAR_MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', gif: 'image/gif', webp: 'image/webp',
@@ -81,20 +82,28 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
   // LIVE-VERIFIED: a custom photo avatar is a multipart/form-data PUT to the category with a
   // `profile_picture` file part (NOT the S3 cloud-upload flow); the server pushes it to Cloudinary
   // and fills in `profile_picture_urls`. Preset emoji avatars use `avatar_id` instead (no upload).
-  server.tool('skylight_set_member_avatar', "Set a family member's avatar to a custom photo from a local image file (uploaded as multipart/form-data). For a preset emoji avatar, use skylight_list_avatars + the avatar_id on create/update instead.",
+  const setMemberAvatar = frameScoped(getClient, async (c, f, { id, image_path }: { id: string | number; image_path: string; frameId?: string }) => {
+    const ext = extname(image_path).slice(1).toLowerCase() || 'png';
+    const formData = new FormData();
+    // fileBlob streams the file off disk (file-backed Blob) instead of buffering it.
+    formData.append('profile_picture', await fileBlob(image_path, { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
+    const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { formData });
+    return textContent(flattenJsonApi(doc));
+  });
+
+  server.tool('skylight_set_member_avatar', "Set a family member's avatar to a custom photo from a local image file (uploaded as multipart/form-data). For a preset emoji avatar, use skylight_list_avatars + the avatar_id on create/update instead. Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO network call; with confirm:true it uploads.",
     {
       id: idParam.describe('Category/member id.'),
       image_path: z.string().describe('Absolute path to a local image file (jpg, png, heic, …).'),
       frameId: z.string().optional(),
+      confirm: schemaConfirm,
     },
-    frameScoped(getClient, async (c, f, { id, image_path }: { id: string | number; image_path: string; frameId?: string }) => {
-      const ext = extname(image_path).slice(1).toLowerCase() || 'png';
-      const formData = new FormData();
-      // fileBlob streams the file off disk (file-backed Blob) instead of buffering it.
-      formData.append('profile_picture', await fileBlob(image_path, { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { formData });
-      return textContent(flattenJsonApi(doc));
-    }));
+    { destructiveHint: true },
+    async (args: { id: string | number; image_path: string; frameId?: string; confirm?: boolean }) => {
+      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, "Upload a local file as a member's avatar", 'PUT', '/frames/{frame}/categories/{id}', AVATAR_MIME, 'png');
+      if (gate) return gate;
+      return setMemberAvatar(args);
+    });
 
   server.tool('skylight_create_category', 'Create a category / family member on the frame. Set linked_to_profile + selected_for_chore_chart to make it a full chore-chart member; pick avatar_id from skylight_list_avatars, or set a custom photo afterward with skylight_set_member_avatar.',
     {
