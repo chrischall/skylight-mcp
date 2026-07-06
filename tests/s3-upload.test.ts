@@ -128,6 +128,17 @@ describe('s3Upload (SigV4 multipart)', () => {
       .rejects.toThrow(/S3 create failed \(HTTP 403\): <Error>AccessDenied<\/Error>/);
   });
 
+  it('redacts credential material echoed in a non-2xx S3 error body', async () => {
+    const leak = 'Authorization: Bearer ya29.a0Ad52N3-LEAKED-STS-TOKEN denied';
+    const impl = vi.fn().mockResolvedValue({ status: 403, headers: { get: () => null }, text: async () => leak } as unknown as Response);
+    let msg = '';
+    await s3Upload({ creds, region: 'us-east-1', bucket: 'b', key: 'k.jpg', body: Buffer.from('x'), contentType: 'image/jpeg', fetchImpl: impl, now })
+      .catch((e: unknown) => { msg = (e as Error).message; });
+    expect(msg).toContain('S3 create failed (HTTP 403)');
+    expect(msg).not.toContain('ya29.a0Ad52N3-LEAKED-STS-TOKEN');
+    expect(msg).toContain('[REDACTED]');
+  });
+
   it('tolerates an unreadable error body on a failed request', async () => {
     const impl = vi.fn().mockResolvedValue({ status: 500, headers: { get: () => null }, text: async () => { throw new Error('closed'); } } as unknown as Response);
     await expect(s3Upload({ creds, region: 'us-east-1', bucket: 'b', key: 'k.jpg', body: Buffer.from('x'), contentType: 'image/jpeg', fetchImpl: impl, now }))

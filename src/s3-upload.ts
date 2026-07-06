@@ -12,6 +12,8 @@
 //   2. ETags from S3 are quoted; the part list echoes them verbatim.
 import { createHash, createHmac } from 'node:crypto';
 
+import { truncateErrorMessage } from '@chrischall/mcp-utils';
+
 export interface S3Credentials {
   access_key_id: string;
   secret_access_key: string;
@@ -124,7 +126,10 @@ export async function s3Upload(opts: S3UploadOptions): Promise<string> {
     const headers = sign({ method, host, region, canonicalUri, query, payloadHash: sha256hex(init.payload), creds, amzDate, extra: init.extra });
     const res = await doFetch(url(query), { method, headers, body: init.payload as BodyInit });
     if (res.status < 200 || res.status >= 300) {
-      throw new Error(`S3 ${label} failed (HTTP ${res.status}): ${(await res.text().catch(() => '')).slice(0, 300)}`);
+      // Redact before truncating — an S3 error body can echo an
+      // x-amz-security-token (temporary STS credential) fragment.
+      const body = truncateErrorMessage(await res.text().catch(() => ''), 300);
+      throw new Error(`S3 ${label} failed (HTTP ${res.status}): ${body}`);
     }
     return res;
   }
