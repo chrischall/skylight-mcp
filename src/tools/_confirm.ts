@@ -43,9 +43,10 @@ export function previewFileUploadUnlessConfirmed(
   path: string,
   mimeByExt: Record<string, string>,
   defaultExt: string,
+  extra?: Record<string, unknown>,
 ): CallToolResult | null {
   const resolved = resolve(imagePath);
   const ext = extname(resolved).slice(1).toLowerCase() || defaultExt;
   const mime = mimeByExt[ext] ?? 'application/octet-stream';
-  return previewUnlessConfirmed(confirm, action, method, path, { image_path: resolved, mime });
+  return previewUnlessConfirmed(confirm, action, method, path, { ...extra, image_path: resolved, mime });
 }

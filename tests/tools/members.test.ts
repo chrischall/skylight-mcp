@@ -296,7 +296,7 @@ describe('member tools', () => {
     expect(request).not.toHaveBeenCalled();
     const preview = JSON.parse(out.content[0].text);
     expect(preview.dryRun).toBe(true);
-    expect(preview.willSend).toEqual({ image_path: '/tmp/secret.png', mime: 'image/png' });
+    expect(preview.willSend).toEqual({ id: '9', image_path: '/tmp/secret.png', mime: 'image/png' });
     expect(preview.note).toMatch(/confirm: true/);
   });
 
