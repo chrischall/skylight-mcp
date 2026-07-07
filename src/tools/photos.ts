@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
 import { s3Upload, type S3Credentials } from '../s3-upload.js';
 
@@ -51,7 +51,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     // Register returns `{ data: { message_ids: [...] } }`; the photo then transcodes
     // server-side (status "processing") before it shows on the frame.
     const doc = await c.request<{ data?: { message_ids?: Array<string | number> } }>('POST', '/messages/uploads', {
-      body: compact({ file_upload: { bucket, key, etag }, frame_ids: frames, caption, ext }),
+      body: pruneUndefined({ file_upload: { bucket, key, etag }, frame_ids: frames, caption, ext }),
     });
     return textContent({ message_ids: doc.data?.message_ids ?? [], key, frame_ids: frames, status: 'processing' });
   });
@@ -79,7 +79,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     // NOTE: the event_importer intent references the just-uploaded photo (created_via app_photo_picker);
     // the exact server-side linkage to the upload is inferred from captured traffic.
     const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
-      body: compact({ ext, engine: 'event_importer', category_ids, created_via: 'app_photo_picker' }),
+      body: pruneUndefined({ ext, engine: 'event_importer', category_ids, created_via: 'app_photo_picker' }),
     });
     return textContent(flattenJsonApi(doc));
   });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { textResult, flattenJsonApi } from '@chrischall/mcp-utils';
+import { textResult, flattenJsonApi, pruneUndefined } from '@chrischall/mcp-utils';
 import type { SkylightClient } from '../client.js';
 
 // Tool-result wrapper + JSON:API flattening now come from @chrischall/mcp-utils.
@@ -7,18 +7,15 @@ import type { SkylightClient } from '../client.js';
 // sites read unchanged; `flattenJsonApi` is re-exported verbatim. The shared
 // version flattens the same `{ data: { id, type, attributes } }` envelopes (and
 // passes resources without `attributes` through untouched), matching Skylight's
-// previous local implementation.
+// previous local implementation. `pruneUndefined` is the shared, byte-identical
+// replacement for the former local `compact()` — it shallow-copies an object
+// dropping every `undefined`-valued key (falsy values like 0/''/false survive).
 export const textContent = textResult;
-export { flattenJsonApi };
+export { flattenJsonApi, pruneUndefined };
 
 /** A JSON:API document — `data` is one resource or an array of them. */
 export interface JsonApiResource { id: string; type: string; attributes?: Record<string, unknown>; }
 export interface JsonApiDoc { data: JsonApiResource | JsonApiResource[]; }
-
-/** Drop keys whose value is `undefined` (used to build flat write payloads). */
-export function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
-  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
-}
 
 export type GetClient = () => Promise<SkylightClient>;
 

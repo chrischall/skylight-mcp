@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerTaskTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_tasks', "List task-box items (the frame's task list).", {
@@ -15,7 +15,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
     routine: z.boolean().optional(),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { summary, emoji_icon, reward_points, routine }: { summary: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
-    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/task_box/items`, { body: compact({ summary, emoji_icon, reward_points, routine }) });
+    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/task_box/items`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
     return textContent(flattenJsonApi(doc));
   }));
 
@@ -27,7 +27,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
     routine: z.boolean().optional(),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { id, summary, emoji_icon, reward_points, routine }: { id: string; summary?: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
-    const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/task_box/items/${id}`, { body: compact({ summary, emoji_icon, reward_points, routine }) });
+    const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/task_box/items/${id}`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
     return textContent(flattenJsonApi(doc));
   }));
 

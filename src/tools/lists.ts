@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerListTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_lists', 'List all lists on a Skylight frame.', {
@@ -20,7 +20,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     kind: z.enum(['shopping', 'to_do']).describe('List type (required).'),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { label, color, kind }: { label: string; color: string; kind: 'shopping' | 'to_do'; frameId?: string }) => {
-    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists`, { body: compact({ label, color, kind }) });
+    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists`, { body: pruneUndefined({ label, color, kind }) });
     return textContent(flattenJsonApi(doc));
   }));
 
@@ -29,7 +29,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     label: z.string(),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { listId, label }: { listId: string; label: string; frameId?: string }) => {
-    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists/${listId}/list_items`, { body: compact({ label }) });
+    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists/${listId}/list_items`, { body: pruneUndefined({ label }) });
     return textContent(flattenJsonApi(doc));
   }));
 
@@ -42,7 +42,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { listId, itemId, label, checked, section }: { listId: string; itemId: string; label?: string; checked?: boolean; section?: string | null; frameId?: string }) => {
     const status = checked === undefined ? undefined : (checked ? 'completed' : 'pending');
-    const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: compact({ label, status, section }) });
+    const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: pruneUndefined({ label, status, section }) });
     return textContent(flattenJsonApi(doc));
   }));
 
@@ -62,7 +62,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     kind: z.enum(['shopping', 'to_do']).optional(),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { listId, label, color, kind }: { listId: string; label?: string; color?: string; kind?: 'shopping' | 'to_do'; frameId?: string }) => {
-    const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/lists/${listId}`, { body: compact({ label, color, kind }) });
+    const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/lists/${listId}`, { body: pruneUndefined({ label, color, kind }) });
     return textContent(flattenJsonApi(doc));
   }));
 

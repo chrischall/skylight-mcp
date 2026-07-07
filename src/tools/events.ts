@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 const INCLUDE = 'categories,calendar_account,event_notification_setting';
 
@@ -38,14 +38,14 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_create_event', 'Create a calendar event on a Skylight frame.',
     { ...eventAttrs, frameId: z.string().optional() },
     frameScoped(getClient, async (c, f, { frameId: _frameId, ...attrs }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/calendar_events`, { body: compact(attrs) });
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/calendar_events`, { body: pruneUndefined(attrs) });
       return textContent(flattenJsonApi(doc));
     }));
 
   server.tool('skylight_update_event', 'Update a calendar event by id.',
     { id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional() },
     frameScoped(getClient, async (c, f, { id, frameId: _frameId, ...attrs }: { id: string; frameId?: string } & Record<string, unknown>) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/calendar_events/${id}`, { body: compact(attrs) });
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/calendar_events/${id}`, { body: pruneUndefined(attrs) });
       return textContent(flattenJsonApi(doc));
     }));
 
@@ -83,7 +83,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { on_time, early, early_minutes_before }: { on_time?: boolean; early?: boolean; early_minutes_before?: number; frameId?: string }) => {
-      const body = compact({ on_time, early, early_minutes_before });
+      const body = pruneUndefined({ on_time, early, early_minutes_before });
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/event_notification_settings`, { body })));
     }));
 }
