@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.4](https://github.com/chrischall/skylight-mcp/compare/v0.4.3...v0.4.4) (2026-07-07)
+
+
+### Bug Fixes
+
+* bump @chrischall/mcp-utils to 0.12.0 ([#69](https://github.com/chrischall/skylight-mcp/issues/69)) ([6e3501a](https://github.com/chrischall/skylight-mcp/commit/6e3501a2eb088788ac37d45f64e54fb8eecc3be7))
+* confirm-gate Skylight local-file uploads ([#65](https://github.com/chrischall/skylight-mcp/issues/65)) ([10174ea](https://github.com/chrischall/skylight-mcp/commit/10174ea87cb749a7457794886319e1cbfeab000a))
+* include member id in skylight_set_member_avatar dry-run preview ([#68](https://github.com/chrischall/skylight-mcp/issues/68)) ([4b4d681](https://github.com/chrischall/skylight-mcp/commit/4b4d6815ebf294b1cae231540958b4ec115575d7))
+* **security:** redact credential material in S3 error bodies ([#63](https://github.com/chrischall/skylight-mcp/issues/63)) ([c6ced4b](https://github.com/chrischall/skylight-mcp/commit/c6ced4b9d0813ac450c09b81a9d9dcc43375849a))
+
+
+### Refactor
+
+* adopt mcp-utils pruneUndefined ([#67](https://github.com/chrischall/skylight-mcp/issues/67)) ([c9efe71](https://github.com/chrischall/skylight-mcp/commit/c9efe71034a8dff3624b7995f34c49d30963f8d6))
+
+
+### Documentation
+
+* document first-party dependency-bump label exception ([#71](https://github.com/chrischall/skylight-mcp/issues/71)) ([04d752a](https://github.com/chrischall/skylight-mcp/commit/04d752af9297078fa882d142fabf99c42592d368))
+
 ## [0.4.3](https://github.com/chrischall/skylight-mcp/compare/v0.4.2...v0.4.3) (2026-06-15)
 
 
