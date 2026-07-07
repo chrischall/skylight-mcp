@@ -56,4 +56,11 @@ describe('previewFileUploadUnlessConfirmed', () => {
     const out = previewFileUploadUnlessConfirmed(undefined, '/tmp/scan.xyz', 'Upload', 'POST', '/u', MIME, 'jpg');
     expect(JSON.parse(out!.content[0].text as string).willSend.mime).toBe('application/octet-stream');
   });
+
+  it('merges extra fields (e.g. the target id) into willSend', () => {
+    const out = previewFileUploadUnlessConfirmed(undefined, '/tmp/pic.jpg', 'Upload', 'PUT', '/u', MIME, 'jpg', { id: '9' });
+    expect(JSON.parse(out!.content[0].text as string).willSend).toEqual({
+      id: '9', image_path: '/tmp/pic.jpg', mime: 'image/jpeg',
+    });
+  });
 });

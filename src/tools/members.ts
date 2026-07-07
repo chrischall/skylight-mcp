@@ -100,7 +100,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
     },
     { destructiveHint: true },
     async (args: { id: string | number; image_path: string; frameId?: string; confirm?: boolean }) => {
-      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, "Upload a local file as a member's avatar", 'PUT', '/frames/{frame}/categories/{id}', AVATAR_MIME, 'png');
+      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, "Upload a local file as a member's avatar", 'PUT', '/frames/{frame}/categories/{id}', AVATAR_MIME, 'png', { id: args.id });
       if (gate) return gate;
       return setMemberAvatar(args);
     });
