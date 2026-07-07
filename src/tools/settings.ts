@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerSettingsTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_update_frame', 'Update Skylight frame display/sleep settings.',
@@ -18,7 +18,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { frameId: _frameId, ...rest }) => {
-      const body = compact(rest);
+      const body = pruneUndefined(rest);
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}`, { body })));
     }));
 
@@ -34,7 +34,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { name, birthday }: { name?: string; birthday?: string; frameId?: string }) => {
-      const body = compact({ name, birthday });
+      const body = pruneUndefined({ name, birthday });
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/profile`, { body })));
     }));
 
@@ -45,7 +45,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { disney_profile_pictures, disney_screensaver }: { disney_profile_pictures?: boolean; disney_screensaver?: boolean; frameId?: string }) => {
-      const body = compact({ disney_profile_pictures, disney_screensaver });
+      const body = pruneUndefined({ disney_profile_pictures, disney_screensaver });
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', `/frames/${f}/household_config`, { body })));
     }));
 

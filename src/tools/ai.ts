@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerAiTools(server: McpServer, getClient: GetClient) {
   server.tool(
@@ -21,7 +21,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
           text: '',
           meal_category_id,
           created_via: 'app_form',
-          engine_inputs: compact({
+          engine_inputs: pruneUndefined({
             meal_sitting_dates: dates,
             meal_recipe_source: recipe_source ?? 'generate',
             meal_mouths_to_feed: mouths_to_feed,
@@ -53,7 +53,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
           category_ids,
           created_via: 'app_form',
           draft_first: true,
-          engine_inputs: compact({ physical_location, activity_kind, budget, datetime_range_start, datetime_range_end }),
+          engine_inputs: pruneUndefined({ physical_location, activity_kind, budget, datetime_range_start, datetime_range_end }),
         },
       });
       return textContent(flattenJsonApi(doc));

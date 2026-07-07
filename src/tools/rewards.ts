@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerRewardTools(server: McpServer, getClient: GetClient) {
   server.tool(
@@ -23,7 +23,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { name, description, point_value, respawn_on_redemption, category_ids }: { name: string; description?: string; point_value: number; respawn_on_redemption?: boolean; category_ids: Array<string | number>; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/rewards`, { body: compact({ name, description, point_value, respawn_on_redemption, category_ids }) });
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/rewards`, { body: pruneUndefined({ name, description, point_value, respawn_on_redemption, category_ids }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -39,7 +39,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, name, point_value, category_ids }: { id: string; name?: string; point_value?: number; category_ids?: Array<string | number>; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/rewards/${id}`, { body: compact({ name, point_value, category_ids }) });
+      const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/rewards/${id}`, { body: pruneUndefined({ name, point_value, category_ids }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -63,7 +63,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/rewards/${id}/redeem`, { body: compact({ category_id }) });
+      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/rewards/${id}/redeem`, { body: pruneUndefined({ category_id }) });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ redeemed: id });
     }),
   );
@@ -77,7 +77,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/rewards/${id}/unredeem`, { body: compact({ category_id }) });
+      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/rewards/${id}/unredeem`, { body: pruneUndefined({ category_id }) });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ unredeemed: id });
     }),
   );

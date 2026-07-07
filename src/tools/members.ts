@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { extname } from 'node:path';
 import { fileBlob } from '@chrischall/mcp-utils';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 const AVATAR_MIME: Record<string, string> = {
@@ -71,7 +71,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, birthday, dietary_preferences }: { id: string | number; birthday?: string; dietary_preferences?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}/family_member`, { body: compact({ birthday, dietary_preferences }) });
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}/family_member`, { body: pruneUndefined({ birthday, dietary_preferences }) });
       return textContent(flattenJsonApi(doc));
     }));
 
@@ -115,7 +115,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { label: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/categories`, { body: compact({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/categories`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
       return textContent(flattenJsonApi(doc));
     }));
 
@@ -130,7 +130,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { id: string | number; label?: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { body: compact({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
+      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
       return textContent(flattenJsonApi(doc));
     }));
 }

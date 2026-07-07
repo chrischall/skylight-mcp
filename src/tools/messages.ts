@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerMessageTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_messages', 'List messages posted to the Skylight frame.', {
@@ -39,7 +39,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     exclude_from_slideshow: z.boolean().optional().describe('Hide this album from the frame slideshow.'),
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f, { id, title, exclude_from_slideshow }: { id: string | number; title?: string; exclude_from_slideshow?: boolean; frameId?: string }) => {
-    const body = compact({ title, exclude_from_slideshow });
+    const body = pruneUndefined({ title, exclude_from_slideshow });
     return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', `/frames/${f}/albums/${id}`, { body })));
   }));
 

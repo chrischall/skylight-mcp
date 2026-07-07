@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, compact, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.tool(
@@ -31,7 +31,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { summary, category_id, start, description, reward_points }: { summary: string; category_id: string | number; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/chores`, { body: compact({ summary, category_id, start, description, reward_points }) });
+      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/chores`, { body: pruneUndefined({ summary, category_id, start, description, reward_points }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -60,7 +60,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { summary, recurrence, category_ids, start, start_time, recurring_until, reward_points, emoji_icon, description, routine, up_for_grabs }: { summary: string; recurrence: string; category_ids?: (string | number)[]; start: string; start_time?: string; recurring_until?: string; reward_points?: number; emoji_icon?: string; description?: string; routine?: boolean; up_for_grabs?: boolean; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/chores/create_multiple`, {
-        body: compact({ summary, category_ids, recurrence_set: [`RRULE:${recurrence}`], start, start_time, recurring_until, reward_points, emoji_icon, description, routine, up_for_grabs }),
+        body: pruneUndefined({ summary, category_ids, recurrence_set: [`RRULE:${recurrence}`], start, start_time, recurring_until, reward_points, emoji_icon, description, routine, up_for_grabs }),
       });
       return textContent(flattenJsonApi(doc));
     }),
@@ -102,7 +102,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { id, summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence, recurring_until, apply_to }: { id: string; summary?: string; category_id?: string | number; start?: string; start_time?: string; description?: string; reward_points?: number; emoji_icon?: string; recurrence?: string; recurring_until?: string; apply_to?: 'this' | 'this_and_future' | 'all'; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/chores/${id}`, {
-        body: compact({ summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence_set: recurrence !== undefined ? [`RRULE:${recurrence}`] : undefined, recurring_until, apply_to }),
+        body: pruneUndefined({ summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence_set: recurrence !== undefined ? [`RRULE:${recurrence}`] : undefined, recurring_until, apply_to }),
       });
       return textContent(flattenJsonApi(doc));
     }),
@@ -124,7 +124,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time, category_id }: { id: string; instance_date: string; instance_time?: string; category_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: compact({ status: 'complete', instance_date, instance_time, category_id }) });
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'complete', instance_date, instance_time, category_id }) });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ completed: id, instance_date });
     }),
   );
@@ -142,8 +142,8 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time }: { id: string; instance_date?: string; instance_time?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: compact({ status: 'pending', instance_date, instance_time }) });
-      return doc ? textContent(flattenJsonApi(doc)) : textContent(compact({ uncompleted: id, instance_date }));
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'pending', instance_date, instance_time }) });
+      return doc ? textContent(flattenJsonApi(doc)) : textContent(pruneUndefined({ uncompleted: id, instance_date }));
     }),
   );
 
