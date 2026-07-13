@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/chrischall/skylight-mcp/compare/v0.4.4...v0.4.5) (2026-07-13)
+
+
+### Bug Fixes
+
+* **plugin:** move SKILL.md into skills/ directory so plugin skills load ([#75](https://github.com/chrischall/skylight-mcp/issues/75)) ([bd8721c](https://github.com/chrischall/skylight-mcp/commit/bd8721c35c6a28984ed083bc686a0714d196125e))
+
 ## [0.4.4](https://github.com/chrischall/skylight-mcp/compare/v0.4.3...v0.4.4) (2026-07-07)
 
 

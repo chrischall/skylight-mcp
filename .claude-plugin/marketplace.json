@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "MCP server for Skylight Calendar — read/write family events, chores, rewards, and shared lists.",
-    "version": "0.4.4"
+    "version": "0.4.5"
   },
   "plugins": [
     {
@@ -15,7 +15,7 @@
       "displayName": "Skylight",
       "source": "./",
       "description": "Skylight Calendar MCP server for Claude — family events, chores, and rewards via natural language.",
-      "version": "0.4.4",
+      "version": "0.4.5",
       "author": {
         "name": "Chris Hall"
       },
