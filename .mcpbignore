@@ -41,7 +41,6 @@ server.json
 plugin.json
 .claude-plugin/
 .mcp.json
-SKILL.md
 skills/
 
 # Companion native bits (e.g. Chrome extension) are installed separately
