@@ -48,6 +48,15 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      # The shared mcp-publish action expects SKILL.md at the repo root
+      # (it gates .skill packaging and the ClawHub publish on `-f SKILL.md`),
+      # but the plugin skill lives at skills/skylight-mcp/SKILL.md per the
+      # Claude Code plugin layout. Stage a root copy so both steps still run.
+      # The root copy is release-job-only and is excluded from the .mcpb
+      # bundle via .mcpbignore.
+      - name: Stage SKILL.md at repo root for mcp-publish
+        run: cp skills/skylight-mcp/SKILL.md SKILL.md
+
       - uses: chrischall/workflows/.github/actions/mcp-publish@main
         with:
           version: ${{ needs.release-please.outputs.version }}

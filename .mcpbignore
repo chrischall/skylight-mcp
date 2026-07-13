@@ -42,6 +42,9 @@ plugin.json
 .claude-plugin/
 .mcp.json
 skills/
+# Root SKILL.md is a release-job staging copy (see release-please.yml);
+# keep it out of the .mcpb bundle
+SKILL.md
 
 # Companion native bits (e.g. Chrome extension) are installed separately
 extension/
