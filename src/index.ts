@@ -25,7 +25,7 @@ const getClient = makeGetClient();
 
 await runMcp<typeof getClient>({
   name: 'skylight-mcp',
-  version: '0.4.5', // x-release-please-version
+  version: '0.4.6', // x-release-please-version
   banner: 'skylight-mcp ready',
   deps: getClient,
   tools: [
