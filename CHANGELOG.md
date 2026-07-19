@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.6](https://github.com/chrischall/skylight-mcp/compare/v0.4.5...v0.4.6) (2026-07-19)
+
+
+### Documentation
+
+* replace duplicated fleet policy with a pointer ([#78](https://github.com/chrischall/skylight-mcp/issues/78)) ([e4d45b7](https://github.com/chrischall/skylight-mcp/commit/e4d45b7f2506c21c6ab9538fccc417b755f8af2d))
+
 ## [0.4.5](https://github.com/chrischall/skylight-mcp/compare/v0.4.4...v0.4.5) (2026-07-13)
 
 
