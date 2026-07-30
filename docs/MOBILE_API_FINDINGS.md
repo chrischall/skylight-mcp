@@ -69,6 +69,11 @@ Three engines; then approve/undo the drafts:
 
 ## Meals
 
+- Read planned sittings (LIVE-VERIFIED): `GET /frames/{f}/meals/sittings?date_min=YYYY-MM-DD&date_max=YYYY-MM-DD`.
+  - **Both** bounds are required — each is its own 422: `{"errors":["Date min is required."]}` / `{"errors":["Date max is required."]}`.
+  - Supports `include=meal_category,meal_recipe`, which sideloads those resources into the document's `included` array.
+  - Sitting attributes: `summary`, `description`, `note`, `rrule`, `draft`, `recurring`, `instances` (array of `YYYY-MM-DD` — this is where the date lives). Relationships: `meal_category`, `meal_recipe`, `profiles`.
+  - There is **no** single-sitting read: `GET /frames/{f}/meals/sittings/{id}` returns 404.
 - Plan a sitting: `POST /frames/{f}/meals/sittings { meal_recipe_id, meal_category_id, date, rrule:"FREQ=DAILY;…UNTIL=…", summary, description, add_to_grocery_list, note, saveToRecipeBox }`.
   - NOTE: meal sittings use a plain `rrule` **string** (unlike chores' array).
 - Add recipe to grocery: `POST /frames/{f}/meals/recipes/{id}/add_to_grocery_list` (existing).

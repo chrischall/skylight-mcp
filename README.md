@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/skylight-mcp)](https://www.npmjs.com/package/skylight-mcp)
 [![license](https://img.shields.io/npm/l/skylight-mcp)](LICENSE)
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 110 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 111 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -103,6 +103,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | rewards | `skylight_redeem_reward` | W | Redeem a reward |
 | rewards | `skylight_unredeem_reward` | W | Reverse a reward redemption |
 | rewards | `skylight_add_reward_points` | W | Grant or deduct reward points to members |
+| meals | `skylight_list_meals` | R | List planned meals in a date range (date_min + date_max both required) |
 | meals | `skylight_list_recipes` | R | List meal recipes for the frame |
 | meals | `skylight_list_meal_categories` | R | List meal categories for the frame |
 | meals | `skylight_get_recipe` | R | Get one meal recipe |
