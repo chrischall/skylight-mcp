@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## TL;DR
 
-MCP server for Skylight Calendar — 109 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member/category management (read+write, incl. preset and custom-photo avatars).
+MCP server for Skylight Calendar — 110 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member/category management (read+write, incl. preset and custom-photo avatars).
 
 Every request carries the `skylight-api-version: 2026-05-01` header (`src/client.ts`), matching the official mobile app — without it some features 422 with "API version does not support …".
 
@@ -54,11 +54,13 @@ No bot wall has been observed; the headless flow works directly. The server logs
 
 ## JSON:API flattening convention
 
-The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, relationships }, ... }` or array). `flattenJsonApi()` in `src/tools/_shared.ts` collapses these to plain objects before returning to the LLM. All tool handlers call `flattenJsonApi(doc)` on raw API responses.
+The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, relationships }, ... }` or array). `flattenJsonApi()` in `src/tools/_shared.ts` collapses these to plain objects before returning to the LLM. Nearly all tool handlers call `flattenJsonApi(doc)` on raw API responses.
+
+**Exception — sideloaded relationships.** `flattenJsonApi()` keeps only `attributes` + `id`/`type`; it drops `relationships` and the top-level `included` array, so anything requested via `?include=…` is discarded. That is fine for most endpoints but not for `skylight_list_meals`: a meal sitting's slot (breakfast/lunch/dinner) lives only in its `meal_category` relationship, so flattening it away leaves the caller unable to tell which meal is dinner, with no way to recover the link. `flattenSittings()` in `src/tools/meals.ts` therefore resolves each relationship ref against `included` and inlines the flattened resource under the relationship name, falling back to the bare `{ id, type }` ref when it was not sideloaded. Reach for the same approach in any future tool where an `include` carries load-bearing data.
 
 ## Tool surface
 
-109 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write + device rename), `settings.ts` (5 frame-settings writes incl. the global reminder profile), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (10 people/category tools). Counts: 9 frame + 5 settings + 10 calendar + 10 member, 10 event tools (incl. both notification-settings read+write), 12 list tools (2R+10W), 10 chore tools (3R+7W), 7 reward tools (1R+6W), 8 meal tools (3R+5W), 14 message/album tools (3R+11W), 4 task-box tools (1R+3W), 8 AI auto-creation tools (4R+4W), 2 photo tools (`skylight_upload_photo`, `skylight_import_events_from_photo`).
+110 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write + device rename), `settings.ts` (5 frame-settings writes incl. the global reminder profile), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (10 people/category tools). Counts: 9 frame + 5 settings + 10 calendar + 10 member, 10 event tools (incl. both notification-settings read+write), 12 list tools (2R+10W), 10 chore tools (3R+7W), 7 reward tools (1R+6W), 9 meal tools (4R+5W), 14 message/album tools (3R+11W), 4 task-box tools (1R+3W), 8 AI auto-creation tools (4R+4W), 2 photo tools (`skylight_upload_photo`, `skylight_import_events_from_photo`).
 
 | Module | Tools |
 |---|---|
@@ -70,7 +72,7 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 | lists.ts | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_update_list`, `skylight_delete_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item`, `skylight_delete_list_items`, `skylight_move_list_item`, `skylight_clear_list`, `skylight_set_list_item_section` |
 | chores.ts | `skylight_list_chores`, `skylight_search_chores`, `skylight_create_chore`, `skylight_create_recurring_chore`, `skylight_complete_chore`, `skylight_uncomplete_chore`, `skylight_update_chore`, `skylight_complete_chore_instance`, `skylight_delete_chore`, `skylight_list_rewards` |
 | rewards.ts | `skylight_get_reward`, `skylight_create_reward`, `skylight_update_reward`, `skylight_delete_reward`, `skylight_redeem_reward`, `skylight_unredeem_reward`, `skylight_add_reward_points` |
-| meals.ts | `skylight_list_recipes`, `skylight_list_meal_categories`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_update_recipe`, `skylight_delete_recipe`, `skylight_add_recipe_to_grocery_list`, `skylight_plan_meal` |
+| meals.ts | `skylight_list_meals`, `skylight_list_recipes`, `skylight_list_meal_categories`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_update_recipe`, `skylight_delete_recipe`, `skylight_add_recipe_to_grocery_list`, `skylight_plan_meal` |
 | messages.ts | `skylight_list_messages`, `skylight_list_albums`, `skylight_get_message`, `skylight_create_album`, `skylight_update_album`, `skylight_delete_album`, `skylight_add_to_album`, `skylight_remove_from_album`, `skylight_add_message_comment`, `skylight_set_message_caption`, `skylight_like_message`, `skylight_unlike_message`, `skylight_delete_message`, `skylight_delete_messages` |
 | tasks.ts | `skylight_list_tasks`, `skylight_create_task`, `skylight_update_task`, `skylight_delete_task` |
 | ai.ts | `skylight_generate_meal_plan`, `skylight_generate_activity_ideas`, `skylight_get_auto_creation_intent`, `skylight_list_auto_creation_intents`, `skylight_list_auto_creation_drafts`, `skylight_list_auto_creation_items`, `skylight_approve_auto_creation`, `skylight_undo_auto_creation` |
