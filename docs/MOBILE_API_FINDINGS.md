@@ -69,9 +69,36 @@ Three engines; then approve/undo the drafts:
 
 ## Meals
 
+- Read planned sittings (LIVE-VERIFIED): `GET /frames/{f}/meals/sittings?date_min=YYYY-MM-DD&date_max=YYYY-MM-DD`.
+  - **Both** bounds are required — each is its own 422: `{"errors":["Date min is required."]}` / `{"errors":["Date max is required."]}`.
+  - Supports `include=meal_category,meal_recipe`, which sideloads those resources into the document's `included` array.
+  - Sitting attributes: `summary`, `description`, `note`, `rrule`, `draft`, `recurring`, `instances` (array of `YYYY-MM-DD` — this is where the date lives). Relationships: `meal_category`, `meal_recipe`, `profiles`.
+  - There is **no** single-sitting read: `GET /frames/{f}/meals/sittings/{id}` returns 404.
 - Plan a sitting: `POST /frames/{f}/meals/sittings { meal_recipe_id, meal_category_id, date, rrule:"FREQ=DAILY;…UNTIL=…", summary, description, add_to_grocery_list, note, saveToRecipeBox }`.
   - NOTE: meal sittings use a plain `rrule` **string** (unlike chores' array).
 - Add recipe to grocery: `POST /frames/{f}/meals/recipes/{id}/add_to_grocery_list` (existing).
+
+### Meal sittings are create-only — NEGATIVE RESULT (probed 2026-07-30)
+
+`POST /frames/{f}/meals/sittings` is the only route we can reach on that resource. Every other verb and shape probed returned a **routing** 404, so there is currently no way to read one sitting, edit a planned meal, or delete one. Recorded so nobody re-runs this.
+
+**Distinguishing "no such route" from "routed, record missing".** The two 404s have different bodies, which makes route existence testable against a nonexistent id without touching real data:
+
+| Body | Meaning |
+|---|---|
+| `{"errors":["Record not found"]}` | route exists, the record does not (controller-level) |
+| `{"status":404,"error":"Not Found"}` | no such route (routing-level) |
+
+Control: all four of `GET`/`PATCH`/`PUT`/`DELETE /frames/{f}/meals/recipes/{ghost-id}` return `Record not found` — member routes that do exist. Sittings never produce that body.
+
+Probed against a ghost id, all returning the routing-level 404:
+
+- Member routes: `GET`, `PUT`, `PATCH`, `DELETE /frames/{f}/meals/sittings/{id}`. Note the per-verb check matters — Rails routes per verb, so a dead `GET show` would not by itself rule out `update`/`destroy`. Here all four are dead.
+- Collection-level bulk patterns borrowed from elsewhere in this API: `DELETE …/meals/sittings/bulk_destroy { ids }` (as `lists.ts` uses), `DELETE …/meals/sittings/destroy_multiple?sitting_ids[]=` and `?ids[]=` (as `messages.ts` uses), `DELETE …/meals/sittings { ids }`.
+- Alternate resource names: `/frames/{f}/meal_sittings/{id}`, `/frames/{f}/meals/meal_sittings/{id}`.
+- Instance-scoped, by analogy with chores' `/completions`: `DELETE` and `PUT …/meals/sittings/{id}/instances`.
+
+**Caveat:** this proves those specific paths do not exist, not that the app cannot delete a planned meal — it plainly can, so a route exists that these guesses missed. Finding it needs app-traffic capture or web-bundle inspection (the method behind the rest of this document), not more blind path guessing.
 
 ## Frame / device / reminders
 
