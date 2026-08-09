@@ -259,6 +259,19 @@ describe('login', () => {
       expect(new URLSearchParams(step2[1].body).get('authenticity_token')).toBe('TK');
     });
 
+    it('finds the token in a csrf-token meta tag with content before name', async () => {
+      // Symmetric to the 'value before name' case on the hidden input:
+      // attribute order is markup detail. Without this the reversed-order
+      // meta regex could be malformed and every other test would still pass
+      // — it only ever ran as a null-returning fallback.
+      const httpFetch = makeHappyFetch({
+        html: '<meta content="TK" name="csrf-token" />',
+      });
+      await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+      const step2 = (httpFetch as ReturnType<typeof vi.fn>).mock.calls[1];
+      expect(new URLSearchParams(step2[1].body).get('authenticity_token')).toBe('TK');
+    });
+
     it('prefers the hidden input over the meta tag when both are present', async () => {
       // They are distinct values on the live page; the form token is the
       // one the POST is validated against.
@@ -289,6 +302,18 @@ describe('login', () => {
         .rejects.toThrow(/redirect.*\/maintenance/is);
     });
 
+    it('reports a 1xx status rather than treating it as a served page', async () => {
+      const info = {
+        status: 100,
+        ok: false,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => '',
+      } as unknown as Response;
+      const httpFetch: HttpFetch = vi.fn().mockResolvedValue(info);
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
+        .rejects.toThrow(/HTTP 100/);
+    });
+
     it('handles a redirect with no Location header', async () => {
       // A 3xx whose Location was stripped (proxy, or a Rails `head :found`)
       // still has to name the redirect rather than fall through to a
@@ -316,6 +341,18 @@ describe('login', () => {
       );
       await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, fetchNoToken))
         .rejects.toThrow(/51[0-9] bytes|5[0-9][0-9] bytes/);
+    });
+
+    it('counts real bytes, not UTF-16 code units, in the size diagnostic', async () => {
+      // The label says "bytes", so it must survive multibyte content: an
+      // emoji is 1 JS string char per surrogate pair (length 2) but 4 UTF-8
+      // bytes. Getting this wrong understates a truncated page.
+      const body = '<html>' + '\u{1F600}'.repeat(10) + '</html>'; // 13 + 20 = 33 UTF-16 units
+      const expectedBytes = new TextEncoder().encode(body).length;   // 13 + 40 = 53 bytes
+      expect(expectedBytes).toBeGreaterThan(body.length);
+      const httpFetch: HttpFetch = vi.fn().mockResolvedValue(htmlResponse(body));
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
+        .rejects.toThrow(new RegExp(`${expectedBytes} bytes`));
     });
 
     it('never echoes the page body into the error', async () => {

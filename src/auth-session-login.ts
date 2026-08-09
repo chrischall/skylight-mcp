@@ -120,7 +120,12 @@ function describeTokenlessResponse(html: string, res: Response): string {
   }
   if (status < 200 || status >= 300) return `HTTP ${status}`;
   if (html.trim() === '') return `HTTP ${status} with an empty body`;
-  return `HTTP ${status}, ${html.length} bytes of HTML — the login page markup may have changed`;
+  // Real UTF-8 bytes, not `html.length` (UTF-16 code units): the label says
+  // bytes, and a page of multibyte content would otherwise be understated —
+  // which matters precisely when the size is being used to spot truncation.
+  // Encoding on an error path only, so the cost is irrelevant.
+  const bytes = new TextEncoder().encode(html).length;
+  return `HTTP ${status}, ${bytes} bytes of HTML — the login page markup may have changed`;
 }
 
 export async function login(
