@@ -72,6 +72,25 @@ Three engines; then approve/undo the drafts:
 - Plan a sitting: `POST /frames/{f}/meals/sittings { meal_recipe_id, meal_category_id, date, rrule:"FREQ=DAILY;…UNTIL=…", summary, description, add_to_grocery_list, note, saveToRecipeBox }`.
   - NOTE: meal sittings use a plain `rrule` **string** (unlike chores' array).
 - Add recipe to grocery: `POST /frames/{f}/meals/recipes/{id}/add_to_grocery_list` (existing).
+- **Read the meal plan (issue #86): `GET /frames/{f}/meals/sittings?date_min=&date_max=&include=meal_category,meal_recipe`.**
+  - **Both** date params are required, and each omission is its own 422: `{"errors":["Date min is required."]}` /
+    `{"errors":["Date max is required."]}`.
+  - Sitting attributes: `summary`, `description`, `note`, `rrule`, `draft`, `recurring`, `instances`
+    (array of `YYYY-MM-DD` — **this is where the date lives**; there is no `date` attribute on a read).
+    Relationships: `meal_category`, `meal_recipe`, `profiles`.
+  - `include=meal_category,meal_recipe,profiles` is accepted by the server; per JSON:API those resources
+    arrive in the document's `included` array, though the sideload itself is **unobserved** — the probe
+    account has no sittings in 2023–2026, so every live response came back with `data` and `included` both
+    empty. A read must therefore resolve relationships rather than flatten them away — `flattenJsonApi()`
+    keeps only `attributes` + `id`/`type` and would drop `meal_category`, the only field separating breakfast
+    from lunch from dinner. `resolveJsonApiIncluded()` in `src/tools/_shared.ts` exists for this.
+  - **`include` is validated server-side, and an unknown relationship name is a 500, not a 400.** Probed live:
+    `include=bogus_relationship` and the near-miss `include=profiless` both return `{"status":500,"error":"Internal
+    Server Error"}` deterministically, while `meal_category`, `meal_recipe` and `profiles` each return 200
+    individually and together. That 500/200 split is what confirms `profiles` is a real sitting relationship
+    — worth reusing as the probe technique for any other `include` guess on this API.
+  - There is **no single-sitting read**: `GET /frames/{f}/meals/sittings/{id}` returns 404. A date-range list is
+    the only shape available.
 
 ## Frame / device / reminders
 

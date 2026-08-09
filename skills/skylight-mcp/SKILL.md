@@ -1,11 +1,11 @@
 ---
 name: skylight-mcp
-description: Read and manage your Skylight Calendar family hub — calendar events, chores and reward stars, and shared lists (grocery/to-do). Triggers on phrases like "check Skylight", "what's on the family calendar", "add an event to Skylight", "what chores does [kid] have", "mark [chore] done", "add milk to the grocery list", "what's on our shopping list", "who's on the Skylight frame", or any request involving the Skylight frame, family calendar, chores, rewards, or shared lists. Works against your own signed-in Skylight account via email + password.
+description: Read and manage your Skylight Calendar family hub — calendar events, chores and reward stars, shared lists (grocery/to-do), and the meal plan. Triggers on phrases like "check Skylight", "what's on the family calendar", "add an event to Skylight", "what chores does [kid] have", "mark [chore] done", "add milk to the grocery list", "what's on our shopping list", "what's for dinner tonight", "what's on the meal plan this week", "what are we eating", "who's on the Skylight frame", or any request involving the Skylight frame, family calendar, chores, rewards, shared lists, meals, recipes, or dinner plans. Works against your own signed-in Skylight account via email + password.
 ---
 
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 21 tools across calendar events, chores & rewards, shared lists, and frame/device info.
+MCP server for [Skylight Calendar](https://www.ourskylight.com). The server registers 110 tools; the quick reference below covers the 21 used most often — calendar events, chores & rewards, shared lists, and frame/device info. Meal planning, messages/albums, task-box items, photo upload and the AI auto-creation tools are available too; see the [README](https://github.com/chrischall/skylight-mcp#tools) for the full list.
 
 - **npm:** [npmjs.com/package/skylight-mcp](https://www.npmjs.com/package/skylight-mcp)
 - **Source:** [github.com/chrischall/skylight-mcp](https://github.com/chrischall/skylight-mcp)
@@ -51,6 +51,6 @@ Everything is scoped to a **frame** (your family hub); pass an optional `frameId
 
 ## Notes
 
-- **Meals are not supported** — Skylight does not expose a meals API.
+- **Meals are supported** — `skylight_list_meal_sittings` reads the meal plan for a date range (answers "what's for dinner?"), alongside `skylight_list_recipes`, `skylight_list_meal_categories` and the recipe/planning writes. They are omitted from the table above only to keep it short.
 - `skylight_complete_chore` marks a chore complete; completing a single occurrence of a recurring chore isn't separately exposed.
 - `skylight_list_chores` requires `after` and `before` dates (chores are date-scoped).

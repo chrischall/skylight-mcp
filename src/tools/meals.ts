@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, resolveJsonApiIncluded, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+
+/**
+ * All three of a sitting's relationships: the category (breakfast/lunch/dinner),
+ * the linked recipe, and the profiles the meal is for. The API validates this
+ * list server-side — an unknown relationship name deterministically 500s — so
+ * every name here is one the endpoint confirmed it accepts.
+ */
+const SITTING_INCLUDE = 'meal_category,meal_recipe,profiles';
 
 export function registerMealTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_list_recipes', 'List meal recipes for the frame.', {
@@ -12,6 +20,20 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     frameId: z.string().optional(),
   }, frameScoped(getClient, async (c, f) =>
     textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/categories`)))));
+
+  // The meal plan itself. There is no single-sitting read — GET /meals/sittings/{id}
+  // 404s — so a date range is the only shape the API offers.
+  server.tool('skylight_list_meal_sittings',
+    "List planned meals (sittings) in a date range — answers \"what's for dinner?\". The dates a sitting lands on live in its `instances` array (not a `date` attribute); `meal_category` (breakfast/lunch/dinner), `meal_recipe` and `profiles` (who the meal is for) come back as resolved objects rather than bare ids.", {
+      date_min: z.string().describe('YYYY-MM-DD inclusive lower bound. REQUIRED — omitting it 422s with "Date min is required.".'),
+      date_max: z.string().describe('YYYY-MM-DD inclusive upper bound. REQUIRED — omitting it 422s with "Date max is required.".'),
+      frameId: z.string().optional(),
+    }, frameScoped(getClient, async (c, f, { date_min, date_max }: { date_min: string; date_max: string; frameId?: string }) => {
+      const doc = await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/sittings`, {
+        query: { date_min, date_max, include: SITTING_INCLUDE },
+      });
+      return textContent(resolveJsonApiIncluded(doc));
+    }));
 
   server.tool('skylight_get_recipe', 'Get one meal recipe.', {
     id: z.string(),

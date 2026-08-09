@@ -244,4 +244,115 @@ describe('meal tools', () => {
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/meals/sittings', expect.any(Object));
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
+
+  // ── skylight_list_meal_sittings ─────────────────────────────────────────
+
+  // The API validates `include` server-side: an unknown relationship name
+  // deterministically 500s (probed live with `bogus_relationship` and the
+  // near-miss `profiless`), while all three of the sitting's real
+  // relationships are accepted. `profiles` answers "who is this meal for?" —
+  // without it those come back as bare `{ id, type }` links with no names.
+  it('list_meal_sittings sideloads all three sitting relationships, profiles included', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_meal_sittings({ date_min: '2026-06-01', date_max: '2026-06-07' });
+    const include = (request.mock.calls[0][2] as { query: { include: string } }).query.include;
+    expect(include.split(',')).toEqual(['meal_category', 'meal_recipe', 'profiles']);
+  });
+
+  it('list_meal_sittings GETs the date range with all three includes and the default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    const out = await tools.skylight_list_meal_sittings({ date_min: '2026-06-01', date_max: '2026-06-07' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/meals/sittings', {
+      query: { date_min: '2026-06-01', date_max: '2026-06-07', include: 'meal_category,meal_recipe,profiles' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual([]);
+  });
+
+  it('list_meal_sittings resolves sideloaded meal_category + meal_recipe and keeps instances', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{
+        id: '7',
+        type: 'meal_sitting',
+        attributes: { summary: 'Tacos', instances: ['2026-06-02'], draft: false },
+        relationships: {
+          meal_category: { data: { id: '2', type: 'meal_category' } },
+          meal_recipe: { data: { id: '5', type: 'meal_recipe' } },
+        },
+      }],
+      included: [
+        { id: '2', type: 'meal_category', attributes: { label: 'Dinner', color: '#fff' } },
+        { id: '5', type: 'meal_recipe', attributes: { summary: 'Tacos', description: 'Beef, tortillas' } },
+      ],
+    });
+    const out = await tools.skylight_list_meal_sittings({ date_min: '2026-06-01', date_max: '2026-06-07' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{
+      id: '7',
+      type: 'meal_sitting',
+      summary: 'Tacos',
+      instances: ['2026-06-02'],
+      draft: false,
+      meal_category: { id: '2', type: 'meal_category', label: 'Dinner', color: '#fff' },
+      meal_recipe: { id: '5', type: 'meal_recipe', summary: 'Tacos', description: 'Beef, tortillas' },
+    }]);
+  });
+
+  it('list_meal_sittings falls back to the bare link when a relationship is not sideloaded', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{
+        id: '7',
+        type: 'meal_sitting',
+        attributes: { summary: 'Tacos', instances: ['2026-06-02'] },
+        relationships: { meal_recipe: { data: { id: '5', type: 'meal_recipe' } } },
+      }],
+      included: [{ id: '2', type: 'meal_category', attributes: { label: 'Dinner' } }],
+    });
+    const out = await tools.skylight_list_meal_sittings({ date_min: '2026-06-01', date_max: '2026-06-07' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{
+      id: '7', type: 'meal_sitting', summary: 'Tacos', instances: ['2026-06-02'],
+      meal_recipe: { id: '5', type: 'meal_recipe' },
+    }]);
+  });
+
+  it('list_meal_sittings resolves a to-many profiles relationship', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{
+        id: '7',
+        type: 'meal_sitting',
+        attributes: { summary: 'Tacos' },
+        relationships: { profiles: { data: [{ id: '11', type: 'profile' }, { id: '12', type: 'profile' }] } },
+      }],
+      included: [{ id: '11', type: 'profile', attributes: { name: 'Ada' } }],
+    });
+    const out = await tools.skylight_list_meal_sittings({ date_min: '2026-06-01', date_max: '2026-06-07' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{
+      id: '7', type: 'meal_sitting', summary: 'Tacos',
+      profiles: [{ id: '11', type: 'profile', name: 'Ada' }, { id: '12', type: 'profile' }],
+    }]);
+  });
+
+  it('list_meal_sittings passes through a sitting with no relationships and a doc with no included', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{ id: '7', type: 'meal_sitting', attributes: { summary: 'Leftovers', instances: ['2026-06-03'] } }],
+    });
+    const out = await tools.skylight_list_meal_sittings({ date_min: '2026-06-01', date_max: '2026-06-07' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '7', type: 'meal_sitting', summary: 'Leftovers', instances: ['2026-06-03'] },
+    ]);
+  });
+
+  it('list_meal_sittings with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_meal_sittings({ date_min: '2026-06-01', date_max: '2026-06-07', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/meals/sittings', {
+      query: { date_min: '2026-06-01', date_max: '2026-06-07', include: 'meal_category,meal_recipe,profiles' },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
 });
