@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/chrischall/skylight-mcp/compare/v0.4.6...v0.5.0) (2026-08-09)
+
+
+### Features
+
+* **messages:** copy photos and messages to other frames ([#98](https://github.com/chrischall/skylight-mcp/issues/98)) ([34f579f](https://github.com/chrischall/skylight-mcp/commit/34f579fa508d9318953f10ae375cb089a6cf7073)), closes [#12](https://github.com/chrischall/skylight-mcp/issues/12)
+
+
+### Bug Fixes
+
+* **auth:** find the CSRF token in any markup shape, and say why when it can't ([#95](https://github.com/chrischall/skylight-mcp/issues/95)) ([dac3833](https://github.com/chrischall/skylight-mcp/commit/dac3833f2f7835e58cf4061e3e7f4a2bf37cdd19)), closes [#96](https://github.com/chrischall/skylight-mcp/issues/96)
+
 ## [0.4.6](https://github.com/chrischall/skylight-mcp/compare/v0.4.5...v0.4.6) (2026-07-19)
 
 
