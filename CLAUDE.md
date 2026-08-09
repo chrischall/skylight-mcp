@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## TL;DR
 
-MCP server for Skylight Calendar — 109 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member/category management (read+write, incl. preset and custom-photo avatars).
+MCP server for Skylight Calendar — 110 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member/category management (read+write, incl. preset and custom-photo avatars).
 
 Every request carries the `skylight-api-version: 2026-05-01` header (`src/client.ts`), matching the official mobile app — without it some features 422 with "API version does not support …".
 
@@ -58,7 +58,7 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ## Tool surface
 
-109 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write + device rename), `settings.ts` (5 frame-settings writes incl. the global reminder profile), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (10 people/category tools). Counts: 9 frame + 5 settings + 10 calendar + 10 member, 10 event tools (incl. both notification-settings read+write), 12 list tools (2R+10W), 10 chore tools (3R+7W), 7 reward tools (1R+6W), 8 meal tools (3R+5W), 14 message/album tools (3R+11W), 4 task-box tools (1R+3W), 8 AI auto-creation tools (4R+4W), 2 photo tools (`skylight_upload_photo`, `skylight_import_events_from_photo`).
+110 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write + device rename), `settings.ts` (5 frame-settings writes incl. the global reminder profile), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (10 people/category tools). Counts: 9 frame + 5 settings + 10 calendar + 10 member, 10 event tools (incl. both notification-settings read+write), 12 list tools (2R+10W), 10 chore tools (3R+7W), 7 reward tools (1R+6W), 8 meal tools (3R+5W), 15 message/album tools (3R+12W), 4 task-box tools (1R+3W), 8 AI auto-creation tools (4R+4W), 2 photo tools (`skylight_upload_photo`, `skylight_import_events_from_photo`).
 
 | Module | Tools |
 |---|---|
@@ -71,7 +71,7 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 | chores.ts | `skylight_list_chores`, `skylight_search_chores`, `skylight_create_chore`, `skylight_create_recurring_chore`, `skylight_complete_chore`, `skylight_uncomplete_chore`, `skylight_update_chore`, `skylight_complete_chore_instance`, `skylight_delete_chore`, `skylight_list_rewards` |
 | rewards.ts | `skylight_get_reward`, `skylight_create_reward`, `skylight_update_reward`, `skylight_delete_reward`, `skylight_redeem_reward`, `skylight_unredeem_reward`, `skylight_add_reward_points` |
 | meals.ts | `skylight_list_recipes`, `skylight_list_meal_categories`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_update_recipe`, `skylight_delete_recipe`, `skylight_add_recipe_to_grocery_list`, `skylight_plan_meal` |
-| messages.ts | `skylight_list_messages`, `skylight_list_albums`, `skylight_get_message`, `skylight_create_album`, `skylight_update_album`, `skylight_delete_album`, `skylight_add_to_album`, `skylight_remove_from_album`, `skylight_add_message_comment`, `skylight_set_message_caption`, `skylight_like_message`, `skylight_unlike_message`, `skylight_delete_message`, `skylight_delete_messages` |
+| messages.ts | `skylight_list_messages`, `skylight_list_albums`, `skylight_get_message`, `skylight_create_album`, `skylight_update_album`, `skylight_delete_album`, `skylight_add_to_album`, `skylight_remove_from_album`, `skylight_copy_messages_to_frames` *(inferred)*, `skylight_add_message_comment`, `skylight_set_message_caption`, `skylight_like_message`, `skylight_unlike_message`, `skylight_delete_message`, `skylight_delete_messages` |
 | tasks.ts | `skylight_list_tasks`, `skylight_create_task`, `skylight_update_task`, `skylight_delete_task` |
 | ai.ts | `skylight_generate_meal_plan`, `skylight_generate_activity_ideas`, `skylight_get_auto_creation_intent`, `skylight_list_auto_creation_intents`, `skylight_list_auto_creation_drafts`, `skylight_list_auto_creation_items`, `skylight_approve_auto_creation`, `skylight_undo_auto_creation` |
 | photos.ts | `skylight_upload_photo`, `skylight_import_events_from_photo` *(best-effort)* |
@@ -102,6 +102,7 @@ Write-tool payload shapes have been partially verified live:
 - `skylight_update_category` — **live-verified (JSON, not multipart)**: `PUT /frames/{f}/categories/{id}` with `compact({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id })`. Set `linked_to_profile: true` (usually with `selected_for_chore_chart: true`) to convert a basic label into a full family-member profile.
 - `skylight_create_reward` — **live-verified fields**: `POST /frames/{f}/rewards` with `compact({ name, description, point_value, respawn_on_redemption, category_ids })`. `respawn_on_redemption: true` lets the reward be redeemed repeatedly.
 - `skylight_delete_category` — gained an **inferred** `reassign_to_category_id`: when provided it is sent as the DELETE request body so the member's items move to another category instead of being orphaned. Inferred from the app bundle.
+- `skylight_copy_messages_to_frames` — **inferred (from the app bundle, not live-verified)**: `POST /frames/{f}/copy_to_frames` with `{ message_ids, new_frame_ids }` copies photos/messages onto other frames on the account. Returns the JSON:API doc when the server sends one; falls back to `{ copied, new_frame_ids }` on an empty 2xx body.
 - `skylight_set_device_album` — **inferred (from bundle)**: `PUT /frames/{f}/devices/{id}` with `{ current_album_id }` sets which photo album a device displays. Other device fields are not yet exposed.
 - `skylight_categorize_source_calendar` — **LIVE-VERIFIED**: `PUT /frames/{f}/source_calendars/{id}/source_calendar_categorizations` with body `{ categorizations: [{ category_id }, …] }` returns 200, attributing the calendar's events to those family-member categories.
 - `skylight_link_apple_calendar` — **not CI-live-verified**: `POST /frames/{f}/calendars/apple` with `{ email, app_specific_password }`. Needs a real Apple ID + app-specific password (generated at appleid.apple.com) to exercise live; the payload shape is unverified.

@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/skylight-mcp)](https://www.npmjs.com/package/skylight-mcp)
 [![license](https://img.shields.io/npm/l/skylight-mcp)](LICENSE)
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 102 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), and frame/device/account settings + calendar + member management (read+write).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 110 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -60,6 +60,9 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_delete_category` | W | Delete a category / family member (optional `reassign_to_category_id`, inferred) |
 | frames | `skylight_update_family_member` | W | Update a family member's profile — birthday, dietary preferences (the name is the category label; set via `skylight_update_category`) |
 | frames | `skylight_update_category` | W | Update a category — rename/recolor, or convert a label into a family-member profile (`linked_to_profile`) |
+| frames | `skylight_create_category` | W | Create a category / family member (optional `linked_to_profile`, `avatar_id`) |
+| frames | `skylight_list_avatars` | R | List the preset avatar library (emoji/icon images) |
+| frames | `skylight_set_member_avatar` | W | Set a family member's avatar to a custom photo (dry-run unless `confirm:true`) |
 | frames | `skylight_set_device_album` | W | Set which photo album a device displays (inferred) |
 | frames | `skylight_rename_device` | W | Rename a Skylight device |
 | events | `skylight_list_events` | R | List calendar events within a date range |
@@ -116,6 +119,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | messages | `skylight_delete_album` | W | Delete a photo album |
 | messages | `skylight_add_to_album` | W | Add messages/photos to albums |
 | messages | `skylight_remove_from_album` | W | Remove messages/photos from albums |
+| messages | `skylight_copy_messages_to_frames` | W | Copy messages/photos to other frames on the account (inferred) |
 | messages | `skylight_add_message_comment` | W | Comment on a frame message/photo |
 | messages | `skylight_set_message_caption` | W | Set a message/photo caption |
 | messages | `skylight_like_message` | W | Like a frame message/photo |
@@ -130,8 +134,12 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | ai | `skylight_generate_activity_ideas` | W | Generate AI activity/event ideas for a location + time range (draft events — async) |
 | ai | `skylight_get_auto_creation_intent` | R | Get an AI auto-creation intent (status + draft results) |
 | ai | `skylight_list_auto_creation_drafts` | R | List the events an AI intent drafted (review before approving) |
+| ai | `skylight_list_auto_creation_intents` | R | List all AI auto-creation intents on the frame |
+| ai | `skylight_list_auto_creation_items` | R | List every draft item an AI intent created (meals, activities, list items) |
 | ai | `skylight_approve_auto_creation` | W | Approve AI-drafted events into real calendar events |
 | ai | `skylight_undo_auto_creation` | W | Undo/discard an AI auto-creation intent and its drafts |
+| photos | `skylight_upload_photo` | W | Upload a photo/video from a local file to the frame (dry-run unless `confirm:true`) |
+| photos | `skylight_import_events_from_photo` | W | Import calendar events from a photo of a flyer/invite using Skylight's AI (best-effort) |
 
 ## Configuration
 

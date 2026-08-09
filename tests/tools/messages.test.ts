@@ -149,6 +149,35 @@ describe('message tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── skylight_copy_messages_to_frames ────────────────────────────────────
+
+  it('copy_messages_to_frames POSTs message_ids/new_frame_ids with default frame', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'message', attributes: { caption: 'Beach' } } });
+    const out = await tools.skylight_copy_messages_to_frames({ message_ids: [1, 2], new_frame_ids: ['77'] });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/copy_to_frames', {
+      body: { message_ids: [1, 2], new_frame_ids: ['77'] },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'message', caption: 'Beach' });
+  });
+
+  it('copy_messages_to_frames with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'message', attributes: {} } });
+    await tools.skylight_copy_messages_to_frames({ message_ids: ['3'], new_frame_ids: [88], frameId: '99' });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/99/copy_to_frames', {
+      body: { message_ids: ['3'], new_frame_ids: [88] },
+    });
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  it('copy_messages_to_frames tolerates an empty response body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_copy_messages_to_frames({ message_ids: [1, 2], new_frame_ids: ['77'] });
+    expect(JSON.parse(out.content[0].text)).toEqual({ copied: 2, new_frame_ids: ['77'] });
+  });
+
   // ── skylight_add_message_comment ────────────────────────────────────────
 
   it('add_message_comment POSTs body with default frame', async () => {

@@ -57,6 +57,15 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
   }, frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
     textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/albums/remove_from`, { body: { album_ids, message_ids } })))));
 
+  server.tool('skylight_copy_messages_to_frames', 'Copy messages/photos from this frame to other frames on the account (inferred from the app bundle, not live-verified).', {
+    message_ids: idArrayParam.describe('Message/photo ids to copy.'),
+    new_frame_ids: idArrayParam.describe('Destination frame ids (see skylight_list_frames).'),
+    frameId: z.string().optional(),
+  }, frameScoped(getClient, async (c, f, { message_ids, new_frame_ids }: { message_ids: Array<string | number>; new_frame_ids: Array<string | number>; frameId?: string }) => {
+    const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/copy_to_frames`, { body: { message_ids, new_frame_ids } });
+    return textContent(doc ? flattenJsonApi(doc) : { copied: message_ids.length, new_frame_ids });
+  }));
+
   server.tool('skylight_add_message_comment', 'Comment on a frame message/photo.', {
     id: z.string(),
     body: z.string().describe('Comment text.'),
