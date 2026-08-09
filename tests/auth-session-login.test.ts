@@ -54,6 +54,8 @@ const TOKEN_BODY = { access_token: 'AT', refresh_token: 'RT', expires_in: 604800
 // ---------------------------------------------------------------------------
 function makeHappyFetch(opts: {
   authTokenInHtml?: string;
+  /** Full step-1 page body, when a test needs specific markup. */
+  html?: string;
   step2Location?: string;
   step3Location?: string;
   cookies?: string[];
@@ -65,7 +67,7 @@ function makeHappyFetch(opts: {
     cookies = ['_skylight_cloud_session=abc123; Path=/; HttpOnly'],
   } = opts;
 
-  const html = `<input name="authenticity_token" value="${authTokenInHtml}">`;
+  const html = opts.html ?? `<input name="authenticity_token" value="${authTokenInHtml}">`;
   let callIndex = 0;
   return vi.fn().mockImplementation(async (url: string) => {
     callIndex++;
@@ -209,6 +211,125 @@ describe('login', () => {
     );
     await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, noTokenFetch))
       .rejects.toThrow(/authenticity_token/);
+  });
+
+  // -------------------------------------------------------------------------
+  // CSRF token discovery (#88)
+  // -------------------------------------------------------------------------
+  //
+  // Step 1 scraped the login page with one rigid regex that assumed
+  // `name` precedes `value` and that both use double quotes. Any markup
+  // change — or a body that never arrived at all — surfaced as the same
+  // opaque "the login page may have changed", which is what #88 reported
+  // and what made it un-triageable from the report alone.
+
+  describe('authenticity_token discovery', () => {
+    // Attribute order is a Rails/markup detail, not a contract. The live
+    // page currently emits `type` first, then `name`, then `value`.
+    const variants: Array<[string, string]> = [
+      ['live markup (type, name, value; self-closing)',
+       '<input type="hidden" name="authenticity_token" value="TK" />'],
+      ['value before name',
+       '<input value="TK" name="authenticity_token" />'],
+      ['single-quoted attributes',
+       "<input name='authenticity_token' value='TK' />"],
+      ['extra attributes between name and value',
+       '<input name="authenticity_token" autocomplete="off" value="TK" />'],
+      ['newline between attributes',
+       '<input name="authenticity_token"\n      value="TK" />'],
+    ];
+
+    for (const [label, markup] of variants) {
+      it(`finds the token in ${label}`, async () => {
+        const httpFetch = makeHappyFetch({ html: markup });
+        await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+        const step2 = (httpFetch as ReturnType<typeof vi.fn>).mock.calls[1];
+        expect(new URLSearchParams(step2[1].body).get('authenticity_token')).toBe('TK');
+      });
+    }
+
+    it('falls back to the csrf-token meta tag when no hidden input is present', async () => {
+      // The login page serves both; if Rails ever drops the hidden input
+      // for a fetch-based submit, the meta tag still carries the token.
+      const httpFetch = makeHappyFetch({
+        html: '<meta name="csrf-param" content="authenticity_token" />\n<meta name="csrf-token" content="TK" />',
+      });
+      await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+      const step2 = (httpFetch as ReturnType<typeof vi.fn>).mock.calls[1];
+      expect(new URLSearchParams(step2[1].body).get('authenticity_token')).toBe('TK');
+    });
+
+    it('prefers the hidden input over the meta tag when both are present', async () => {
+      // They are distinct values on the live page; the form token is the
+      // one the POST is validated against.
+      const httpFetch = makeHappyFetch({
+        html: '<meta name="csrf-token" content="META" />\n<input type="hidden" name="authenticity_token" value="FORM" />',
+      });
+      await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+      const step2 = (httpFetch as ReturnType<typeof vi.fn>).mock.calls[1];
+      expect(new URLSearchParams(step2[1].body).get('authenticity_token')).toBe('FORM');
+    });
+  });
+
+  describe('authenticity_token discovery failures are diagnosable (#88)', () => {
+    it('reports the HTTP status when step 1 is not a 2xx', async () => {
+      const fetch503: HttpFetch = vi.fn().mockResolvedValue(jsonResponse(503, { error: 'down' }));
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, fetch503))
+        .rejects.toThrow(/HTTP 503/);
+    });
+
+    it('names the redirect target when step 1 redirects', async () => {
+      // `redirect: "manual"` yields an EMPTY body on a 3xx, so a newly
+      // introduced interstitial or region redirect previously looked
+      // identical to "markup changed".
+      const fetchRedirect: HttpFetch = vi.fn().mockResolvedValue(
+        redirectResponse('https://app.ourskylight.com/maintenance'),
+      );
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, fetchRedirect))
+        .rejects.toThrow(/redirect.*\/maintenance/is);
+    });
+
+    it('handles a redirect with no Location header', async () => {
+      // A 3xx whose Location was stripped (proxy, or a Rails `head :found`)
+      // still has to name the redirect rather than fall through to a
+      // markup-change claim.
+      const noLocation = {
+        status: 302,
+        ok: false,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => '',
+      } as unknown as Response;
+      const httpFetch: HttpFetch = vi.fn().mockResolvedValue(noLocation);
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
+        .rejects.toThrow(/HTTP 302 redirect to \(no Location header\)/);
+    });
+
+    it('says the body was empty rather than blaming the markup', async () => {
+      const fetchEmpty: HttpFetch = vi.fn().mockResolvedValue(htmlResponse(''));
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, fetchEmpty))
+        .rejects.toThrow(/empty/i);
+    });
+
+    it('reports the body size when the page parsed but held no token', async () => {
+      const fetchNoToken: HttpFetch = vi.fn().mockResolvedValue(
+        htmlResponse('<html><body>' + 'x'.repeat(500) + '</body></html>'),
+      );
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, fetchNoToken))
+        .rejects.toThrow(/51[0-9] bytes|5[0-9][0-9] bytes/);
+    });
+
+    it('never echoes the page body into the error', async () => {
+      // Step 1 sets a session cookie; the body can carry tokens. The error
+      // is surfaced through MCP tool results, so it must stay opaque.
+      const secret = 'SUPER_SECRET_VALUE_9d8f7';
+      const fetchSecret: HttpFetch = vi.fn().mockResolvedValue(
+        htmlResponse(`<html><script>var t="${secret}"</script></html>`),
+      );
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, fetchSecret))
+        .rejects.toThrow(/authenticity_token/);
+      await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, fetchSecret))
+        .rejects.not.toThrow(new RegExp(secret));
+    });
   });
 
   it('handles Set-Cookie absent (getSetCookie returns empty array)', async () => {

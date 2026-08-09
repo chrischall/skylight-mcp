@@ -66,6 +66,63 @@ function globalFetch(url: string, init: RequestInit): Promise<Response> {
   return fetch(url, init);
 }
 
+// ---------------------------------------------------------------------------
+// CSRF token discovery (login step 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Pull the Rails CSRF token out of the /auth/session/new page.
+ *
+ * Two sources, in preference order — the page currently serves both, with
+ * *different* values, and the POST is validated against the form one:
+ *
+ *   <input type="hidden" name="authenticity_token" value="…" />   ← preferred
+ *   <meta name="csrf-token" content="…" />                        ← fallback
+ *
+ * The match is deliberately attribute-order- and quote-agnostic. The previous
+ * single regex required `name` immediately before `value`, both double-quoted
+ * — none of which is a contract, all of which is Rails markup detail.
+ *
+ * On failure the thrown error names the concrete reason (status, redirect,
+ * empty body, or parsed-but-tokenless) instead of the blanket "the login page
+ * may have changed", which is what made #88 un-triageable from the report.
+ * The page body is NEVER echoed: it carries session state, and this error
+ * surfaces through MCP tool results.
+ */
+function extractAuthenticityToken(html: string, res: Response): string {
+  const attr = (name: string, value: string) =>
+    new RegExp(`<[^>]*\\b${name}\\s*=\\s*["']authenticity_token["'][^>]*\\b${value}\\s*=\\s*["']([^"']+)["']`, 'i');
+  // The form token, in either attribute order.
+  const form = html.match(attr('name', 'value'))
+    ?? html.match(new RegExp(`<[^>]*\\bvalue\\s*=\\s*["']([^"']+)["'][^>]*\\bname\\s*=\\s*["']authenticity_token["']`, 'i'));
+  if (form) return form[1];
+  // Fallback: the <meta name="csrf-token" content="…"> Rails also emits.
+  const meta = html.match(/<meta[^>]*\bname\s*=\s*["']csrf-token["'][^>]*\bcontent\s*=\s*["']([^"']+)["']/i)
+    ?? html.match(/<meta[^>]*\bcontent\s*=\s*["']([^"']+)["'][^>]*\bname\s*=\s*["']csrf-token["']/i);
+  if (meta) return meta[1];
+
+  const why = describeTokenlessResponse(html, res);
+  throw new Error(
+    `Skylight login failed: could not find authenticity_token in /auth/session/new response (${why}). ` +
+    'Neither the hidden form input nor the csrf-token meta tag was present.',
+  );
+}
+
+/** Why step 1 yielded no token — status/redirect/shape only, never content. */
+function describeTokenlessResponse(html: string, res: Response): string {
+  const status = res.status;
+  if (status >= 300 && status < 400) {
+    // login() uses redirect:"manual", so a 3xx arrives with an empty body.
+    // An interstitial, maintenance page or region redirect lands here and
+    // would otherwise be indistinguishable from a markup change.
+    const location = res.headers.get('location');
+    return `HTTP ${status} redirect to ${location ?? '(no Location header)'} — the login page was not served`;
+  }
+  if (status < 200 || status >= 300) return `HTTP ${status}`;
+  if (html.trim() === '') return `HTTP ${status} with an empty body`;
+  return `HTTP ${status}, ${html.length} bytes of HTML — the login page markup may have changed`;
+}
+
 export async function login(
   opts: { authBaseUrl: string; email: string; password: string; deviceFingerprint?: string },
   httpFetch: HttpFetch = globalFetch,
@@ -94,14 +151,7 @@ export async function login(
   jar.absorb(step1.headers);
 
   const html = await step1.text();
-  const tokenMatch = html.match(/name="authenticity_token"\s+value="([^"]+)"/);
-  if (!tokenMatch) {
-    throw new Error(
-      'Skylight login failed: could not find authenticity_token in /auth/session/new response. ' +
-      'The Skylight login page may have changed.',
-    );
-  }
-  const authenticityToken = tokenMatch[1];
+  const authenticityToken = extractAuthenticityToken(html, step1);
 
   // -------------------------------------------------------------------------
   // Step 2: POST /auth/session — submit credentials
