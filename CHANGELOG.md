@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/chrischall/skylight-mcp/compare/v0.5.0...v0.6.0) (2026-08-10)
+
+
+### Features
+
+* **meals:** add skylight_list_meals to read the planned meal plan ([#87](https://github.com/chrischall/skylight-mcp/issues/87)) ([d7b7e16](https://github.com/chrischall/skylight-mcp/commit/d7b7e16fcaa45327ab0e44859cc2a578fae138cd))
+
 ## [0.5.0](https://github.com/chrischall/skylight-mcp/compare/v0.4.6...v0.5.0) (2026-08-09)
 
 
