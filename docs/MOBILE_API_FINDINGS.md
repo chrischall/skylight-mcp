@@ -71,9 +71,10 @@ Three engines; then approve/undo the drafts:
 
 - Read planned sittings (LIVE-VERIFIED): `GET /frames/{f}/meals/sittings?date_min=YYYY-MM-DD&date_max=YYYY-MM-DD`.
   - **Both** bounds are required — each is its own 422: `{"errors":["Date min is required."]}` / `{"errors":["Date max is required."]}`.
-  - Supports `include=meal_category,meal_recipe`, which sideloads those resources into the document's `included` array.
+  - Supports `include=meal_category,meal_recipe,profiles`, which sideloads those resources into the document's `included` array. All three are requested by `skylight_list_meals` (verified `200` for the combined three-way include).
   - **`include` is validated server-side, and an unknown relationship is a `500`, not a `400`** (probed live): `include=bogus_relationship` and the near-miss `include=profiless` both return `{"status":500,"error":"Internal Server Error"}`, while `meal_category`, `meal_recipe` and `profiles` each return `200` individually and together. Read a `500` here as "that relationship name is wrong", not a server fault — the `500`/`200` split is what confirms `profiles` is a real sitting relationship.
   - Sitting attributes: `summary`, `description`, `note`, `rrule`, `draft`, `recurring`, `instances` (array of `YYYY-MM-DD` — this is where the date lives). Relationships: `meal_category`, `meal_recipe`, `profiles`.
+  - **There is no profiles collection to resolve a `profile` ref against** — `GET /frames/{f}/profiles` and `GET /profiles` both `404`, and a `category_detail` exposes no profile link, so it is unverified whether a profile id is the same id space as the family-member category ids `skylight_resolve_member` returns. Sideloading via `include=profiles` is the only way to get from an assigned member ref to its name, which is why it is in the include rather than left to the caller.
   - There is **no** single-sitting read: `GET /frames/{f}/meals/sittings/{id}` returns 404.
 - Plan a sitting: `POST /frames/{f}/meals/sittings { meal_recipe_id, meal_category_id, date, rrule:"FREQ=DAILY;…UNTIL=…", summary, description, add_to_grocery_list, note, saveToRecipeBox }`.
   - NOTE: meal sittings use a plain `rrule` **string** (unlike chores' array).

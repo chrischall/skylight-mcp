@@ -4,10 +4,21 @@ import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type
 
 // LIVE-VERIFIED: GET /frames/{f}/meals/sittings requires BOTH date_min and
 // date_max (each is a separate 422 — "Date min is required." / "Date max is
-// required."), and supports include=meal_category,meal_recipe, which sideloads
-// those resources into the document's `included` array. There is no
+// required."), and supports include=meal_category,meal_recipe,profiles, which
+// sideloads those resources into the document's `included` array. There is no
 // single-sitting read — GET /frames/{f}/meals/sittings/{id} returns 404.
-const SITTING_INCLUDE = 'meal_category,meal_recipe';
+//
+// `profiles` (the family members a sitting is assigned to) is included for the
+// same reason as the other two: relationship data is only ever a bare
+// `{ id, type }` ref, and the caller has no way to turn a profile id into a name
+// on its own — there is no profiles collection to look it up in (GET
+// /frames/{f}/profiles and GET /profiles both 404), and a `category_detail`
+// carries no profile link, so whether a profile id is even the same id space as
+// the category ids `skylight_resolve_member` returns is unverified. Sideloading
+// is therefore the only route from an assigned member to its name.
+// Not extended further: `include` is validated server-side and an unknown
+// relationship 500s, so only relationships verified to return 200 belong here.
+const SITTING_INCLUDE = 'meal_category,meal_recipe,profiles';
 
 /** A JSON:API resource identifier — the `{ id, type }` pointer in a relationship. */
 interface ResourceRef { id: string; type: string }
@@ -21,20 +32,21 @@ interface SittingDoc { data: SittingResource[]; included?: SittingResource[] }
  * Flatten meal sittings, inlining their sideloaded relationships.
  *
  * The shared `flattenJsonApi()` keeps only `attributes` + `id`/`type`, dropping
- * `relationships` and `included`. On a sitting that discards the one field saying
- * whether the meal is breakfast, lunch or dinner (`meal_category`), and leaves the
- * caller no way to recover the link. So resolve each relationship ref against
- * `included` and inline the flattened resource under the relationship name,
- * falling back to the bare `{ id, type }` ref when it was not sideloaded.
+ * `relationships` and `included`. Applied to a sitting, that discards the one
+ * field saying whether the meal is breakfast, lunch or dinner (`meal_category`),
+ * and leaves the caller no id with which to recover it. So resolve each
+ * relationship ref against `included` and inline the flattened resource under the
+ * relationship name, falling back to the bare `{ id, type }` ref when it was not
+ * sideloaded.
  */
-function flattenSittings(doc: SittingDoc): Record<string, unknown>[] {
+function flattenSittings(doc: SittingDoc | undefined): Record<string, unknown>[] {
   const sideloaded = new Map<string, Record<string, unknown>>();
-  for (const r of doc.included ?? []) {
+  for (const r of doc?.included ?? []) {
     sideloaded.set(`${r.type}:${r.id}`, { ...r.attributes, id: r.id, type: r.type });
   }
   const resolve = (ref: ResourceRef) => sideloaded.get(`${ref.type}:${ref.id}`) ?? ref;
 
-  return doc.data.map((sitting) => {
+  return (doc?.data ?? []).map((sitting) => {
     const flat: Record<string, unknown> = { ...sitting.attributes, id: sitting.id, type: sitting.type };
     for (const [name, rel] of Object.entries(sitting.relationships ?? {})) {
       // A relationship with `data: null` (no linked recipe) carries no information.
@@ -56,7 +68,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   }, frameScoped(getClient, async (c, f) =>
     textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/categories`)))));
 
-  server.tool('skylight_list_meals', 'List planned meals (meal sittings) in a date range — what is on the meal plan for each day. Each sitting carries the dates it falls on in its `instances` array, its meal slot in `meal_category` (breakfast/lunch/dinner) and its linked recipe in `meal_recipe`.', {
+  server.tool('skylight_list_meals', 'List planned meals (meal sittings) in a date range — what is on the meal plan for each day. Each sitting carries the dates it falls on in its `instances` array, its meal slot in `meal_category` (breakfast/lunch/dinner), its linked recipe in `meal_recipe`, and the family members it is assigned to in `profiles`.', {
     date_min: z.string().describe('YYYY-MM-DD inclusive lower bound (required by the API).'),
     date_max: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
     frameId: z.string().optional(),

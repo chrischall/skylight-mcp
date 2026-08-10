@@ -80,7 +80,7 @@ describe('meal tools', () => {
     });
     const out = await tools.skylight_list_meals({ date_min: '2026-07-30', date_max: '2026-08-05' });
     expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/meals/sittings', {
-      query: { date_min: '2026-07-30', date_max: '2026-08-05', include: 'meal_category,meal_recipe' },
+      query: { date_min: '2026-07-30', date_max: '2026-08-05', include: 'meal_category,meal_recipe,profiles' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual([
       {
@@ -97,6 +97,49 @@ describe('meal tools', () => {
         profiles: [],
       },
     ]);
+  });
+
+  it('list_meals resolves an array relationship through included', async () => {
+    // `profiles` (the family members a sitting is assigned to) is array-valued and
+    // sideloaded, so each ref must resolve to a named resource rather than a bare id.
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        {
+          id: '7',
+          type: 'meal_sitting',
+          attributes: { summary: 'Pancakes', instances: ['2026-08-01'] },
+          relationships: { profiles: { data: [{ id: '4', type: 'profile' }, { id: '5', type: 'profile' }] } },
+        },
+      ],
+      included: [
+        { id: '4', type: 'profile', attributes: { name: 'Ada' } },
+        { id: '5', type: 'profile', attributes: { name: 'Grace' } },
+      ],
+    });
+    const out = await tools.skylight_list_meals({ date_min: '2026-08-01', date_max: '2026-08-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      {
+        id: '7',
+        type: 'meal_sitting',
+        summary: 'Pancakes',
+        instances: ['2026-08-01'],
+        profiles: [
+          { id: '4', type: 'profile', name: 'Ada' },
+          { id: '5', type: 'profile', name: 'Grace' },
+        ],
+      },
+    ]);
+  });
+
+  it('list_meals returns an empty list when the response carries no document', async () => {
+    // SkylightClient.request() resolves to undefined for a 204/empty body; a list
+    // GET realistically always returns a document, but an empty result beats a
+    // "Cannot read properties of undefined" TypeError if one ever does not.
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_list_meals({ date_min: '2026-08-03', date_max: '2026-08-03' });
+    expect(JSON.parse(out.content[0].text)).toEqual([]);
   });
 
   it('list_meals falls back to the bare ref when a relationship is not sideloaded', async () => {
