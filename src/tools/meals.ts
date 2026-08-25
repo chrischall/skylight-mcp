@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 // LIVE-VERIFIED: GET /frames/{f}/meals/sittings requires BOTH date_min and
 // date_max (each is a separate 422 — "Date min is required." / "Date max is
 // required."), and supports include=meal_category,meal_recipe,profiles, which
 // sideloads those resources into the document's `included` array. There is no
-// single-sitting read — GET /frames/{f}/meals/sittings/{id} returns 404.
+// single-sitting read at GET /frames/{f}/meals/sittings/{id} (404) — but there
+// IS one a level down, at GET /frames/{f}/meals/sittings/{id}/instances (see
+// the instance-route note above skylight_update_meal below).
 //
 // `profiles` (the family members a sitting is assigned to) is included for the
 // same reason as the other two: relationship data is only ever a bare
@@ -133,6 +136,84 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     const body = pruneUndefined({ meal_recipe_id, meal_category_id, date, rrule, summary, description, note, add_to_grocery_list, saveToRecipeBox });
     return textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/meals/sittings`, { body })));
   }));
+
+  // LIVE-VERIFIED (2026-08-24). Meal sittings are NOT create-only: they can be
+  // edited and deleted. The routes are members one level *below* the sitting,
+  // under `/instances/{instanceISO}` — which is why probing the sitting itself
+  // (`/meals/sittings/{id}`, and the `/instances` collection) only ever found
+  // routing 404s. Recovered from the web client bundle, then exercised against
+  // the live API on a throwaway series.
+  //
+  //   PATCH  /frames/{f}/meals/sittings/{id}/instances/{iso}?apply_to=…
+  //   DELETE /frames/{f}/meals/sittings/{id}/instances/{iso}?apply_to=…
+  //
+  // `instanceISO` is the YYYY-MM-DD of the occurrence being acted on and must be
+  // one of that sitting's `instances`. `apply_to` is the app-wide recurrence
+  // scope (`ScheduledItemUpdateApplyTo`), shared with calendar events.
+  //
+  // Observed scope semantics (each verified live):
+  //   one    — splits that occurrence out into its own standalone sitting (new
+  //            id, `rrule: null`) and drops the date from the original series.
+  //   future — truncates the original series' rrule UNTIL to just before the
+  //            occurrence, and creates a NEW INDEPENDENT sitting for the
+  //            remainder. That new sitting is NOT reachable from the original's
+  //            /instances endpoint — re-run skylight_list_meals over the date
+  //            range to find it, or it looks like the tail silently vanished.
+  //   all    — applies to (or deletes) the entire series.
+  const APPLY_TO = z
+    .enum(['one', 'future', 'all'])
+    .describe("Recurrence scope: 'one' = just this occurrence (splits it out of the series), 'future' = this and all later occurrences (splits the tail into a new sitting), 'all' = the whole series.");
+
+  server.tool('skylight_update_meal', "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape.",
+    {
+      id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
+      instance_date: z.string().describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
+      apply_to: APPLY_TO,
+      summary: z.string().optional().describe('New meal name.'),
+      description: z.string().optional().describe('Ingredients / instructions.'),
+      note: z.string().optional(),
+      date: z.string().optional().describe('YYYY-MM-DD to move the meal to.'),
+      rrule: z.string().optional().describe('Replacement iCal RRULE string (plain string, NOT an array).'),
+      meal_category_id: idParam.optional().describe('Move to another slot (breakfast/lunch/dinner).'),
+      meal_recipe_id: idParam.optional().describe('Link a different recipe.'),
+      frameId: z.string().optional(),
+    },
+    frameScoped(getClient, async (c, f, { id, instance_date, apply_to, summary, description, note, date, rrule, meal_category_id, meal_recipe_id }: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; summary?: string; description?: string; note?: string; date?: string; rrule?: string; meal_category_id?: string | number; meal_recipe_id?: string | number; frameId?: string }) => {
+      const body = pruneUndefined({ summary, description, note, date, rrule, meal_category_id, meal_recipe_id });
+      const doc = await c.request<SittingDoc>('PATCH', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
+        query: { apply_to, include: SITTING_INCLUDE },
+        body,
+      });
+      return textContent(flattenSittings(doc));
+    }));
+
+  const deleteMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to }: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string }) => {
+    const doc = await c.request<SittingDoc>('DELETE', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
+      query: { apply_to, include: SITTING_INCLUDE },
+    });
+    return doc ? textContent(flattenSittings(doc)) : textContent({ deleted: String(id), instance_date, apply_to });
+  });
+
+  server.tool('skylight_delete_meal', "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to. There is no undo — without confirm:true this returns a dry-run preview of exactly what would be deleted and makes NO network call; with confirm:true it deletes.",
+    {
+      id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
+      instance_date: z.string().describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
+      apply_to: APPLY_TO,
+      frameId: z.string().optional(),
+      confirm: schemaConfirm,
+    },
+    { destructiveHint: true },
+    async (args: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string; confirm?: boolean }) => {
+      const gate = previewUnlessConfirmed(
+        args.confirm,
+        `Delete planned meal ${args.id} at ${args.instance_date} (scope: ${args.apply_to})`,
+        'DELETE',
+        '/frames/{frame}/meals/sittings/{id}/instances/{instance_date}',
+        { id: args.id, instance_date: args.instance_date, apply_to: args.apply_to },
+      );
+      if (gate) return gate;
+      return deleteMeal(args);
+    });
 
   server.tool('skylight_add_recipe_to_grocery_list', "Add a recipe's ingredients to a grocery list.", {
     id: z.string(),

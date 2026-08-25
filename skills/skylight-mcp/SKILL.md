@@ -5,7 +5,7 @@ description: Read and manage your Skylight Calendar family hub — calendar even
 
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 111 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 113 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
 
 - **npm:** [npmjs.com/package/skylight-mcp](https://www.npmjs.com/package/skylight-mcp)
 - **Source:** [github.com/chrischall/skylight-mcp](https://github.com/chrischall/skylight-mcp)
@@ -48,7 +48,7 @@ Everything is scoped to a **frame** (your family hub); pass an optional `frameId
 | Calendar events | `skylight_list_events`, `skylight_get_event`, `skylight_create_event`, `skylight_update_event`, `skylight_delete_event`, `skylight_list_categories`, `skylight_list_source_calendars` |
 | Shared lists | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item` |
 | Chores & rewards | `skylight_list_chores`, `skylight_create_chore`, `skylight_complete_chore`, `skylight_list_rewards` |
-| Meals | `skylight_list_meals`, `skylight_list_recipes`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_plan_meal`, `skylight_add_recipe_to_grocery_list` |
+| Meals | `skylight_list_meals`, `skylight_list_recipes`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_plan_meal`, `skylight_update_meal`, `skylight_delete_meal`, `skylight_add_recipe_to_grocery_list` |
 
 ## Notes
 

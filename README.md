@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/skylight-mcp)](https://www.npmjs.com/package/skylight-mcp)
 [![license](https://img.shields.io/npm/l/skylight-mcp)](LICENSE)
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 111 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 113 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -112,6 +112,8 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | meals | `skylight_delete_recipe` | W | Delete a meal recipe |
 | meals | `skylight_add_recipe_to_grocery_list` | W | Add a recipe's ingredients to a grocery list |
 | meals | `skylight_plan_meal` | W | Plan a meal on a date (optionally repeating, link a recipe, add to grocery list) |
+| meals | `skylight_update_meal` | W | Update a planned meal (name, recipe, slot, notes, date, repeat rule) at a chosen recurrence scope |
+| meals | `skylight_delete_meal` | W | Remove a planned meal — one occurrence, this-and-future, or the whole series (confirm-gated) |
 | messages | `skylight_list_messages` | R | List messages posted to the frame |
 | messages | `skylight_list_albums` | R | List photo albums on the frame |
 | messages | `skylight_get_message` | R | Get one frame message |
