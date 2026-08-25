@@ -161,6 +161,27 @@ SKYLIGHT_PASSWORD=your-password
 
 Treat `.env` like a password file — it is gitignored, do not commit it.
 
+## Use as a library
+
+The package also has a library entry point, so the tool modules can be registered
+against an MCP server you construct yourself — a different transport, a subset of
+the modules, or a host that supplies its own client. The registrars are
+transport-agnostic; only `src/index.ts` chooses stdio.
+
+```ts
+import { registerMealTools, makeGetClient } from 'skylight-mcp';
+
+registerMealTools(server, makeGetClient());
+```
+
+`makeGetClient()` takes an optional resolver, and `SkylightClient`'s constructor
+accepts `{ account, tokens, refreshFn }` directly — so a host that stores tokens
+of its own can build a client from them instead of running the four-step login on
+every process start.
+
+Note that importing the package never starts a server: `exports["."]` resolves to
+`dist/lib.js`, while the `skylight-mcp` bin stays `dist/index.js`.
+
 ## Local dev
 
 ```
