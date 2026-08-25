@@ -1,0 +1,44 @@
+version: 1
+name: Skylight
+slug: skylight
+summary: >-
+  Skylight Calendar MCP — read/write family calendar events, chores,
+  rewards, and shared lists via Claude. Auth via email+password.
+env:
+  - name: SKYLIGHT_EMAIL
+    required: false
+    help: >-
+      Skylight account email. Pair with SKYLIGHT_PASSWORD for direct login.
+  - name: SKYLIGHT_PASSWORD
+    secret: true
+    required: false
+    help: >-
+      Skylight account password — required iff SKYLIGHT_EMAIL is set.
+  - name: SKYLIGHT_FRAME_ID
+    required: false
+    help: >-
+      Optional: pick a specific Skylight frame when the account has more than
+      one.
+  - name: SKYLIGHT_NAME
+    required: false
+    help: >-
+      Friendly account name used in startup logs.
+state:
+  dataDir: true
+  reason: >-
+    Persists the saved session/token under $HOME so authentication survives a
+    restart. Without it every cold start re-authenticates, which a hosted
+    child may be unable to do unaided.
+egress:
+  allow:
+    # Only hosts the SERVER process actually fetches. Hosts that appear
+    # solely in a URL this server BUILDS and returns are excluded.
+    - amazonaws.com
+    - app.ourskylight.com
+    - ourskylight.com
+    #
+    # NOTE — this server also reaches at least one host determined at
+    # RUNTIME, which cannot appear as a literal here:
+    #   - a base URL taken from config rather than a literal
+    # Confirm the concrete host(s) against a live run and add them, or
+    # the isolated tier will block the call.
