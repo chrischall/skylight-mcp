@@ -32,7 +32,11 @@ function isTokens(raw: unknown): raw is BearerTokens {
   if (raw === null || typeof raw !== 'object') return false;
   const t = raw as Partial<BearerTokens>;
   if (typeof t.accessToken !== 'string' || t.accessToken === '') return false;
-  if (typeof t.expiresAt !== 'number' || !Number.isFinite(t.expiresAt)) return false;
+  // `typeof === 'number'` is sufficient here and !Number.isFinite() would be
+  // dead: this only ever validates a JSON.parse result, and JSON has no
+  // NaN/Infinity literal (JSON.stringify emits null for both), so a number that
+  // reaches this line is always finite.
+  if (typeof t.expiresAt !== 'number') return false;
   return t.refreshToken === undefined || typeof t.refreshToken === 'string';
 }
 

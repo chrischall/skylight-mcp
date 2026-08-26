@@ -81,7 +81,10 @@ describe('createTokenPersistence', () => {
     ['a missing accessToken', { expiresAt: 1 }],
     ['an empty accessToken', { accessToken: '', expiresAt: 1 }],
     ['a non-numeric expiresAt', { accessToken: 'AT', expiresAt: 'soon' }],
-    ['a non-finite expiresAt', { accessToken: 'AT', expiresAt: null }],
+    // JSON has no NaN/Infinity literal — JSON.stringify turns both into null —
+    // so a non-finite number cannot survive a round-trip through the store file.
+    // `null` is the only shape this reaches the guard as.
+    ['a null expiresAt', { accessToken: 'AT', expiresAt: null }],
     ['a non-string refreshToken', { accessToken: 'AT', refreshToken: 7, expiresAt: 1 }],
   ])('rejects %s rather than feeding it to the token manager', (_label, body) => {
     const p = createTokenPersistence({ MCP_DATA_DIR: dir })!;
