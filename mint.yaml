@@ -28,6 +28,11 @@ env:
     help: >-
       Set to false to disable the on-disk token cache and log in on every
       process start. Defaults to enabled.
+  - name: SKYLIGHT_TOKEN_FILE
+    required: false
+    help: >-
+      Absolute path for the token cache file. Defaults to
+      $MCP_DATA_DIR/.skylight-mcp/tokens.json.
 state:
   dataDir: true
   reason: >-
@@ -36,7 +41,8 @@ state:
     authorization-code login, and Skylight's login endpoint rate-limits — on a
     scale-to-zero host, where every start is a cold one, that is the difference
     between a free start and a throttled one. Only the tokens are written; the
-    email and password stay in the environment.
+    email and password stay in the environment (the cache is bound to them by a
+    salted digest, so rotating either discards it).
 egress:
   allow:
     # Only hosts the SERVER process actually fetches. Hosts that appear

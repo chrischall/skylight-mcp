@@ -1,7 +1,7 @@
 import { loadAccount } from './config.js';
 import { login, refresh } from './auth-session-login.js';
 import { SkylightClient, type HttpFetch } from './client.js';
-import { createTokenPersistence } from './token-store.js';
+import { createTokenPersistence, reportCacheWriteFailure } from './token-store.js';
 import type { BearerTokens, StatePersistence } from '@chrischall/mcp-utils/session';
 
 export interface ResolvedAuth {
@@ -36,7 +36,16 @@ export async function resolveAuth(
         { authBaseUrl: account.authBaseUrl, email: account.email, password: account.password },
         httpFetch,
       ),
-    persistence: opts.persistence !== undefined ? opts.persistence : createTokenPersistence(),
+    persistence:
+      opts.persistence !== undefined
+        ? opts.persistence
+        : createTokenPersistence(process.env, {
+            email: account.email,
+            password: account.password,
+          }),
+    // Report rather than throw: the tokens are re-mintable from the environment,
+    // so a lost write costs the next start a login, not access.
+    onPersistError: reportCacheWriteFailure,
     refreshFn: (refreshToken) => refresh({ authBaseUrl: account.authBaseUrl, refreshToken }, httpFetch),
     httpFetch,
   });

@@ -174,7 +174,16 @@ A cached token that has expired is refreshed rather than re-logged-in, and a
 refresh token the server rejects falls back to a fresh login, so a stale file
 cannot lock you out.
 
-Set `SKYLIGHT_TOKEN_CACHE=false` to turn it off and log in on every start.
+The cache is bound to the credentials that minted it: rotate `SKYLIGHT_PASSWORD`
+or point the server at a different account and the cached token is discarded
+rather than kept in play. Only a salted digest of the pair is stored — neither
+the email nor the password reaches the file.
+
+Set `SKYLIGHT_TOKEN_CACHE=false` to turn it off and log in on every start, or
+`SKYLIGHT_TOKEN_FILE` to put the cache somewhere specific.
+
+If a write fails (read-only or full data dir) the server logs to stderr and
+keeps working on the in-memory token — only the next start pays for it.
 
 ## Local dev
 

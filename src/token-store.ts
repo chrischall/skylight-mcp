@@ -1,11 +1,16 @@
-import { join } from 'node:path';
 import {
   createFileStatePersistence,
-  resolveStateDir,
+  resolveStateFile,
   type BearerTokens,
   type StatePersistence,
 } from '@chrischall/mcp-utils/session';
 import { parseBoolEnv } from '@chrischall/mcp-utils';
+
+/** The credentials a cached token was minted from. */
+export interface CacheBinding {
+  email: string;
+  password: string;
+}
 
 /**
  * Where the OAuth token pair is cached between runs.
@@ -24,7 +29,12 @@ import { parseBoolEnv } from '@chrischall/mcp-utils';
  * cannot turn into a relative path under the process cwd.
  */
 export function tokenStorePath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(resolveStateDir({ env, subdir: '.skylight-mcp' }), 'tokens.json');
+  return resolveStateFile({
+    env,
+    envVar: 'SKYLIGHT_TOKEN_FILE',
+    subdir: '.skylight-mcp',
+    fileName: 'tokens.json',
+  });
 }
 
 /** Only the token pair is ever stored — never the email or password. */
@@ -51,10 +61,35 @@ function isTokens(raw: unknown): raw is BearerTokens {
  */
 export function createTokenPersistence(
   env: NodeJS.ProcessEnv = process.env,
+  binding?: CacheBinding,
 ): StatePersistence<BearerTokens> | null {
   if (!parseBoolEnv('SKYLIGHT_TOKEN_CACHE', { env, default: true })) return null;
   return createFileStatePersistence<BearerTokens>({
     filePath: tokenStorePath(env),
     validate: (raw) => (isTokens(raw) ? raw : null),
+    // Bound to the credentials that minted the token, so rotating the password
+    // — or pointing the server at a different account — discards the cache
+    // instead of letting a token from the old one keep working. Only a salted
+    // HMAC digest is written; neither value reaches the file.
+    ...(binding !== undefined
+      ? { boundTo: `${binding.email.trim().toLowerCase()}\u0000${binding.password}` }
+      : {}),
   });
+}
+
+/**
+ * Report a cache write that failed. Deliberately not fatal: Skylight's tokens
+ * are re-mintable from the credentials in the environment, so a lost write
+ * costs the next start a login rather than locking anything out. It is still
+ * worth saying — a read-only or full data dir otherwise looks exactly like a
+ * server that simply never caches.
+ *
+ * stderr only; stdout is the JSON-RPC channel.
+ */
+export function reportCacheWriteFailure(err: unknown): void {
+  const detail = err instanceof Error ? err.message : String(err);
+  console.error(
+    `[skylight-mcp] could not cache the OAuth tokens at ${tokenStorePath()} (${detail}); ` +
+      'continuing without the cache — every restart will re-run the login until this is fixed.',
+  );
 }

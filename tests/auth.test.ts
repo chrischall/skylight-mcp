@@ -200,6 +200,31 @@ describe('resolveAuth token cache', () => {
     return api;
   }
 
+  it('reports a failed write to stderr without failing the request', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    mockLogin.mockResolvedValue(GOOD_TOKENS);
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const httpFetch = vi.fn().mockResolvedValue(okResponse());
+      const { client } = await resolveAuth({
+        httpFetch,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        persistence: {
+          load: () => null,
+          save: () => {
+            throw new Error('EROFS');
+          },
+        } as any,
+      });
+      // The token is valid in this process; only the next start pays for it.
+      await expect(client.request('GET', '/frames')).resolves.toBeDefined();
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/could not cache/i));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('uses the on-disk cache by default, under MCP_DATA_DIR', async () => {
     process.env.SKYLIGHT_EMAIL = 'a@b.com';
     process.env.SKYLIGHT_PASSWORD = 'pw';
@@ -216,7 +241,7 @@ describe('resolveAuth token cache', () => {
 
       const file = join(dir, '.skylight-mcp', 'tokens.json');
       expect(existsSync(file)).toBe(true);
-      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(
+      expect(JSON.parse(readFileSync(file, 'utf8')).state).toEqual(
         expect.objectContaining({ accessToken: 'AT', refreshToken: 'RT' }),
       );
     } finally {

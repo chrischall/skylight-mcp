@@ -25,6 +25,8 @@ export interface SkylightClientOpts {
    * keep tokens in memory for the life of the process, as before.
    */
   persistence?: StatePersistence<BearerTokens> | null;
+  /** Called when a token-cache write fails. Reporting only — see `auth.ts`. */
+  onPersistError?: (err: unknown) => void;
   /** Called with the current refreshToken; must return fresh tokens. */
   refreshFn: (refreshToken: string) => Promise<Tokens>;
   /** HTTP transport for API calls. Defaults to global fetch. */
@@ -65,6 +67,7 @@ export class SkylightClient {
     const tokens = new TokenManager({
       initial: typeof mint === 'function' ? async () => toBearer(await mint()) : toBearer(mint),
       persistence: opts.persistence ?? undefined,
+      ...(opts.onPersistError !== undefined ? { onPersistError: opts.onPersistError } : {}),
       refresh: async (refreshToken) => {
         const tok = await opts.refreshFn(refreshToken);
         return {
