@@ -161,6 +161,21 @@ SKYLIGHT_PASSWORD=your-password
 
 Treat `.env` like a password file — it is gitignored, do not commit it.
 
+### Token cache
+
+After the first login the OAuth token pair is cached at
+`$MCP_DATA_DIR/.skylight-mcp/tokens.json` (falling back to `$HOME`), written
+`0600`. A later start reuses it instead of re-running the four-step login —
+which matters because Skylight's login endpoint rate-limits, and a hosted
+server that scales to zero cold-starts constantly.
+
+Only the tokens are written; your email and password stay in the environment.
+A cached token that has expired is refreshed rather than re-logged-in, and a
+refresh token the server rejects falls back to a fresh login, so a stale file
+cannot lock you out.
+
+Set `SKYLIGHT_TOKEN_CACHE=false` to turn it off and log in on every start.
+
 ## Local dev
 
 ```

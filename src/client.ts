@@ -1,5 +1,9 @@
 import { createApiClient, type ApiClient, type RequestOptions } from '@chrischall/mcp-utils';
-import { TokenManager } from '@chrischall/mcp-utils/session';
+import {
+  TokenManager,
+  type BearerTokens,
+  type StatePersistence,
+} from '@chrischall/mcp-utils/session';
 import type { Account } from './config.js';
 import type { Tokens } from './auth-session-login.js';
 
@@ -8,7 +12,19 @@ export type HttpFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 export interface SkylightClientOpts {
   account: Account;
-  tokens: Tokens;
+  /**
+   * The starting tokens, or a function that mints them (the four-step login).
+   *
+   * Prefer the function form: with {@link SkylightClientOpts.persistence} set it
+   * runs ONLY when no usable token was restored, so a restart that finds a live
+   * token never touches Skylight's rate-limited login endpoint at all.
+   */
+  tokens: Tokens | (() => Promise<Tokens>);
+  /**
+   * Where to cache the token pair between processes. Omit (or pass `null`) to
+   * keep tokens in memory for the life of the process, as before.
+   */
+  persistence?: StatePersistence<BearerTokens> | null;
   /** Called with the current refreshToken; must return fresh tokens. */
   refreshFn: (refreshToken: string) => Promise<Tokens>;
   /** HTTP transport for API calls. Defaults to global fetch. */
@@ -37,13 +53,18 @@ export class SkylightClient {
 
   constructor(opts: SkylightClientOpts) {
     // TokenManager owns the bearer-token lifecycle. Skylight's refreshFn returns a
-    // RELATIVE `expiresInMs`; adapt it to TokenManager's absolute `expiresAt`.
+    // RELATIVE `expiresInMs`; adapt it to TokenManager's absolute `expiresAt` —
+    // absolute is also what gets persisted, so a cached token's remaining life is
+    // read correctly by the next process rather than restarting its clock.
+    const toBearer = (t: Tokens): BearerTokens => ({
+      accessToken: t.accessToken,
+      refreshToken: t.refreshToken,
+      expiresAt: Date.now() + t.expiresInMs,
+    });
+    const mint = opts.tokens;
     const tokens = new TokenManager({
-      initial: {
-        accessToken: opts.tokens.accessToken,
-        refreshToken: opts.tokens.refreshToken,
-        expiresAt: Date.now() + opts.tokens.expiresInMs,
-      },
+      initial: typeof mint === 'function' ? async () => toBearer(await mint()) : toBearer(mint),
+      persistence: opts.persistence ?? undefined,
       refresh: async (refreshToken) => {
         const tok = await opts.refreshFn(refreshToken);
         return {

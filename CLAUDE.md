@@ -10,6 +10,8 @@ Every request carries the `skylight-api-version: 2026-05-01` header (`src/client
 
 Auth resolution lives in `src/auth.ts`. There is one auth path: headless email+password OAuth2 authorization-code flow (Node-direct). See "Auth resolution" below.
 
+The login is **lazy and cached**: `resolveAuth()` hands `SkylightClient` a bootstrap function rather than tokens, and `TokenManager` runs it only when the on-disk cache (`src/token-store.ts`) has nothing usable. A cached live token costs nothing; a cached expired one costs a refresh; only an empty or unusable cache spends a login. This matters because the login endpoint rate-limits (see the `refreshFn` note below) and a scale-to-zero host makes every start a cold one.
+
 ## Auth resolution
 
 `src/auth.ts` implements a single headless email+password OAuth2 authorization-code flow. (Skylight rejects `grant_type=password` with `unsupported_grant_type`; no browser-bridge proxy is needed — no observed bot wall.)
@@ -47,6 +49,7 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `src/auth-session-login.ts` — `login()`: headless four-step authorization-code flow.
 - `src/config.ts` — `loadAccount()`: env-var resolution, exposes `baseUrl` and `authBaseUrl`.
 - `src/client.ts` — `SkylightClient`: a thin wrapper over the shared `createApiClient` (`@chrischall/mcp-utils`) wired to the fleet `TokenManager` (`/session`). The shared client owns 429-retry, 401 mapping, redacted error formatting, and 204/empty handling; the `TokenManager` owns proactive (~60 s skew) + reactive (401-replay) refresh. Skylight-specific bits: the `skylight-api-version` `baseHeaders` and `resolveFrameId()` frame auto-discovery. Multipart uploads (avatars/photos) go through `RequestOpts.formData`.
+- `src/token-store.ts` — `tokenStorePath()` / `createTokenPersistence()`: the on-disk token cache (`$MCP_DATA_DIR/.skylight-mcp/tokens.json`, 0600) built on `createFileStatePersistence` + `resolveStateDir` (`@chrischall/mcp-utils/session`). Returns `null` when `SKYLIGHT_TOKEN_CACHE=false`, which puts `TokenManager` back to in-memory-only. Only the token pair is stored — never the email or password.
 - `src/get-client.ts` — `makeGetClient()`: the lazy `getClient` factory. Wraps `resolveAuth()` in a `CookieSessionManager` for single-flight first login + permanent-vs-transient (`NO_ENV_CONFIG_MARKER`) caching — see "No env vars → clean start" above.
 - `src/index.ts` — entry point. Boots the MCP server via `runMcp` (`@chrischall/mcp-utils`), wires `getClient` from `makeGetClient()`, registers the thirteen tool modules.
 - `src/tools/` — one file per domain: `frames.ts`, `settings.ts`, `calendars.ts`, `members.ts`, `events.ts`, `lists.ts`, `chores.ts`, `rewards.ts`, `meals.ts`, `messages.ts`, `tasks.ts`, `ai.ts`, `photos.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers. `src/s3-upload.ts` holds the dependency-free SigV4 multipart S3 upload used by `photos.ts`.

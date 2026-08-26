@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Mock auth-session-login at the module boundary.
 // vi.mock is hoisted — use vi.fn() inside the factory so the mocks are
@@ -18,9 +21,28 @@ const mockRefresh = mockRefreshImport as ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.clearAllMocks();
   for (const k of Object.keys(process.env)) if (k.startsWith('SKYLIGHT_')) delete process.env[k];
+  delete process.env.MCP_DATA_DIR;
 });
 
 const GOOD_TOKENS = { accessToken: 'AT', refreshToken: 'RT', expiresInMs: 600_000 };
+
+/** A minimal 200 JSON response, enough to drive one client.request(). */
+function okResponse(): Response {
+  return {
+    status: 200,
+    ok: true,
+    headers: { get: () => 'application/json' },
+    text: async () => '{"ok":true}',
+    json: async () => ({ ok: true }),
+  } as unknown as Response;
+}
+
+// Every resolveAuth() here passes `persistence: null`. Two reasons: the default
+// would read and write the developer's real ~/.skylight-mcp/tokens.json, making
+// the suite non-hermetic and order-dependent; and these cases are about WHEN the
+// login runs, which the token cache would otherwise skip entirely. The cache
+// itself is covered in its own describe block below and in token-store.test.ts.
+const noCache = { persistence: null } as const;
 
 describe('resolveAuth', () => {
   it('returns a client with source=env when login succeeds', async () => {
@@ -28,9 +50,15 @@ describe('resolveAuth', () => {
     process.env.SKYLIGHT_PASSWORD = 'pw';
     mockLogin.mockResolvedValue(GOOD_TOKENS);
 
-    const { client, source } = await resolveAuth();
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    const { client, source } = await resolveAuth({ ...noCache, httpFetch });
     expect(source).toBe('env');
     expect(client).toBeDefined();
+    // The login is LAZY now — constructing the client must not spend one against
+    // an endpoint that rate-limits.
+    expect(mockLogin).not.toHaveBeenCalled();
+
+    await client.request('GET', '/frames');
     expect(mockLogin).toHaveBeenCalledOnce();
     expect(mockLogin).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'a@b.com', password: 'pw' }),
@@ -38,13 +66,29 @@ describe('resolveAuth', () => {
     );
   });
 
+  it('logs in once for a burst of concurrent first requests', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    mockLogin.mockResolvedValue(GOOD_TOKENS);
+
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    const { client } = await resolveAuth({ ...noCache, httpFetch });
+    await Promise.all([
+      client.request('GET', '/a'),
+      client.request('GET', '/b'),
+      client.request('GET', '/c'),
+    ]);
+    expect(mockLogin).toHaveBeenCalledOnce();
+  });
+
   it('passes the injected httpFetch to login', async () => {
     process.env.SKYLIGHT_EMAIL = 'a@b.com';
     process.env.SKYLIGHT_PASSWORD = 'pw';
     mockLogin.mockResolvedValue(GOOD_TOKENS);
 
-    const httpFetch = vi.fn();
-    await resolveAuth({ httpFetch });
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    const { client } = await resolveAuth({ ...noCache, httpFetch });
+    await client.request('GET', '/frames');
     expect(mockLogin).toHaveBeenCalledWith(
       expect.anything(),
       httpFetch,
@@ -58,17 +102,20 @@ describe('resolveAuth', () => {
       new Error('Skylight login failed — check SKYLIGHT_EMAIL/SKYLIGHT_PASSWORD'),
     );
 
-    await expect(resolveAuth()).rejects.toThrow(/Skylight login failed/);
+    // Deferred with the login itself: resolveAuth no longer performs it, so the
+    // actionable error arrives on the first request instead of at construction.
+    const { client } = await resolveAuth(noCache);
+    await expect(client.request('GET', '/frames')).rejects.toThrow(/Skylight login failed/);
   });
 
   it('throws when no credentials are configured', async () => {
-    await expect(resolveAuth()).rejects.toThrow(/Missing Skylight auth config/);
+    await expect(resolveAuth(noCache)).rejects.toThrow(/Missing Skylight auth config/);
     expect(mockLogin).not.toHaveBeenCalled();
   });
 
   it('throws on partial config (email only)', async () => {
     process.env.SKYLIGHT_EMAIL = 'a@b.com';
-    await expect(resolveAuth()).rejects.toThrow(/SKYLIGHT_PASSWORD/);
+    await expect(resolveAuth(noCache)).rejects.toThrow(/SKYLIGHT_PASSWORD/);
     expect(mockLogin).not.toHaveBeenCalled();
   });
 
@@ -85,7 +132,7 @@ describe('resolveAuth', () => {
     });
     vi.stubGlobal('fetch', globalFetchMock);
     try {
-      const { source, client } = await resolveAuth(); // no httpFetch → uses defaultFetch
+      const { source, client } = await resolveAuth(noCache); // no httpFetch → uses defaultFetch
       expect(source).toBe('env');
       // Actually invoke the client so defaultFetch body is exercised
       await client.request('GET', '/frames');
@@ -111,7 +158,7 @@ describe('resolveAuth', () => {
     } as unknown as Response;
 
     const httpFetch = vi.fn().mockResolvedValue(apiResponse);
-    const { client } = await resolveAuth({ httpFetch });
+    const { client } = await resolveAuth({ ...noCache, httpFetch });
 
     // Trigger a request — expired token → proactive refresh → then API call
     const result = await client.request('GET', '/x');
@@ -128,10 +175,117 @@ describe('resolveAuth', () => {
     process.env.SKYLIGHT_PASSWORD = 'pw';
     mockLogin.mockResolvedValue(GOOD_TOKENS);
 
-    await resolveAuth();
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    const { client } = await resolveAuth({ ...noCache, httpFetch });
+    await client.request('GET', '/frames');
     expect(mockLogin).toHaveBeenCalledWith(
       expect.objectContaining({ authBaseUrl: 'https://app.ourskylight.com' }),
       expect.anything(),
     );
+  });
+});
+
+describe('resolveAuth token cache', () => {
+  function fakeStore(seed: unknown = null) {
+    const api = {
+      value: seed,
+      load: () => api.value,
+      save: (v: unknown) => {
+        api.value = v;
+      },
+      clear: () => {
+        api.value = null;
+      },
+    };
+    return api;
+  }
+
+  it('uses the on-disk cache by default, under MCP_DATA_DIR', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    mockLogin.mockResolvedValue(GOOD_TOKENS);
+    // Point the default store at a temp dir. This is the ONE case that exercises
+    // the real createTokenPersistence() wiring end-to-end; every other case
+    // passes persistence explicitly so the suite never touches the real $HOME.
+    const dir = mkdtempSync(join(tmpdir(), 'skylight-auth-'));
+    process.env.MCP_DATA_DIR = dir;
+    try {
+      const httpFetch = vi.fn().mockResolvedValue(okResponse());
+      const { client } = await resolveAuth({ httpFetch }); // no persistence override
+      await client.request('GET', '/frames');
+
+      const file = join(dir, '.skylight-mcp', 'tokens.json');
+      expect(existsSync(file)).toBe(true);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(
+        expect.objectContaining({ accessToken: 'AT', refreshToken: 'RT' }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      delete process.env.MCP_DATA_DIR;
+    }
+  });
+
+  it('skips the login entirely when a cached token is still valid', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    const store = fakeStore({ accessToken: 'CACHED', refreshToken: 'RT', expiresAt: Date.now() + 3_600_000 });
+
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { client } = await resolveAuth({ httpFetch, persistence: store as any });
+    await client.request('GET', '/frames');
+
+    expect(mockLogin).not.toHaveBeenCalled();
+    const [, init] = httpFetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer CACHED');
+  });
+
+  it('persists the tokens a fresh login mints', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    mockLogin.mockResolvedValue(GOOD_TOKENS);
+    const store = fakeStore(null);
+
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { client } = await resolveAuth({ httpFetch, persistence: store as any });
+    await client.request('GET', '/frames');
+
+    expect(store.value).toEqual(
+      expect.objectContaining({ accessToken: 'AT', refreshToken: 'RT' }),
+    );
+    // Absolute, not the relative expiresInMs — the next process must be able to
+    // tell how much life is actually left.
+    expect((store.value as { expiresAt: number }).expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  it('falls back to a login when the cached token is expired and unrefreshable', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    mockLogin.mockResolvedValue(GOOD_TOKENS);
+    const store = fakeStore({ accessToken: 'OLD', expiresAt: Date.now() - 1 }); // no refreshToken
+
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { client } = await resolveAuth({ httpFetch, persistence: store as any });
+    await client.request('GET', '/frames');
+
+    expect(mockLogin).toHaveBeenCalledOnce();
+  });
+
+  it('refreshes an expired cached token instead of logging in again', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    mockRefresh.mockResolvedValue({ accessToken: 'AT2', refreshToken: 'RT2', expiresInMs: 600_000 });
+    const store = fakeStore({ accessToken: 'OLD', refreshToken: 'RT', expiresAt: Date.now() - 1 });
+
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { client } = await resolveAuth({ httpFetch, persistence: store as any });
+    await client.request('GET', '/frames');
+
+    expect(mockRefresh).toHaveBeenCalledOnce();
+    expect(mockLogin).not.toHaveBeenCalled(); // a refresh is cheap; a login is not
+    expect(store.value).toEqual(expect.objectContaining({ accessToken: 'AT2' }));
   });
 });

@@ -23,12 +23,20 @@ env:
     required: false
     help: >-
       Friendly account name used in startup logs.
+  - name: SKYLIGHT_TOKEN_CACHE
+    required: false
+    help: >-
+      Set to false to disable the on-disk token cache and log in on every
+      process start. Defaults to enabled.
 state:
   dataDir: true
   reason: >-
-    Persists the saved session/token under $HOME so authentication survives a
-    restart. Without it every cold start re-authenticates, which a hosted
-    child may be unable to do unaided.
+    Keeps the OAuth token pair at $MCP_DATA_DIR/.skylight-mcp/tokens.json (0600)
+    so a restart reuses it. Without it every cold start re-runs the four-step
+    authorization-code login, and Skylight's login endpoint rate-limits — on a
+    scale-to-zero host, where every start is a cold one, that is the difference
+    between a free start and a throttled one. Only the tokens are written; the
+    email and password stay in the environment.
 egress:
   allow:
     # Only hosts the SERVER process actually fetches. Hosts that appear
