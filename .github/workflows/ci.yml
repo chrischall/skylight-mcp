@@ -12,6 +12,19 @@ name: CI
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
+  # A manual gate, for when the automatic one does not arrive. On 2026-08-26
+  # GitHub stopped creating `pull_request` runs for this repo entirely — CI and
+  # the auto-review both went silent across three pushes and a reopen, while
+  # `auto-merge.yml` kept firing because it is `pull_request_target`. The
+  # workflow files were valid and unchanged since they last ran hours earlier,
+  # so nothing here could be fixed to bring them back, and PRs sat ungated.
+  #
+  # The reusable workflow already handles a non-PR event: it runs CI
+  # unconditionally (reusable-mcp-ci.yml, "non-PR event → run CI") and skips
+  # posting the `ci-gated` status, which is guarded on `pull_request`. So a
+  # dispatch runs the real build and test suite for any ref and simply reports
+  # through the run itself rather than through a commit status.
+  workflow_dispatch:
 
 permissions:
   contents: read
