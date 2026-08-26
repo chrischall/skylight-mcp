@@ -6,10 +6,16 @@ function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
   // Take the LAST argument as the handler: tools registered with an annotations
   // object (e.g. skylight_delete_meal's destructiveHint) use the 5-arg form.
-  const server = { tool: (name: string, ...rest: any[]) => { tools[name] = rest[rest.length - 1]; } } as any;
+  const annotations: Record<string, any> = {};
+  // `rest` is [description, schema, handler] or, for the 5-arg form,
+  // [description, schema, annotations, handler].
+  const server = { tool: (name: string, ...rest: any[]) => {
+    tools[name] = rest[rest.length - 1];
+    if (rest.length === 4) annotations[name] = rest[2];
+  } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerMealTools(server, async () => client);
-  return { tools, request, resolveFrameId };
+  return { tools, annotations, request, resolveFrameId };
 }
 
 describe('meal tools', () => {
@@ -454,5 +460,49 @@ describe('meal tools', () => {
     request.mockResolvedValue(undefined);
     const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', confirm: true });
     expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08', apply_to: 'one' });
+  });
+it('update_meal flattens a single-resource data object, not just an array', async () => {
+    const { tools, request } = harness();
+    // JSON:API member routes conventionally return `data` as one resource
+    // rather than a collection. Nothing pins which shape the instance routes
+    // use, so flattenSittings() must tolerate both.
+    request.mockResolvedValue({
+      data: {
+        id: '42', type: 'meal_sitting',
+        attributes: { summary: 'Tacos' },
+        relationships: { meal_category: { data: { id: '9', type: 'meal_category' } } },
+      },
+      included: [{ id: '9', type: 'meal_category', attributes: { label: 'Dinner' } }],
+    });
+    const out = await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    const rows = JSON.parse(out.content[0].text);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].summary).toBe('Tacos');
+    expect(rows[0].meal_category).toEqual({ id: '9', type: 'meal_category', label: 'Dinner' });
+  });
+
+  it('update_meal is annotated destructive — apply_to one/future split the series', async () => {
+    const { annotations } = harness();
+    expect(annotations.skylight_update_meal).toEqual({ destructiveHint: true });
+    expect(annotations.skylight_delete_meal).toEqual({ destructiveHint: true });
+  });
+
+  it('delete_meal falls back to a summary object on a 200 with no sittings in it', async () => {
+    // A true 204 yields `undefined`, but a 200 {} or 200 {"data":[]} is truthy
+    // and would otherwise render as [] — which reads as "nothing was deleted"
+    // and invites the model to retry an irreversible call.
+    for (const body of [{}, { data: [] }, { data: null }]) {
+      const { tools, request } = harness();
+      request.mockResolvedValue(body);
+      const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', confirm: true });
+      expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    }
+  });
+
+  it('delete_meal returns the deleted sittings when the API does send a body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '42', type: 'meal_sitting', attributes: { summary: 'Tacos' } }] });
+    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all', confirm: true });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '42', type: 'meal_sitting', summary: 'Tacos' }]);
   });
 });

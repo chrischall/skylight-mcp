@@ -29,7 +29,7 @@ interface SittingResource extends ResourceRef {
   attributes?: Record<string, unknown>;
   relationships?: Record<string, { data?: ResourceRef | ResourceRef[] | null }>;
 }
-interface SittingDoc { data: SittingResource[]; included?: SittingResource[] }
+interface SittingDoc { data?: SittingResource | SittingResource[] | null; included?: SittingResource[] }
 
 /**
  * Flatten meal sittings, inlining their sideloaded relationships.
@@ -41,6 +41,12 @@ interface SittingDoc { data: SittingResource[]; included?: SittingResource[] }
  * relationship ref against `included` and inline the flattened resource under the
  * relationship name, falling back to the bare `{ id, type }` ref when it was not
  * sideloaded.
+ *
+ * `data` is normalized because this runs against both the collection read
+ * (`GET /meals/sittings`, an array) and the instance member routes
+ * (`PATCH`/`DELETE .../instances/{iso}`). JSON:API member endpoints
+ * conventionally return a single resource, and assuming an array would surface
+ * as an opaque "map is not a function" TypeError rather than degrading.
  */
 function flattenSittings(doc: SittingDoc | undefined): Record<string, unknown>[] {
   const sideloaded = new Map<string, Record<string, unknown>>();
@@ -49,7 +55,10 @@ function flattenSittings(doc: SittingDoc | undefined): Record<string, unknown>[]
   }
   const resolve = (ref: ResourceRef) => sideloaded.get(`${ref.type}:${ref.id}`) ?? ref;
 
-  return (doc?.data ?? []).map((sitting) => {
+  const data = doc?.data;
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+
+  return rows.map((sitting) => {
     const flat: Record<string, unknown> = { ...sitting.attributes, id: sitting.id, type: sitting.type };
     for (const [name, rel] of Object.entries(sitting.relationships ?? {})) {
       // A relationship with `data: null` (no linked recipe) carries no information.
@@ -124,7 +133,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_plan_meal', 'Plan a meal on a date (optionally repeating, link a recipe, add to grocery list).', {
     meal_category_id: idParam.describe('Meal category id (breakfast/lunch/dinner — from skylight_list_meal_categories).'),
     date: z.string().describe('YYYY-MM-DD the meal is planned for.'),
-    summary: z.string().describe('Meal name.'),
+    summary: z.string().describe('Meal name. LIVE-VERIFIED: when meal_recipe_id is set, this must be BLANK — pass "" and the sitting inherits its name from the linked recipe. Sending a non-blank summary together with a recipe id returns 422 {"errors":{"summary":["must be blank"]}}.'),
     description: z.string().optional().describe('Ingredients / instructions.'),
     meal_recipe_id: idParam.optional().describe('Link an existing recipe.'),
     rrule: z.string().optional().describe('iCal RRULE string for a repeating meal, e.g. "FREQ=DAILY;INTERVAL=1;UNTIL=20260626T235959Z" (meals use a plain rrule string, NOT an array).'),
@@ -169,7 +178,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
       instance_date: z.string().describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
       apply_to: APPLY_TO,
-      summary: z.string().optional().describe('New meal name.'),
+      summary: z.string().optional().describe('New meal name. The create route 422s when this is non-blank and meal_recipe_id is also set; whether PATCH enforces the same rule is UNVERIFIED, so prefer setting one or the other.'),
       description: z.string().optional().describe('Ingredients / instructions.'),
       note: z.string().optional(),
       date: z.string().optional().describe('YYYY-MM-DD to move the meal to.'),
@@ -178,6 +187,10 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       meal_recipe_id: idParam.optional().describe('Link a different recipe.'),
       frameId: z.string().optional(),
     },
+    // Destructive despite being an "update": per the live findings above,
+    // apply_to 'one' and 'future' do not edit in place — they rewrite the
+    // original series' rrule and spawn additional sittings.
+    { destructiveHint: true },
     frameScoped(getClient, async (c, f, { id, instance_date, apply_to, summary, description, note, date, rrule, meal_category_id, meal_recipe_id }: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; summary?: string; description?: string; note?: string; date?: string; rrule?: string; meal_category_id?: string | number; meal_recipe_id?: string | number; frameId?: string }) => {
       const body = pruneUndefined({ summary, description, note, date, rrule, meal_category_id, meal_recipe_id });
       const doc = await c.request<SittingDoc>('PATCH', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
@@ -191,7 +204,11 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     const doc = await c.request<SittingDoc>('DELETE', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
       query: { apply_to, include: SITTING_INCLUDE },
     });
-    return doc ? textContent(flattenSittings(doc)) : textContent({ deleted: String(id), instance_date, apply_to });
+    // A true 204 yields `undefined`, but a 200 {} or 200 {"data":[]} is truthy
+    // and would render as [] — which reads to a model as "nothing was deleted",
+    // inviting a retry of an irreversible call. Decide on the flattened rows.
+    const rows = flattenSittings(doc);
+    return rows.length ? textContent(rows) : textContent({ deleted: String(id), instance_date, apply_to });
   });
 
   server.tool('skylight_delete_meal', "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to. There is no undo — without confirm:true this returns a dry-run preview of exactly what would be deleted and makes NO network call; with confirm:true it deletes.",
