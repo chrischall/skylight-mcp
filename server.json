@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.chrischall/skylight-mcp",
-  "description": "Skylight Calendar for Claude \u2014 family events, chores, and rewards.",
+  "description": "Skylight Calendar for Claude — family events, chores, and rewards.",
   "repository": {
     "url": "https://github.com/chrischall/skylight-mcp",
     "source": "github"
@@ -18,7 +18,7 @@
       "environmentVariables": [
         {
           "name": "SKYLIGHT_REFRESH_TOKEN",
-          "description": "An OAuth refresh token you already hold. Supply this and no password is needed \u2014 the login is skipped entirely.",
+          "description": "An OAuth refresh token you already hold. Supply this and no password is needed — the login is skipped entirely.",
           "isRequired": false,
           "format": "string",
           "isSecret": true
@@ -31,7 +31,7 @@
         },
         {
           "name": "SKYLIGHT_PASSWORD",
-          "description": "Skylight account password \u2014 required iff SKYLIGHT_EMAIL is set. Needed only if you are not supplying SKYLIGHT_REFRESH_TOKEN.",
+          "description": "Skylight account password — required iff SKYLIGHT_EMAIL is set. Needed only if you are not supplying SKYLIGHT_REFRESH_TOKEN.",
           "isRequired": false,
           "format": "string",
           "isSecret": true
