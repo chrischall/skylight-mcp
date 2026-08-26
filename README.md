@@ -10,7 +10,7 @@ Every API request carries the `skylight-api-version: 2026-05-01` header (matchin
 
 ## Auth
 
-The server uses a headless email+password OAuth2 authorization-code flow — no SSO, no 2FA, no browser extension required. Credentials are always `SKYLIGHT_EMAIL` + `SKYLIGHT_PASSWORD`.
+The server uses a headless email+password OAuth2 authorization-code flow — no SSO, no 2FA, no browser extension required. Configure it with `SKYLIGHT_REFRESH_TOKEN` if you already hold a token, or `SKYLIGHT_EMAIL` + `SKYLIGHT_PASSWORD` to log in for one.
 
 On first tool call, the server performs four steps against `https://app.ourskylight.com`:
 1. `GET /auth/session/new` — fetch the Rails CSRF token and session cookie.
@@ -144,12 +144,26 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 
 ## Configuration
 
-### Required
+### Required — one of these two
+
+**A refresh token you already hold** (preferred: scoped, revocable, and it never
+touches the rate-limited login endpoint):
+
+```
+SKYLIGHT_REFRESH_TOKEN=your-refresh-token
+```
+
+**Or the login pair**, which mints one for you:
 
 ```
 SKYLIGHT_EMAIL=you@example.com
 SKYLIGHT_PASSWORD=your-password
 ```
+
+Setting both is also valid, and is the most robust configuration: the token is
+used first, and if it has expired the login quietly mints a replacement. With a
+token alone, an expired token is reported as expired — the server says so
+plainly rather than claiming it is unconfigured.
 
 ### Optional
 
@@ -174,10 +188,11 @@ A cached token that has expired is refreshed rather than re-logged-in, and a
 refresh token the server rejects falls back to a fresh login, so a stale file
 cannot lock you out.
 
-The cache is bound to the credentials that minted it: rotate `SKYLIGHT_PASSWORD`
-or point the server at a different account and the cached token is discarded
-rather than kept in play. Only a salted digest of the pair is stored — neither
-the email nor the password reaches the file.
+The cache is bound to whichever credential minted it — the password pair, or the
+supplied `SKYLIGHT_REFRESH_TOKEN`. Rotate that credential, or point the server at
+a different account, and the cached token is discarded rather than kept in play.
+Only a salted digest is stored; no email, password or supplied token reaches the
+file.
 
 Set `SKYLIGHT_TOKEN_CACHE=false` to turn it off and log in on every start, or
 `SKYLIGHT_TOKEN_FILE` to put the cache somewhere specific.

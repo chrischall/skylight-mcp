@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "skylight-mcp",
   "version": "0.6.0",
-  "description": "Skylight Calendar MCP — read/write family calendar events, chores, rewards, and shared lists via Claude. Auth via email+password.",
+  "description": "Skylight Calendar MCP \u2014 read/write family calendar events, chores, rewards, and shared lists via Claude. Auth via email+password.",
   "author": {
     "name": "Claude Code (AI)"
   },
@@ -15,22 +15,30 @@
         "${__dirname}/dist/bundle.js"
       ],
       "env": {
+        "SKYLIGHT_REFRESH_TOKEN": "${user_config.skylight_refresh_token}",
         "SKYLIGHT_EMAIL": "${user_config.skylight_email}",
         "SKYLIGHT_PASSWORD": "${user_config.skylight_password}"
       }
     }
   },
   "user_config": {
+    "skylight_refresh_token": {
+      "type": "string",
+      "title": "Refresh token",
+      "description": "An OAuth refresh token you already hold. Supply this and no password is needed \u2014 the login is skipped entirely.",
+      "required": false,
+      "sensitive": true
+    },
     "skylight_email": {
       "type": "string",
       "title": "Email",
-      "description": "Skylight account email. Required together with the password below.",
+      "description": "Skylight account email. Needed only if you are not supplying a refresh token above.",
       "required": false
     },
     "skylight_password": {
       "type": "string",
       "title": "Password",
-      "description": "Skylight account password. Required only when the email above is set. Stored locally in the bundle config — keep it private.",
+      "description": "Skylight account password. Needed only if you are not supplying a refresh token above. Stored locally in the bundle config \u2014 keep it private.",
       "required": false,
       "sensitive": true
     }
