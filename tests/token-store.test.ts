@@ -166,6 +166,39 @@ describe('credential binding', () => {
     expect(other.load()).toBeNull();
   });
 
+  it('reuses the cache while a supplied refresh token is unchanged', () => {
+    // The other arm of CacheBinding: a deployment configured with
+    // SKYLIGHT_REFRESH_TOKEN binds the cache to that token instead of a
+    // password pair.
+    const bind = { refreshToken: 'RT1' };
+    createTokenPersistence({ MCP_DATA_DIR: dir }, bind)!.save({ accessToken: 'AT', expiresAt: 1 });
+    expect(createTokenPersistence({ MCP_DATA_DIR: dir }, bind)!.load()).toEqual({
+      accessToken: 'AT',
+      expiresAt: 1,
+    });
+  });
+
+  it('discards the cache when the supplied refresh token is replaced', () => {
+    createTokenPersistence({ MCP_DATA_DIR: dir }, { refreshToken: 'RT1' })!.save({ accessToken: 'AT', expiresAt: 1 });
+    // Replacing the token is the token-path equivalent of rotating a password:
+    // a pair minted from the old one must not stay in play.
+    const after = createTokenPersistence({ MCP_DATA_DIR: dir }, { refreshToken: 'RT2' })!;
+    expect(after.load()).toBeNull();
+  });
+
+  it('does not let a password pair and a refresh token collide in the cache', () => {
+    // Different binding SHAPES must not hash to the same key — otherwise a
+    // token cached under one credential would be served to the other.
+    createTokenPersistence({ MCP_DATA_DIR: dir }, creds)!.save({ accessToken: 'AT', expiresAt: 1 });
+    expect(createTokenPersistence({ MCP_DATA_DIR: dir }, { refreshToken: 'pw1' })!.load()).toBeNull();
+  });
+
+  it('never writes a supplied refresh token to disk', () => {
+    createTokenPersistence({ MCP_DATA_DIR: dir }, { refreshToken: 'RT-SECRET' })!.save({ accessToken: 'AT', expiresAt: 1 });
+    const body = readFileSync(join(dir, '.skylight-mcp', 'tokens.json'), 'utf8');
+    expect(body).not.toContain('RT-SECRET');
+  });
+
   it('never writes the password or the email to disk', () => {
     createTokenPersistence({ MCP_DATA_DIR: dir }, creds)!.save({ accessToken: 'AT', expiresAt: 1 });
     const body = readFileSync(join(dir, '.skylight-mcp', 'tokens.json'), 'utf8');

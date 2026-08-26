@@ -302,6 +302,45 @@ describe('resolveAuth token cache', () => {
     }
   });
 
+  it('binds the default on-disk cache to a supplied refresh token', async () => {
+    // The token arm of the same default-persistence wiring: with no login pair
+    // there is no email/password to bind to, so the binding must come from the
+    // supplied token instead.
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
+    mockRefresh.mockResolvedValue(GOOD_TOKENS);
+    const dir = mkdtempSync(join(tmpdir(), 'skylight-auth-rt-'));
+    process.env.MCP_DATA_DIR = dir;
+    try {
+      const httpFetch = vi.fn().mockResolvedValue(okResponse());
+      const { client } = await resolveAuth({ httpFetch }); // no persistence override
+      await client.request('GET', '/frames');
+
+      const file = join(dir, '.skylight-mcp', 'tokens.json');
+      expect(existsSync(file)).toBe(true);
+      // The supplied token is the BINDING, never the payload — it must not
+      // reach the file.
+      expect(readFileSync(file, 'utf8')).not.toContain('SUPPLIED_RT');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      delete process.env.MCP_DATA_DIR;
+    }
+  });
+
+  it('reports a non-Error rejection from the refresh grant without losing it', async () => {
+    // Nothing guarantees a rejection is an Error. Stringifying whatever came
+    // back keeps the upstream detail in the message instead of "[object
+    // Object]" or a silently empty cause.
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'STALE_RT';
+    mockRefresh.mockRejectedValue('invalid_grant: token revoked');
+
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    const { client } = await resolveAuth({ ...noCache, httpFetch });
+    const err = await client.request('GET', '/frames').catch((e: Error) => e);
+
+    expect(String(err)).toMatch(/SKYLIGHT_REFRESH_TOKEN/);
+    expect(String(err)).toMatch(/invalid_grant: token revoked/);
+  });
+
   it('skips the login entirely when a cached token is still valid', async () => {
     process.env.SKYLIGHT_EMAIL = 'a@b.com';
     process.env.SKYLIGHT_PASSWORD = 'pw';
