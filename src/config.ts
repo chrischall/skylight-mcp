@@ -6,8 +6,20 @@ export interface SessionAccount {
   baseUrl: string;
   /** Origin of baseUrl, used for auth endpoints (e.g. https://app.ourskylight.com). */
   authBaseUrl: string;
-  email: string;
-  password: string;
+  /**
+   * The login pair. Optional because a consumer may supply {@link refreshToken}
+   * instead — a scoped, revocable credential rather than the unscoped one that
+   * mints it. Present alongside a token when the operator wants a stale token
+   * to recover by logging in again.
+   */
+  email?: string;
+  password?: string;
+  /**
+   * An OAuth refresh token the consumer already holds (`SKYLIGHT_REFRESH_TOKEN`).
+   * When set, the four-step login is skipped entirely — which also means the
+   * rate-limited login endpoint is never touched on a cold start.
+   */
+  refreshToken?: string;
   /** Optional explicit frame id; when unset the client discovers it. */
   frameId?: string;
 }
@@ -18,7 +30,9 @@ const DEFAULT_BASE_URL = 'https://app.ourskylight.com/api';
 // Shared prefix of every config error — getClient() caches errors carrying it
 // as permanent (vs transient login failures, which are retried per call).
 const NO_CONFIG_MARKER = 'Missing Skylight auth config';
-const NO_CONFIG = `${NO_CONFIG_MARKER}. Set SKYLIGHT_EMAIL + SKYLIGHT_PASSWORD.`;
+const NO_CONFIG =
+  `${NO_CONFIG_MARKER}. Set SKYLIGHT_REFRESH_TOKEN (a token you already hold — no password needed), ` +
+  `or SKYLIGHT_EMAIL + SKYLIGHT_PASSWORD to log in for one.`;
 
 /**
  * Read an env var, treating empty/placeholder values as unset. Some MCP hosts
@@ -38,22 +52,32 @@ export const NO_ENV_CONFIG_MARKER = NO_CONFIG_MARKER;
 export function loadAccount(env: Record<string, string | undefined> = process.env): Account {
   const email = readVar(env, 'SKYLIGHT_EMAIL');
   const password = readVar(env, 'SKYLIGHT_PASSWORD');
+  const refreshToken = readVar(env, 'SKYLIGHT_REFRESH_TOKEN');
 
-  if (!email && !password) throw new Error(NO_CONFIG);
-  if (!email || !password) {
-    const missing = email ? 'SKYLIGHT_PASSWORD' : 'SKYLIGHT_EMAIL';
-    throw new Error(`${NO_CONFIG_MARKER} — missing: ${missing}. Set both SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD.`);
+  // A supplied token is a complete configuration on its own. The login pair
+  // stays optional beside it: present, it becomes the recovery path when the
+  // token goes stale; absent, nothing here needs a password at all.
+  if (!refreshToken) {
+    if (!email && !password) throw new Error(NO_CONFIG);
+    if (!email || !password) {
+      const missing = email ? 'SKYLIGHT_PASSWORD' : 'SKYLIGHT_EMAIL';
+      throw new Error(
+        `${NO_CONFIG_MARKER} — missing: ${missing}. Set both SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD, ` +
+          `or SKYLIGHT_REFRESH_TOKEN instead.`,
+      );
+    }
   }
 
   const baseUrl = (readVar(env, 'SKYLIGHT_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/$/, '');
   const authBaseUrl = new URL(baseUrl).origin;
   return {
     mode: 'session',
-    name: readVar(env, 'SKYLIGHT_NAME') ?? email,
+    name: readVar(env, 'SKYLIGHT_NAME') ?? email ?? 'skylight',
     baseUrl,
     authBaseUrl,
     email,
     password,
+    refreshToken,
     frameId: readVar(env, 'SKYLIGHT_FRAME_ID'),
   };
 }

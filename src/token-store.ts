@@ -7,10 +7,13 @@ import {
 import { parseBoolEnv } from '@chrischall/mcp-utils';
 
 /** The credentials a cached token was minted from. */
-export interface CacheBinding {
-  email: string;
-  password: string;
-}
+/**
+ * What the cached token pair is bound to — whichever credential minted it.
+ * A password pair, or a refresh token the consumer supplied. Replacing that
+ * credential must invalidate the cache; binding to the wrong one would let a
+ * token from a replaced credential keep working.
+ */
+export type CacheBinding = { email: string; password: string } | { refreshToken: string };
 
 /**
  * Where the OAuth token pair is cached between runs.
@@ -72,7 +75,12 @@ export function createTokenPersistence(
     // instead of letting a token from the old one keep working. Only a salted
     // HMAC digest is written; neither value reaches the file.
     ...(binding !== undefined
-      ? { boundTo: `${binding.email.trim().toLowerCase()}\u0000${binding.password}` }
+      ? {
+          boundTo:
+            'refreshToken' in binding
+              ? `refresh\u0000${binding.refreshToken}`
+              : `${binding.email.trim().toLowerCase()}\u0000${binding.password}`,
+        }
       : {}),
   });
 }

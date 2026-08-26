@@ -39,6 +39,34 @@ describe('loadAccount', () => {
     expect(acc.authBaseUrl).toBe('https://staging.ourskylight.com');
   });
 
+  it('accepts a supplied refresh token with no email or password', () => {
+    // Path 1 of the ladder: the narrowest credential a consumer can give. A
+    // refresh token is scoped and revocable; the password that mints one is
+    // neither, and until now it was the only thing this server would accept.
+    const acc = loadAccount({ SKYLIGHT_REFRESH_TOKEN: 'RT' });
+    expect(acc.refreshToken).toBe('RT');
+    expect(acc.email).toBeUndefined();
+    expect(acc.password).toBeUndefined();
+    expect(acc.authBaseUrl).toBe('https://app.ourskylight.com');
+  });
+
+  it('keeps email+password alongside a refresh token, so a stale one can re-login', () => {
+    const acc = loadAccount({ SKYLIGHT_REFRESH_TOKEN: 'RT', SKYLIGHT_EMAIL: 'a@b.com', SKYLIGHT_PASSWORD: 'pw' });
+    expect(acc.refreshToken).toBe('RT');
+    expect(acc.email).toBe('a@b.com');
+    expect(acc.password).toBe('pw');
+  });
+
+  it('names the refresh-token route in the no-config error, not just the password one', () => {
+    // The message is what a host shows; a route documented only in prose is a
+    // route nobody configures.
+    expect(() => loadAccount({})).toThrow(/SKYLIGHT_REFRESH_TOKEN/);
+  });
+
+  it('still rejects a half-configured password pair when no token is supplied', () => {
+    expect(() => loadAccount({ SKYLIGHT_EMAIL: 'a@b.com' })).toThrow(/SKYLIGHT_PASSWORD/);
+  });
+
   it('throws the no-config marker when nothing is set', () => {
     expect(() => loadAccount({})).toThrow(/Missing Skylight auth config/);
   });
