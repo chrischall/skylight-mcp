@@ -47,6 +47,18 @@
           "description": "Friendly account name used in startup logs.",
           "isRequired": false,
           "format": "string"
+        },
+        {
+          "name": "SKYLIGHT_TOKEN_CACHE",
+          "description": "Set to false to disable the on-disk token cache and re-authenticate on every process start. Defaults to enabled.",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "SKYLIGHT_TOKEN_FILE",
+          "description": "Absolute path for the token cache file. Defaults to $MCP_DATA_DIR/.skylight-mcp/tokens.json.",
+          "isRequired": false,
+          "format": "string"
         }
       ]
     }
