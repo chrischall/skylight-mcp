@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/chrischall/skylight-mcp/compare/v0.7.0...v0.7.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **egress:** declare every host the server dials in mint.yaml ([#127](https://github.com/chrischall/skylight-mcp/issues/127)) ([a2f3aa6](https://github.com/chrischall/skylight-mcp/commit/a2f3aa66066277d2cbeff557a1d2a6ab8e10ae21))
+
 ## [0.7.0](https://github.com/chrischall/skylight-mcp/compare/v0.6.0...v0.7.0) (2026-08-28)
 
 
