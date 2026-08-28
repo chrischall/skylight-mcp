@@ -56,12 +56,20 @@ egress:
   allow:
     # Only hosts the SERVER process actually fetches. Hosts that appear
     # solely in a URL this server BUILDS and returns are excluded.
-    - amazonaws.com
-    - app.ourskylight.com
-    - ourskylight.com
     #
-    # NOTE — this server also reaches at least one host determined at
-    # RUNTIME, which cannot appear as a literal here:
-    #   - a base URL taken from config rather than a literal
-    # Confirm the concrete host(s) against a live run and add them, or
-    # the isolated tier will block the call.
+    # API base + auth origin (login steps 1-4 and every tool call).
+    - app.ourskylight.com
+    # OAuth redirect_uri of the login flow. Step 3 follows the /oauth/authorize
+    # redirect chain (up to 3 hops) and normally reads the code off the
+    # Location header before this host is ever fetched, but a hop that
+    # carries no code is followed, so the target must be admitted.
+    - ourskylight.com
+    # Photo upload (s3-upload.ts) dials `<bucket>.s3.<region>.amazonaws.com`,
+    # where bucket and region are handed back by the API's
+    # cloud_upload_credentials call at runtime — hence the wildcard: both
+    # labels vary and a bare `amazonaws.com` matches nothing.
+    - '*.amazonaws.com'
+    #
+    # NOTE — SKYLIGHT_BASE_URL overrides the API base (and so the auth
+    # origin); a deployment that sets it to another host must add that host
+    # here too, or the fence will block every call.
