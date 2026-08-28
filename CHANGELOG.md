@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0](https://github.com/chrischall/skylight-mcp/compare/v0.6.0...v0.7.0) (2026-08-28)
+
+
+### Features
+
+* **auth:** accept a supplied refresh token via SKYLIGHT_REFRESH_TOKEN ([#121](https://github.com/chrischall/skylight-mcp/issues/121)) ([659a19f](https://github.com/chrischall/skylight-mcp/commit/659a19f63817a1c5b77e879962eb748f9dd4a426))
+* bind the token cache to its credentials and report failed writes ([#117](https://github.com/chrischall/skylight-mcp/issues/117)) ([ee9def7](https://github.com/chrischall/skylight-mcp/commit/ee9def72ccfcebf0a906605e0097cd4c52f7455e))
+* cache the OAuth token pair so a restart skips the login ([#113](https://github.com/chrischall/skylight-mcp/issues/113)) ([505c034](https://github.com/chrischall/skylight-mcp/commit/505c0341cffa467c3e8480155dd4b4b5765349f8))
+
+
+### Documentation
+
+* list the cache env vars in server.json and .env.example ([#123](https://github.com/chrischall/skylight-mcp/issues/123)) ([b6746b7](https://github.com/chrischall/skylight-mcp/commit/b6746b7f8bc10d57bd65bc332d506d1838cfd0c2))
+* say which description the registry's 100-char cap applies to ([#125](https://github.com/chrischall/skylight-mcp/issues/125)) ([445d586](https://github.com/chrischall/skylight-mcp/commit/445d5865fc9edb7100e62b4c56ca067fc925ab85))
+
 ## [0.6.0](https://github.com/chrischall/skylight-mcp/compare/v0.5.0...v0.6.0) (2026-08-10)
 
 
