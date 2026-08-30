@@ -1,13 +1,27 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { registerMealTools } from '../../src/tools/meals.js';
 import { makeClient } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  const server = { tool: (n: string, _d: string, _s: any, cb: any) => { tools[n] = cb; } } as any;
+  // Take the LAST argument as the handler: tools registered with an annotations
+  // object (e.g. skylight_delete_meal's destructiveHint) use the 5-arg form.
+  const annotations: Record<string, any> = {};
+  // `rest` is [description, schema, handler] or, for the 5-arg form,
+  // [description, schema, annotations, handler].
+  // Schemas are captured too: the harness calls handlers DIRECTLY, so zod never
+  // runs on this path and schema-level rules (e.g. instance_date's format) are
+  // invisible to a handler test. They have to be asserted against the schema.
+  const schemas: Record<string, any> = {};
+  const server = { tool: (name: string, ...rest: any[]) => {
+    tools[name] = rest[rest.length - 1];
+    schemas[name] = rest[1];
+    if (rest.length === 4) annotations[name] = rest[2];
+  } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerMealTools(server, async () => client);
-  return { tools, request, resolveFrameId };
+  return { tools, annotations, schemas, request, resolveFrameId };
 }
 
 describe('meal tools', () => {
@@ -374,5 +388,172 @@ describe('meal tools', () => {
     await tools.skylight_plan_meal({ meal_category_id: '2', date: '2026-06-02', summary: 'Tacos', frameId: '99' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/meals/sittings', expect.any(Object));
     expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_update_meal ────────────────────────────────────────────────
+  //
+  // The route is a member under /instances/{instanceISO}, NOT on the sitting
+  // itself — see the note above skylight_update_meal in src/tools/meals.ts.
+
+  // instance_date is interpolated into the PATH, so a bad format produces a
+  // routing 404 that reads like "no such sitting" rather than naming the real
+  // problem. Asserted on the SCHEMA because the harness bypasses zod.
+  it.each(['skylight_update_meal', 'skylight_delete_meal'])(
+    '%s rejects an instance_date that is not exactly YYYY-MM-DD',
+    (tool) => {
+      const { schemas } = harness();
+      const field = z.object(schemas[tool]).shape.instance_date;
+      expect(field.safeParse('2026-09-08').success).toBe(true);
+      for (const bad of ['2026-09-08T00:00:00Z', '2026-9-8', '08-09-2026', '', 'today']) {
+        expect(field.safeParse(bad).success, bad).toBe(false);
+      }
+    },
+  );
+
+  it('update_meal PATCHes the instance route with apply_to and the sideload include', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_update_meal({
+      id: '42', instance_date: '2026-09-08', apply_to: 'one', summary: 'Burritos',
+    });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/meals/sittings/42/instances/2026-09-08', {
+      query: { apply_to: 'one', include: 'meal_category,meal_recipe,profiles' },
+      body: { summary: 'Burritos' },
+    });
+  });
+
+  it('update_meal prunes undefined fields from the body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_update_meal({
+      id: '42', instance_date: '2026-09-08', apply_to: 'all', rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7, confirm: true,
+    });
+    const body = request.mock.calls[0][2].body;
+    expect(body).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7 });
+    expect(Object.keys(body)).not.toContain('summary');
+  });
+
+  it('update_meal inlines sideloaded relationships like list_meals does', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{
+        id: '42', type: 'meal_sitting',
+        attributes: { summary: 'Tacos', instances: ['2026-09-08'] },
+        relationships: { meal_category: { data: { id: '9', type: 'meal_category' } } },
+      }],
+      included: [{ id: '9', type: 'meal_category', attributes: { label: 'Dinner' } }],
+    });
+    const out = await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    expect(JSON.parse(out.content[0].text)[0].meal_category).toEqual({ id: '9', type: 'meal_category', label: 'Dinner' });
+  });
+
+  it('update_meal with explicit frameId uses it and skips resolveFrameId', async () => {
+    const { tools, request, resolveFrameId } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/99/meals/sittings/42/instances/2026-09-08', expect.any(Object));
+    expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── skylight_delete_meal ────────────────────────────────────────────────
+
+  it('delete_meal without confirm returns a dry-run preview and makes NO network call', async () => {
+    const { tools, request } = harness();
+    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all' });
+    expect(request).not.toHaveBeenCalled();
+    const preview = JSON.parse(out.content[0].text);
+    expect(preview.dryRun).toBe(true);
+    expect(preview.method).toBe('DELETE');
+    expect(preview.willSend).toEqual({ id: '42', instance_date: '2026-09-08', apply_to: 'all' });
+  });
+
+  it('delete_meal with confirm DELETEs the instance route with apply_to', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'future', confirm: true });
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/meals/sittings/42/instances/2026-09-08', {
+      query: { apply_to: 'future', include: 'meal_category,meal_recipe,profiles' },
+    });
+  });
+
+  it('delete_meal falls back to a summary object when the API returns an empty body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', confirm: true });
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08', apply_to: 'one' });
+  });
+it('update_meal flattens a single-resource data object, not just an array', async () => {
+    const { tools, request } = harness();
+    // JSON:API member routes conventionally return `data` as one resource
+    // rather than a collection. Nothing pins which shape the instance routes
+    // use, so flattenSittings() must tolerate both.
+    request.mockResolvedValue({
+      data: {
+        id: '42', type: 'meal_sitting',
+        attributes: { summary: 'Tacos' },
+        relationships: { meal_category: { data: { id: '9', type: 'meal_category' } } },
+      },
+      included: [{ id: '9', type: 'meal_category', attributes: { label: 'Dinner' } }],
+    });
+    const out = await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    const rows = JSON.parse(out.content[0].text);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].summary).toBe('Tacos');
+    expect(rows[0].meal_category).toEqual({ id: '9', type: 'meal_category', label: 'Dinner' });
+  });
+
+  it('update_meal is annotated destructive — apply_to one/future split the series', async () => {
+    const { annotations } = harness();
+    expect(annotations.skylight_update_meal).toEqual({ destructiveHint: true });
+    expect(annotations.skylight_delete_meal).toEqual({ destructiveHint: true });
+  });
+
+  it('delete_meal falls back to a summary object on a 200 with no sittings in it', async () => {
+    // A true 204 yields `undefined`, but a 200 {} or 200 {"data":[]} is truthy
+    // and would otherwise render as [] — which reads as "nothing was deleted"
+    // and invites the model to retry an irreversible call.
+    for (const body of [{}, { data: [] }, { data: null }]) {
+      const { tools, request } = harness();
+      request.mockResolvedValue(body);
+      const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', confirm: true });
+      expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    }
+  });
+
+  it('delete_meal returns the deleted sittings when the API does send a body', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '42', type: 'meal_sitting', attributes: { summary: 'Tacos' } }] });
+    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all', confirm: true });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '42', type: 'meal_sitting', summary: 'Tacos' }]);
+  });
+});
+
+describe('meal confirm gate — scoped to blast radius', () => {
+  it('delete_meal does NOT gate apply_to:one', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    expect(request).toHaveBeenCalled();
+  });
+
+  it.each(['future', 'all'])('delete_meal gates apply_to:%s and makes NO request', async (scope) => {
+    const { tools, request } = harness();
+    const res = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope });
+    expect(request).not.toHaveBeenCalled();
+    expect(JSON.parse(res.content[0].text).dryRun).toBe(true);
+  });
+
+  it.each(['future', 'all'])('update_meal gates apply_to:%s and makes NO request', async (scope) => {
+    const { tools, request } = harness();
+    const res = await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope, summary: 'x' });
+    expect(request).not.toHaveBeenCalled();
+    expect(JSON.parse(res.content[0].text).willSend).toEqual({ summary: 'x' });
+  });
+
+  it('update_meal does NOT gate apply_to:one', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', summary: 'x' });
+    expect(request).toHaveBeenCalled();
   });
 });

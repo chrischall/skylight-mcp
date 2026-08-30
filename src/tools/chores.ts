@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.tool(
@@ -83,6 +84,20 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   // A whole-series edit is PUT /frames/{f}/chores/{id} with the full chore body
   // (no apply_to needed for a series edit; apply_to is for occurrence-level edits).
   // When `recurrence` is provided, send recurrence_set as the ["RRULE:…"] array.
+  interface UpdateChoreArgs {
+    id: string; summary?: string; category_id?: string | number; start?: string;
+    start_time?: string; description?: string; reward_points?: number; emoji_icon?: string;
+    recurrence?: string; recurring_until?: string;
+    apply_to?: 'this' | 'this_and_future' | 'all'; frameId?: string; confirm?: boolean;
+  }
+
+  const updateChore = frameScoped(getClient, async (c, f, { id, summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence, recurring_until, apply_to }: UpdateChoreArgs) => {
+    const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/chores/${id}`, {
+      body: pruneUndefined({ summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence_set: recurrence !== undefined ? [`RRULE:${recurrence}`] : undefined, recurring_until, apply_to }),
+    });
+    return textContent(flattenJsonApi(doc));
+  });
+
   server.tool(
     'skylight_update_chore',
     'Update a chore.',
@@ -99,13 +114,30 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       recurring_until: z.string().optional().describe('ISO datetime the recurrence ends.'),
       apply_to: z.enum(['this', 'this_and_future', 'all']).optional().describe('For recurring chores: which occurrences to update.'),
       frameId: z.string().optional(),
+      confirm: schemaConfirm,
     },
-    frameScoped(getClient, async (c, f, { id, summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence, recurring_until, apply_to }: { id: string; summary?: string; category_id?: string | number; start?: string; start_time?: string; description?: string; reward_points?: number; emoji_icon?: string; recurrence?: string; recurring_until?: string; apply_to?: 'this' | 'this_and_future' | 'all'; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/chores/${id}`, {
-        body: pruneUndefined({ summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence_set: recurrence !== undefined ? [`RRULE:${recurrence}`] : undefined, recurring_until, apply_to }),
-      });
-      return textContent(flattenJsonApi(doc));
-    }),
+    { destructiveHint: true },
+    async (args: UpdateChoreArgs) => {
+      // 'this_and_future' and 'all' rewrite occurrences the caller did not
+      // name; 'this' and an omitted apply_to edit only the one they did.
+      const gate = affectsMultipleOccurrences(args.apply_to)
+        ? previewUnlessConfirmed(
+            args.confirm,
+            `Update chore ${args.id} — scope '${args.apply_to}' rewrites MORE than this one occurrence`,
+            'PUT',
+            '/frames/{frame}/chores/{id}',
+            pruneUndefined({
+              summary: args.summary, category_id: args.category_id, start: args.start,
+              start_time: args.start_time, description: args.description,
+              reward_points: args.reward_points, emoji_icon: args.emoji_icon,
+              recurrence: args.recurrence, recurring_until: args.recurring_until,
+              apply_to: args.apply_to,
+            }),
+          )
+        : null;
+      if (gate) return gate;
+      return updateChore(args);
+    },
   );
 
   // LIVE-VERIFIED: a recurring occurrence is completed with PUT /chores/{id}/completions
@@ -150,6 +182,13 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   // LIVE-VERIFIED: series delete uses a query param — DELETE /frames/{f}/chores/{id}?apply_to=one|all.
   // "one" drops just this occurrence; "all" deletes the whole series. The API returns HTTP 200 with
   // no body, so fall back to a { deleted: id } acknowledgement.
+  interface DeleteChoreArgs { id: string; apply_to?: 'one' | 'all'; frameId?: string; confirm?: boolean }
+
+  const deleteChore = frameScoped(getClient, async (c, f, { id, apply_to }: DeleteChoreArgs) => {
+    const doc = await c.request<JsonApiDoc | undefined>('DELETE', `/frames/${f}/chores/${id}`, apply_to ? { query: { apply_to } } : {});
+    return doc ? textContent(flattenJsonApi(doc)) : textContent({ deleted: id });
+  });
+
   server.tool(
     'skylight_delete_chore',
     'Delete a chore (optionally a single occurrence or the whole series).',
@@ -157,11 +196,25 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       id: z.string(),
       apply_to: z.enum(['one', 'all']).optional().describe('For a recurring chore: delete just this occurrence ("one") or the whole series ("all").'),
       frameId: z.string().optional(),
+      confirm: schemaConfirm,
     },
-    frameScoped(getClient, async (c, f, { id, apply_to }: { id: string; apply_to?: 'one' | 'all'; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('DELETE', `/frames/${f}/chores/${id}`, apply_to ? { query: { apply_to } } : {});
-      return doc ? textContent(flattenJsonApi(doc)) : textContent({ deleted: id });
-    }),
+    { destructiveHint: true },
+    async (args: DeleteChoreArgs) => {
+      // Gated ONLY at 'all', which destroys the whole series. A plain delete
+      // (no apply_to) and 'one' each remove exactly the thing the caller
+      // named, so they cost no second round-trip.
+      const gate = affectsMultipleOccurrences(args.apply_to)
+        ? previewUnlessConfirmed(
+            args.confirm,
+            `Delete chore ${args.id} — scope 'all' removes the ENTIRE series, not just one occurrence`,
+            'DELETE',
+            '/frames/{frame}/chores/{id}',
+            { id: args.id, apply_to: args.apply_to },
+          )
+        : null;
+      if (gate) return gate;
+      return deleteChore(args);
+    },
   );
 
   // LIVE-VERIFIED: search surfaces unscheduled/template chores that the date-range list can't return.

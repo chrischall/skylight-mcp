@@ -75,14 +75,69 @@ Three engines; then approve/undo the drafts:
   - **`include` is validated server-side, and an unknown relationship is a `500`, not a `400`** (probed live): `include=bogus_relationship` and the near-miss `include=profiless` both return `{"status":500,"error":"Internal Server Error"}`, while `meal_category`, `meal_recipe` and `profiles` each return `200` individually and together. Read a `500` here as "that relationship name is wrong", not a server fault — the `500`/`200` split is what confirms `profiles` is a real sitting relationship.
   - Sitting attributes: `summary`, `description`, `note`, `rrule`, `draft`, `recurring`, `instances` (array of `YYYY-MM-DD` — this is where the date lives). Relationships: `meal_category`, `meal_recipe`, `profiles`.
   - **There is no profiles collection to resolve a `profile` ref against** — `GET /frames/{f}/profiles` and `GET /profiles` both `404`, and a `category_detail` exposes no profile link, so it is unverified whether a profile id is the same id space as the family-member category ids `skylight_resolve_member` returns. Sideloading via `include=profiles` is the only way to get from an assigned member ref to its name, which is why it is in the include rather than left to the caller.
-  - There is **no** single-sitting read: `GET /frames/{f}/meals/sittings/{id}` returns 404.
+  - `GET /frames/{f}/meals/sittings/{id}` returns 404, but that is not the whole story: the single-sitting read lives one level down at `GET /frames/{f}/meals/sittings/{id}/instances` (LIVE-VERIFIED 200). See the RESOLVED section below.
 - Plan a sitting: `POST /frames/{f}/meals/sittings { meal_recipe_id, meal_category_id, date, rrule:"FREQ=DAILY;…UNTIL=…", summary, description, add_to_grocery_list, note, saveToRecipeBox }`.
   - NOTE: meal sittings use a plain `rrule` **string** (unlike chores' array).
+  - **LIVE-VERIFIED 422:** when `meal_recipe_id` is supplied, `summary` must be **blank** — sending both returns `{"errors":{"summary":["must be blank"]}}`. Pass `summary: ""` and the sitting inherits its name from the linked recipe.
 - Add recipe to grocery: `POST /frames/{f}/meals/recipes/{id}/add_to_grocery_list` (existing).
 
-### Meal sittings are create-only — NEGATIVE RESULT (probed 2026-07-30)
+### Meal sittings ARE editable and deletable — RESOLVED 2026-08-24 (supersedes the earlier negative result)
 
-`POST /frames/{f}/meals/sittings` is the only route we can reach on that resource. Every other verb and shape probed returned a **routing** 404, so there is currently no way to read one sitting, edit a planned meal, or delete one. Recorded so nobody re-runs this.
+The routes exist. They are **members one level below the sitting**, under
+`/instances/{instanceISO}` — which is exactly why the 2026-07-30 sweep missed
+them: every path probed then targeted the sitting itself
+(`/meals/sittings/{id}`) or the `/instances` *collection*, and none targeted an
+instance member.
+
+```
+GET    /frames/{f}/meals/sittings/{id}/instances?date_min=…&date_max=…&include=meal_category,meal_recipe
+PATCH  /frames/{f}/meals/sittings/{id}/instances/{instanceISO}?apply_to=…
+DELETE /frames/{f}/meals/sittings/{id}/instances/{instanceISO}?apply_to=…
+POST   /frames/{f}/meals/sittings/migrate
+```
+
+`instanceISO` is the `YYYY-MM-DD` of the occurrence being acted on and must be
+one of that sitting's `instances`. PATCH body is the flat sitting shape
+(`summary`, `description`, `note`, `date`, `rrule`, `meal_category_id`,
+`meal_recipe_id`).
+
+This also corrects the "no single-sitting read" line above: `GET
+/meals/sittings/{id}` does 404, but `GET /meals/sittings/{id}/instances` returns
+the sitting (live-verified 200).
+
+**`apply_to` is the app-wide recurrence scope**, not a meal-specific parameter —
+it is the same `ScheduledItemUpdateApplyTo` the client uses for calendar events:
+
+| value | constant | semantics (each verified live) |
+|---|---|---|
+| `one` | `This` | Splits that occurrence out into its own standalone sitting (new id, `rrule: null`) and drops the date from the original series. |
+| `future` | `Future` | Truncates the original series' rrule `UNTIL` to just before the occurrence, and creates a **new independent sitting** for the remainder. |
+| `all` | `All` | Applies to / deletes the entire series, including occurrences previously split off it. |
+
+Two behaviours worth calling out, both observed:
+
+- After `apply_to=future`, the new tail sitting is **not** reachable from the
+  original sitting's `/instances` endpoint. Re-list the date range with
+  `GET /meals/sittings` to find it, or the tail looks like it silently vanished.
+- `DELETE … ?apply_to=all` also removes sittings that were previously split off
+  that series by `apply_to=one`; a follow-up delete of the split-off id then
+  returns the controller-level `{"errors":["Record not found"]}`.
+
+**How this was found — and why the earlier sweep was sound but incomplete.** Blind
+path guessing was, as the previous note said, the wrong tool. The routes came out
+of the **web client bundle**
+(`ourskylight.com/_expo/static/js/web/index-*.js`), which contains the API layer
+in readable-enough minified form — `_e.updateMeal`, `_e.deleteMeal`, `_e.getMeal`
+and `_e.migrateDinnerPlans` sit next to each other, and the `apply_to` enum is a
+plain object literal (`t.This="one",t.Future="future",t.All="all"`). Bundle
+inspection needs no auth, no mutation and no traffic capture; it is the cheapest
+first move for any route this document is missing. Every route above was then
+exercised against the live API on a throwaway series before being written down.
+
+**Note on the 404-body technique.** The routing-404 vs record-404 discrimination
+documented below still works, but only when the request sets
+`Accept: application/json`. Without it Rails serves an HTML error page for both
+cases and the two become indistinguishable.
 
 **Distinguishing "no such route" from "routed, record missing".** The two 404s have different bodies, which makes route existence testable against a nonexistent id without touching real data:
 
@@ -91,16 +146,14 @@ Three engines; then approve/undo the drafts:
 | `{"errors":["Record not found"]}` | route exists, the record does not (controller-level) |
 | `{"status":404,"error":"Not Found"}` | no such route (routing-level) |
 
-Control: all four of `GET`/`PATCH`/`PUT`/`DELETE /frames/{f}/meals/recipes/{ghost-id}` return `Record not found` — member routes that do exist. Sittings never produce that body.
+Control: all four of `GET`/`PATCH`/`PUT`/`DELETE /frames/{f}/meals/recipes/{ghost-id}` return `Record not found` — member routes that do exist.
 
-Probed against a ghost id, all returning the routing-level 404:
+Probed against a ghost id on 2026-07-30 and confirmed dead (retained so nobody re-runs them):
 
-- Member routes: `GET`, `PUT`, `PATCH`, `DELETE /frames/{f}/meals/sittings/{id}`. Note the per-verb check matters — Rails routes per verb, so a dead `GET show` would not by itself rule out `update`/`destroy`. Here all four are dead.
-- Collection-level bulk patterns borrowed from elsewhere in this API: `DELETE …/meals/sittings/bulk_destroy { ids }` (as `lists.ts` uses), `DELETE …/meals/sittings/destroy_multiple?sitting_ids[]=` and `?ids[]=` (as `messages.ts` uses), `DELETE …/meals/sittings { ids }`.
+- Member routes directly on the sitting: `GET`, `PUT`, `PATCH`, `DELETE /frames/{f}/meals/sittings/{id}`.
+- Collection-level bulk patterns borrowed from elsewhere in this API: `DELETE …/meals/sittings/bulk_destroy { ids }`, `DELETE …/meals/sittings/destroy_multiple?sitting_ids[]=` and `?ids[]=`, `DELETE …/meals/sittings { ids }`.
 - Alternate resource names: `/frames/{f}/meal_sittings/{id}`, `/frames/{f}/meals/meal_sittings/{id}`.
-- Instance-scoped, by analogy with chores' `/completions`: `DELETE` and `PUT …/meals/sittings/{id}/instances`.
-
-**Caveat:** this proves those specific paths do not exist, not that the app cannot delete a planned meal — it plainly can, so a route exists that these guesses missed. Finding it needs app-traffic capture or web-bundle inspection (the method behind the rest of this document), not more blind path guessing.
+- Instance-scoped **collection**: `DELETE` and `PUT …/meals/sittings/{id}/instances`. Note the working routes are the instance **member** (`…/instances/{instanceISO}`) — the collection itself only answers `GET`.
 
 ## Frame / device / reminders
 

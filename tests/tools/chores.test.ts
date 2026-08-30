@@ -4,10 +4,19 @@ import { makeClient } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  const server = { tool: (n: string, _d: string, _s: any, cb: any) => { tools[n] = cb; } } as any;
+  // Take the LAST argument as the handler: tools registered with an
+  // annotations object (destructiveHint on the gated update/delete) use the
+  // 5-arg form, and a fixed 4th-arg read captures the annotations instead.
+  const annotations: Record<string, any> = {};
+  const schemas: Record<string, any> = {};
+  const server = { tool: (n: string, ...rest: any[]) => {
+    tools[n] = rest[rest.length - 1];
+    schemas[n] = rest[1];
+    if (rest.length === 4) annotations[n] = rest[2];
+  } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerChoreTools(server, async () => client);
-  return { tools, request, resolveFrameId };
+  return { tools, annotations, schemas, request, resolveFrameId };
 }
 
 afterEach(() => {
@@ -212,6 +221,7 @@ describe('chore tools', () => {
       description: 'All rooms',
       reward_points: 3,
       apply_to: 'this_and_future',
+      confirm: true,
     });
     expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252/chores/5', {
       body: { summary: 'Vacuum', category_id: 42, start: '2026-06-01', description: 'All rooms', reward_points: 3, apply_to: 'this_and_future' },
@@ -360,7 +370,7 @@ describe('chore tools', () => {
   it('delete_chore passes apply_to as a query param when provided', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
-    await tools.skylight_delete_chore({ id: '5', apply_to: 'all' });
+    await tools.skylight_delete_chore({ id: '5', apply_to: 'all', confirm: true });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/chores/5', { query: { apply_to: 'all' } });
   });
 
@@ -476,5 +486,36 @@ describe('chore tools', () => {
     });
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/rewards', expect.any(Object));
     expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+});
+
+// The confirm gate is scoped to blast radius, not to "is a delete".
+describe('confirm gate — scoped to blast radius', () => {
+  it('delete_chore does NOT gate a plain delete or apply_to:one', async () => {
+    for (const args of [{ id: '5' }, { id: '5', apply_to: 'one' }]) {
+      const { tools, request } = harness();
+      request.mockResolvedValue(undefined);
+      await tools.skylight_delete_chore(args);
+      expect(request, JSON.stringify(args)).toHaveBeenCalled();
+    }
+  });
+
+  it('delete_chore gates apply_to:all and makes NO request', async () => {
+    const { tools, request } = harness();
+    const res = await tools.skylight_delete_chore({ id: '5', apply_to: 'all' });
+    expect(request).not.toHaveBeenCalled();
+    expect(JSON.parse(res.content[0].text)).toMatchObject({ dryRun: true, method: 'DELETE' });
+    expect(JSON.parse(res.content[0].text).action).toMatch(/ENTIRE series/);
+  });
+
+  it('update_chore gates this_and_future and all, but not this', async () => {
+    const gated = harness();
+    await gated.tools.skylight_update_chore({ id: '5', summary: 'x', apply_to: 'this_and_future' });
+    expect(gated.request).not.toHaveBeenCalled();
+
+    const ungated = harness();
+    ungated.request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: {} } });
+    await ungated.tools.skylight_update_chore({ id: '5', summary: 'x', apply_to: 'this' });
+    expect(ungated.request).toHaveBeenCalled();
   });
 });
