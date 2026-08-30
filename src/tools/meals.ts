@@ -176,7 +176,16 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_update_meal', "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape.",
     {
       id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
-      instance_date: z.string().describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
+      // Validated, unlike the same-named param on `skylight_complete_chore_instance`,
+      // because THIS one is interpolated into the request PATH. A model passing
+      // `2026-09-08T00:00:00Z` gets a routing 404 that reads like "no such
+      // sitting" rather than a schema error naming the real problem. In
+      // chores.ts the value rides in the body, where a bad format surfaces as a
+      // 422 that says so — so this is not a repo-wide convention change.
+      instance_date: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'instance_date must be exactly YYYY-MM-DD (no time component)')
+        .describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
       apply_to: APPLY_TO,
       summary: z.string().optional().describe('New meal name. The create route 422s when this is non-blank and meal_recipe_id is also set; whether PATCH enforces the same rule is UNVERIFIED, so prefer setting one or the other.'),
       description: z.string().optional().describe('Ingredients / instructions.'),
@@ -214,7 +223,16 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   server.tool('skylight_delete_meal', "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to. There is no undo — without confirm:true this returns a dry-run preview of exactly what would be deleted and makes NO network call; with confirm:true it deletes.",
     {
       id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
-      instance_date: z.string().describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
+      // Validated, unlike the same-named param on `skylight_complete_chore_instance`,
+      // because THIS one is interpolated into the request PATH. A model passing
+      // `2026-09-08T00:00:00Z` gets a routing 404 that reads like "no such
+      // sitting" rather than a schema error naming the real problem. In
+      // chores.ts the value rides in the body, where a bad format surfaces as a
+      // 422 that says so — so this is not a repo-wide convention change.
+      instance_date: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'instance_date must be exactly YYYY-MM-DD (no time component)')
+        .describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
       apply_to: APPLY_TO,
       frameId: z.string().optional(),
       confirm: schemaConfirm,

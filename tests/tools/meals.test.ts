@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { registerMealTools } from '../../src/tools/meals.js';
 import { makeClient } from './_setup.js';
 
@@ -9,13 +10,18 @@ function harness() {
   const annotations: Record<string, any> = {};
   // `rest` is [description, schema, handler] or, for the 5-arg form,
   // [description, schema, annotations, handler].
+  // Schemas are captured too: the harness calls handlers DIRECTLY, so zod never
+  // runs on this path and schema-level rules (e.g. instance_date's format) are
+  // invisible to a handler test. They have to be asserted against the schema.
+  const schemas: Record<string, any> = {};
   const server = { tool: (name: string, ...rest: any[]) => {
     tools[name] = rest[rest.length - 1];
+    schemas[name] = rest[1];
     if (rest.length === 4) annotations[name] = rest[2];
   } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerMealTools(server, async () => client);
-  return { tools, annotations, request, resolveFrameId };
+  return { tools, annotations, schemas, request, resolveFrameId };
 }
 
 describe('meal tools', () => {
@@ -388,6 +394,21 @@ describe('meal tools', () => {
   //
   // The route is a member under /instances/{instanceISO}, NOT on the sitting
   // itself — see the note above skylight_update_meal in src/tools/meals.ts.
+
+  // instance_date is interpolated into the PATH, so a bad format produces a
+  // routing 404 that reads like "no such sitting" rather than naming the real
+  // problem. Asserted on the SCHEMA because the harness bypasses zod.
+  it.each(['skylight_update_meal', 'skylight_delete_meal'])(
+    '%s rejects an instance_date that is not exactly YYYY-MM-DD',
+    (tool) => {
+      const { schemas } = harness();
+      const field = z.object(schemas[tool]).shape.instance_date;
+      expect(field.safeParse('2026-09-08').success).toBe(true);
+      for (const bad of ['2026-09-08T00:00:00Z', '2026-9-8', '08-09-2026', '', 'today']) {
+        expect(field.safeParse(bad).success, bad).toBe(false);
+      }
+    },
+  );
 
   it('update_meal PATCHes the instance route with apply_to and the sideload include', async () => {
     const { tools, request } = harness();
