@@ -426,7 +426,7 @@ describe('meal tools', () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: [] });
     await tools.skylight_update_meal({
-      id: '42', instance_date: '2026-09-08', apply_to: 'all', rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7,
+      id: '42', instance_date: '2026-09-08', apply_to: 'all', rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7, confirm: true,
     });
     const body = request.mock.calls[0][2].body;
     expect(body).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7 });
@@ -525,5 +525,35 @@ it('update_meal flattens a single-resource data object, not just an array', asyn
     request.mockResolvedValue({ data: [{ id: '42', type: 'meal_sitting', attributes: { summary: 'Tacos' } }] });
     const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all', confirm: true });
     expect(JSON.parse(out.content[0].text)).toEqual([{ id: '42', type: 'meal_sitting', summary: 'Tacos' }]);
+  });
+});
+
+describe('meal confirm gate — scoped to blast radius', () => {
+  it('delete_meal does NOT gate apply_to:one', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    expect(request).toHaveBeenCalled();
+  });
+
+  it.each(['future', 'all'])('delete_meal gates apply_to:%s and makes NO request', async (scope) => {
+    const { tools, request } = harness();
+    const res = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope });
+    expect(request).not.toHaveBeenCalled();
+    expect(JSON.parse(res.content[0].text).dryRun).toBe(true);
+  });
+
+  it.each(['future', 'all'])('update_meal gates apply_to:%s and makes NO request', async (scope) => {
+    const { tools, request } = harness();
+    const res = await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope, summary: 'x' });
+    expect(request).not.toHaveBeenCalled();
+    expect(JSON.parse(res.content[0].text).willSend).toEqual({ summary: 'x' });
+  });
+
+  it('update_meal does NOT gate apply_to:one', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', summary: 'x' });
+    expect(request).toHaveBeenCalled();
   });
 });

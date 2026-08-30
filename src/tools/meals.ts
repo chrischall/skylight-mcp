@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
-import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 // LIVE-VERIFIED: GET /frames/{f}/meals/sittings requires BOTH date_min and
 // date_max (each is a separate 422 — "Date min is required." / "Date max is
@@ -173,6 +173,22 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     .enum(['one', 'future', 'all'])
     .describe("Recurrence scope: 'one' = just this occurrence (splits it out of the series), 'future' = this and all later occurrences (splits the tail into a new sitting), 'all' = the whole series.");
 
+  interface UpdateMealArgs {
+    id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all';
+    summary?: string; description?: string; note?: string; date?: string; rrule?: string;
+    meal_category_id?: string | number; meal_recipe_id?: string | number;
+    frameId?: string; confirm?: boolean;
+  }
+
+  const updateMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to, summary, description, note, date, rrule, meal_category_id, meal_recipe_id }: UpdateMealArgs) => {
+    const body = pruneUndefined({ summary, description, note, date, rrule, meal_category_id, meal_recipe_id });
+    const doc = await c.request<SittingDoc>('PATCH', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
+      query: { apply_to, include: SITTING_INCLUDE },
+      body,
+    });
+    return textContent(flattenSittings(doc));
+  });
+
   server.tool('skylight_update_meal', "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape.",
     {
       id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
@@ -195,19 +211,33 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       meal_category_id: idParam.optional().describe('Move to another slot (breakfast/lunch/dinner).'),
       meal_recipe_id: idParam.optional().describe('Link a different recipe.'),
       frameId: z.string().optional(),
+      confirm: schemaConfirm,
     },
     // Destructive despite being an "update": per the live findings above,
     // apply_to 'one' and 'future' do not edit in place — they rewrite the
     // original series' rrule and spawn additional sittings.
     { destructiveHint: true },
-    frameScoped(getClient, async (c, f, { id, instance_date, apply_to, summary, description, note, date, rrule, meal_category_id, meal_recipe_id }: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; summary?: string; description?: string; note?: string; date?: string; rrule?: string; meal_category_id?: string | number; meal_recipe_id?: string | number; frameId?: string }) => {
-      const body = pruneUndefined({ summary, description, note, date, rrule, meal_category_id, meal_recipe_id });
-      const doc = await c.request<SittingDoc>('PATCH', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
-        query: { apply_to, include: SITTING_INCLUDE },
-        body,
-      });
-      return textContent(flattenSittings(doc));
-    }));
+    async (args: UpdateMealArgs) => {
+      // Same rule as the delete: 'one' edits the occurrence named, but
+      // 'future' and 'all' rewrite the series and spawn sittings the caller
+      // did not name. The preview shows the body AND the scope before any of
+      // that happens.
+      const gate = affectsMultipleOccurrences(args.apply_to)
+        ? previewUnlessConfirmed(
+            args.confirm,
+            `Update planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' rewrites the series and affects MORE than this one occurrence`,
+            'PATCH',
+            '/frames/{frame}/meals/sittings/{id}/instances/{instance_date}',
+            pruneUndefined({
+              summary: args.summary, description: args.description, note: args.note,
+              date: args.date, rrule: args.rrule,
+              meal_category_id: args.meal_category_id, meal_recipe_id: args.meal_recipe_id,
+            }),
+          )
+        : null;
+      if (gate) return gate;
+      return updateMeal(args);
+    });
 
   const deleteMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to }: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string }) => {
     const doc = await c.request<SittingDoc>('DELETE', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
@@ -239,13 +269,20 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     },
     { destructiveHint: true },
     async (args: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string; confirm?: boolean }) => {
-      const gate = previewUnlessConfirmed(
-        args.confirm,
-        `Delete planned meal ${args.id} at ${args.instance_date} (scope: ${args.apply_to})`,
-        'DELETE',
-        '/frames/{frame}/meals/sittings/{id}/instances/{instance_date}',
-        { id: args.id, instance_date: args.instance_date, apply_to: args.apply_to },
-      );
+      // Gated only when the scope reaches PAST the occurrence named: `future`
+      // truncates the series and takes the whole tail, `all` reaches
+      // occurrences previously split off it. `one` deletes exactly what the
+      // caller asked for, so it costs no second round-trip. See
+      // `affectsMultipleOccurrences` for the repo-wide rule.
+      const gate = affectsMultipleOccurrences(args.apply_to)
+        ? previewUnlessConfirmed(
+            args.confirm,
+            `Delete planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' removes MORE than this one occurrence`,
+            'DELETE',
+            '/frames/{frame}/meals/sittings/{id}/instances/{instance_date}',
+            { id: args.id, instance_date: args.instance_date, apply_to: args.apply_to },
+          )
+        : null;
       if (gate) return gate;
       return deleteMeal(args);
     });

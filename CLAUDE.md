@@ -78,6 +78,27 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 | ai.ts | `skylight_generate_meal_plan`, `skylight_generate_activity_ideas`, `skylight_get_auto_creation_intent`, `skylight_list_auto_creation_intents`, `skylight_list_auto_creation_drafts`, `skylight_list_auto_creation_items`, `skylight_approve_auto_creation`, `skylight_undo_auto_creation` |
 | photos.ts | `skylight_upload_photo`, `skylight_import_events_from_photo` *(best-effort)* |
 
+### Confirm gates
+
+A destructive API tool is confirm-gated when its `apply_to` scope affects MORE
+than the occurrence the caller named — not merely because the call is
+irreversible. `affectsMultipleOccurrences` (`src/tools/_confirm.ts`) is the
+single decision point; `future` / `this_and_future` / `all` gate, `one` /
+`this` / an omitted `apply_to` do not.
+
+The rule exists because blast radius, not reversibility, is what a caller
+cannot see from the call. `skylight_delete_recipe` destroys the recipe you
+named and stays ungated. `skylight_delete_meal` at `apply_to: 'all'` also
+reaches occurrences previously split off the series, and `'future'` truncates
+the original's `UNTIL` and takes the whole tail — neither is visible in the
+arguments. Gating on "is a delete" instead would tax every ordinary delete in
+the repo with a second round-trip and still not distinguish these.
+
+Gated today: `skylight_update_meal`, `skylight_delete_meal`,
+`skylight_update_chore`, `skylight_delete_chore`. All four also carry
+`destructiveHint: true`, which is the separate machine-readable signal a host
+uses to decide whether to prompt — the gate does not replace it.
+
 ### Known unknowns — write payload shapes
 
 Write-tool payload shapes have been partially verified live:
