@@ -5,7 +5,7 @@
 
 ### Features
 
-* **meals:** add update/delete for meal sittings via instance routes ([#107](https://github.com/chrischall/skylight-mcp/issues/107)) ([800cbfd](https://github.com/chrischall/skylight-mcp/commit/800cbfd0491abbd9bb278fd5a1aa3f085901c04f))
+* **meals:** add update/delete for meal sittings via instance routes (thanks @iamlich3n) ([#107](https://github.com/chrischall/skylight-mcp/issues/107)) ([800cbfd](https://github.com/chrischall/skylight-mcp/commit/800cbfd0491abbd9bb278fd5a1aa3f085901c04f))
 
 ## [0.7.1](https://github.com/chrischall/skylight-mcp/compare/v0.7.0...v0.7.1) (2026-08-28)
 
