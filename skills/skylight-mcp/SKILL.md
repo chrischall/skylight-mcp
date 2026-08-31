@@ -55,13 +55,20 @@ Everything is scoped to a **frame** (your family hub); pass an optional `frameId
 Four tools return a **dry-run instead of acting** when their `apply_to` reaches
 past the occurrence you named:
 
-| tool | gates at |
-| --- | --- |
-| `skylight_update_meal`, `skylight_delete_meal` | `future`, `all` |
-| `skylight_update_chore`, `skylight_delete_chore` | `this_and_future`, `all` |
+The four do NOT share one vocabulary, so they are listed separately — an
+earlier version of this table grouped the chore tools and named
+`this_and_future` for `skylight_delete_chore`, which that tool's schema rejects
+outright.
 
-`one` / `this` / an omitted `apply_to` act immediately — they affect exactly what
-you named, so they cost no extra round-trip.
+| tool | `apply_to` accepts | gates at | acts immediately at |
+| --- | --- | --- | --- |
+| `skylight_update_meal` | `one` \| `future` \| `all` (required) | `future`, `all` | `one` |
+| `skylight_delete_meal` | `one` \| `future` \| `all` (required) | `future`, `all` | `one` |
+| `skylight_update_chore` | `this` \| `this_and_future` \| `all` (optional) | `this_and_future`, `all` | `this`, omitted |
+| `skylight_delete_chore` | `one` \| `all` (optional) | `all` | `one`, omitted |
+
+A scope that acts immediately affects exactly what you named, so it costs no
+extra round-trip.
 
 When gated, the response is `{"dryRun": true, ...}` and **no request was made**.
 Re-issue the same call with `confirm: true` to perform it. Do NOT report the
