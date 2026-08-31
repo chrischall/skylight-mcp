@@ -50,6 +50,29 @@ Everything is scoped to a **frame** (your family hub); pass an optional `frameId
 | Chores & rewards | `skylight_list_chores`, `skylight_create_chore`, `skylight_complete_chore`, `skylight_list_rewards` |
 | Meals | `skylight_list_meals`, `skylight_list_recipes`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_plan_meal`, `skylight_update_meal`, `skylight_delete_meal`, `skylight_add_recipe_to_grocery_list` |
 
+## Confirm gates on recurrence-scoped writes
+
+Four tools return a **dry-run instead of acting** when their `apply_to` reaches
+past the occurrence you named:
+
+| tool | gates at |
+| --- | --- |
+| `skylight_update_meal`, `skylight_delete_meal` | `future`, `all` |
+| `skylight_update_chore`, `skylight_delete_chore` | `this_and_future`, `all` |
+
+`one` / `this` / an omitted `apply_to` act immediately — they affect exactly what
+you named, so they cost no extra round-trip.
+
+When gated, the response is `{"dryRun": true, ...}` and **no request was made**.
+Re-issue the same call with `confirm: true` to perform it. Do NOT report the
+dry-run as if the change happened: the sitting or chore is still there.
+
+The rule is blast radius, not irreversibility — `skylight_delete_recipe` is just
+as permanent and is ungated, because it destroys only what you named. An
+`apply_to` write can reach occurrences you did not name: `all` includes ones
+previously split off the series, and `future` truncates the series' `UNTIL` and
+takes the whole tail with it.
+
 ## Notes
 
 - `skylight_complete_chore` marks a chore complete; completing a single occurrence of a recurring chore isn't separately exposed.
