@@ -6,7 +6,7 @@
 ### Documentation
 
 * **skill:** document the confirm gate on recurrence-scoped writes ([#134](https://github.com/chrischall/skylight-mcp/issues/134)) ([65ef437](https://github.com/chrischall/skylight-mcp/commit/65ef43780150ba04de9b6e8730c42bf86929b324))
-* **skill:** fix the gate table, and hold it to the schemas (thanks @{"message":"Not Found","documentation_url":"https://docs.github.com/rest/pulls/pulls#get-a-pull-request","status":"404"}) ([#137](https://github.com/chrischall/skylight-mcp/issues/137)) ([6086fc9](https://github.com/chrischall/skylight-mcp/commit/6086fc933feb7e3d366f3dfa491eeb071d898fad)), closes [#136](https://github.com/chrischall/skylight-mcp/issues/136)
+* **skill:** fix the gate table, and hold it to the schemas ([#137](https://github.com/chrischall/skylight-mcp/issues/137)) ([6086fc9](https://github.com/chrischall/skylight-mcp/commit/6086fc933feb7e3d366f3dfa491eeb071d898fad)), closes [#136](https://github.com/chrischall/skylight-mcp/issues/136)
 
 ## [0.8.0](https://github.com/chrischall/skylight-mcp/compare/v0.7.1...v0.8.0) (2026-08-30)
 
