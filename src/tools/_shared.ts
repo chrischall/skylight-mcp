@@ -17,6 +17,18 @@ export { flattenJsonApi, pruneUndefined };
 export interface JsonApiResource { id: string; type: string; attributes?: Record<string, unknown>; }
 export interface JsonApiDoc { data: JsonApiResource | JsonApiResource[]; }
 
+/** A JSON:API resource identifier — the `{ id, type }` pointer in a relationship. */
+export interface ResourceRef { id: string; type: string }
+
+/** A resource whose `relationships` are load-bearing. `flattenJsonApi()` drops
+ *  them (see the JSON:API flattening convention in CLAUDE.md), so the handlers
+ *  that must keep them — `flattenChores`, `flattenSittings` — walk this shape
+ *  instead of `JsonApiResource`. */
+export interface RelatedResource extends ResourceRef {
+  attributes?: Record<string, unknown>;
+  relationships?: Record<string, { data?: ResourceRef | ResourceRef[] | null }>;
+}
+
 export type GetClient = () => Promise<SkylightClient>;
 
 /** Wrap a frame-scoped tool handler: resolves the client + frame id once,
