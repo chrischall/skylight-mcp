@@ -5,7 +5,7 @@
 
 ### Bug Fixes
 
-* **chores:** inline category_id assignee into skylight_list_chores output ([#148](https://github.com/chrischall/skylight-mcp/issues/148)) ([d663d4f](https://github.com/chrischall/skylight-mcp/commit/d663d4f2bd42ef8b87da7b0ddc42c5383986c82e))
+* **chores:** inline category_id assignee into skylight_list_chores output (thanks @Weetermachine) ([#148](https://github.com/chrischall/skylight-mcp/issues/148)) ([d663d4f](https://github.com/chrischall/skylight-mcp/commit/d663d4f2bd42ef8b87da7b0ddc42c5383986c82e))
 
 
 ### Documentation
