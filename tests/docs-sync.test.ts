@@ -31,6 +31,7 @@ import { registerTaskTools } from '../src/tools/tasks.js';
 import { registerRewardTools } from '../src/tools/rewards.js';
 import { registerAiTools } from '../src/tools/ai.js';
 import { registerPhotoTools } from '../src/tools/photos.js';
+import { registerHealthcheckTools } from '../src/tools/health.js';
 import type { GetClient } from '../src/tools/_shared.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,6 +56,7 @@ const MODULES: Array<[file: string, register: (s: McpServer, g: GetClient) => vo
   ['rewards.ts', registerRewardTools],
   ['ai.ts', registerAiTools],
   ['photos.ts', registerPhotoTools],
+  ['health.ts', registerHealthcheckTools],
 ];
 
 /** Register every module against a stub server; return file → tool names. */
@@ -64,7 +66,8 @@ function registeredByModule(): Map<string, string[]> {
   }) as unknown as GetClient;
   return new Map(MODULES.map(([file, register]) => {
     const names: string[] = [];
-    register({ tool: (n: string) => { names.push(n); } } as unknown as McpServer, getClient);
+    const capture = (n: string) => { names.push(n); };
+    register({ tool: capture, registerTool: capture } as unknown as McpServer, getClient);
     return [file, names];
   }));
 }
