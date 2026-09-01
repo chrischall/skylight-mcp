@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/chrischall/skylight-mcp/compare/v0.8.2...v0.9.0) (2026-09-01)
+
+
+### Features
+
+* **health:** add skylight_healthcheck ([#143](https://github.com/chrischall/skylight-mcp/issues/143)) ([0f88f85](https://github.com/chrischall/skylight-mcp/commit/0f88f851504e43696b044dfdd518d023f4b5e2a9))
+
 ## [0.8.2](https://github.com/chrischall/skylight-mcp/compare/v0.8.1...v0.8.2) (2026-09-01)
 
 
