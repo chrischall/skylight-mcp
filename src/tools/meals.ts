@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc, type RelatedResource, type ResourceRef } from './_shared.js';
 import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 // LIVE-VERIFIED: GET /frames/{f}/meals/sittings requires BOTH date_min and
@@ -23,13 +23,7 @@ import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } fro
 // relationship 500s, so only relationships verified to return 200 belong here.
 const SITTING_INCLUDE = 'meal_category,meal_recipe,profiles';
 
-/** A JSON:API resource identifier — the `{ id, type }` pointer in a relationship. */
-interface ResourceRef { id: string; type: string }
-interface SittingResource extends ResourceRef {
-  attributes?: Record<string, unknown>;
-  relationships?: Record<string, { data?: ResourceRef | ResourceRef[] | null }>;
-}
-interface SittingDoc { data?: SittingResource | SittingResource[] | null; included?: SittingResource[] }
+interface SittingDoc { data?: RelatedResource | RelatedResource[] | null; included?: RelatedResource[] }
 
 /**
  * Flatten meal sittings, inlining their sideloaded relationships.

@@ -1,18 +1,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource } from './_shared.js';
 import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
-/** A JSON:API resource identifier — the `{ id, type }` pointer in a relationship. */
-interface ResourceRef { id: string; type: string }
-interface ChoreResource extends ResourceRef {
-  attributes?: Record<string, unknown>;
-  relationships?: Record<string, { data?: ResourceRef | ResourceRef[] | null }>;
-}
-interface ChoreDoc { data?: ChoreResource | ChoreResource[] | null }
+interface ChoreDoc { data?: RelatedResource | RelatedResource[] | null }
 
 /**
- * Flatten chores, inlining each chore's assignee.
+ * Flatten one chore, inlining its assignee.
  *
  * LIVE-VERIFIED: a chore's assigned family member exists ONLY as the
  * `relationships.category.data` ref — there is no `category_id` attribute —
@@ -25,33 +19,48 @@ interface ChoreDoc { data?: ChoreResource | ChoreResource[] | null }
  * a bare ref carries nothing but the id anyway, and `category_id` is the name
  * the chore write tools already use for the same value.
  */
-function flattenChores(doc: ChoreDoc | undefined): Record<string, unknown>[] {
-  const data = doc?.data;
-  const rows = Array.isArray(data) ? data : data ? [data] : [];
-  return rows.map((chore) => {
-    const flat: Record<string, unknown> = { ...chore.attributes, id: chore.id, type: chore.type };
-    for (const [rel, key] of [['category', 'category_id'], ['completed_category', 'completed_category_id']] as const) {
-      const ref = chore.relationships?.[rel]?.data;
-      // Guarded on the attribute NOT already carrying the key, so if the API
-      // ever starts returning it directly the attribute value wins.
-      if (ref && !Array.isArray(ref) && flat[key] === undefined) flat[key] = String(ref.id);
+function flattenChore(chore: RelatedResource): Record<string, unknown> {
+  const flat: Record<string, unknown> = { ...chore.attributes, id: chore.id, type: chore.type };
+  for (const [rel, key] of [['category', 'category_id'], ['completed_category', 'completed_category_id']] as const) {
+    const ref = chore.relationships?.[rel]?.data;
+    if (Array.isArray(ref)) {
+      // A multi-member assignment — `skylight_create_recurring_chore` takes the
+      // same value as `category_ids`, so surface the plural rather than dropping
+      // the ref: an absent `category_id` reads as *unassigned*, a wrong answer.
+      flat[`${key}s`] = ref.map((r) => String(r.id));
+      continue;
     }
-    return flat;
-  });
+    // An attribute of the same name wins, so the inlining only fills a gap if
+    // the API ever starts returning the id directly. Either way the value is
+    // stringified, so one list can never mix `111` and `"111"`.
+    const id = flat[key] ?? ref?.id;
+    if (id != null) flat[key] = String(id);
+  }
+  return flat;
+}
+
+/** Flatten the chore-collection envelope. `GET /frames/{f}/chores` is a
+ *  collection route and this has no other caller, so `data` is always an array;
+ *  an envelope shaped any other way is one we do not recognise, and passing it
+ *  to the shared flattener verbatim beats answering a confident empty list. */
+function flattenChores(doc: ChoreDoc): unknown {
+  const rows = doc.data;
+  if (!Array.isArray(rows)) return flattenJsonApi(doc);
+  return rows.map(flattenChore);
 }
 
 export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.tool(
     'skylight_list_chores',
-    'List chores for a Skylight frame within a required date range. Each chore carries its assignee in `category_id` (family-member category — resolve names via skylight_list_categories) and, for a completed up-for-grabs chore, who did it in `completed_category_id`.',
+    'List chores for a Skylight frame within a required date range. Each chore carries its assignee in `category_id` (family-member category — resolve names via skylight_list_categories), or in `category_ids` when it is assigned to several members, and, for a completed up-for-grabs chore, who did it in `completed_category_id`.',
     {
       after: z.string().describe('YYYY-MM-DD inclusive lower bound (required by the API).'),
       before: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { after, before }: { after: string; before: string; frameId?: string }) => {
-      const doc = await c.request<ChoreDoc>('GET', `/frames/${f}/chores`, { query: { after, before } });
-      return textContent(flattenChores(doc));
+      const doc = await c.request<ChoreDoc | undefined>('GET', `/frames/${f}/chores`, { query: { after, before } });
+      return doc ? textContent(flattenChores(doc)) : textContent([]);
     }),
   );
 

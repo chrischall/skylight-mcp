@@ -99,13 +99,41 @@ describe('chore tools', () => {
     expect(JSON.parse(out.content[0].text)[0].category_id).toBe('42');
   });
 
-  it('list_chores leaves a chore without relationships untouched', async () => {
+  it('list_chores omits category_id for an unassigned chore (category.data null)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({
       data: [{ id: '4', type: 'chore', attributes: { summary: 'Sweep' }, relationships: { category: { data: null } } }],
     });
     const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
     expect(JSON.parse(out.content[0].text)).toEqual([{ id: '4', type: 'chore', summary: 'Sweep' }]);
+  });
+
+  it('list_chores omits category_id for a chore with no relationships at all', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '4b', type: 'chore', attributes: { summary: 'Mop' } }] });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '4b', type: 'chore', summary: 'Mop' }]);
+  });
+
+  it('list_chores emits category_ids for a multi-member assignment', async () => {
+    // skylight_create_recurring_chore takes several members as `category_ids`,
+    // so a multi-assignee ref surfaces under the plural rather than being
+    // dropped — a missing `category_id` would read as *unassigned*.
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        {
+          id: '6',
+          type: 'chore',
+          attributes: { summary: 'Yard work' },
+          relationships: { category: { data: [{ id: 10901869, type: 'category' }, { id: '10901870', type: 'category' }] } },
+        },
+      ],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '6', type: 'chore', summary: 'Yard work', category_ids: ['10901869', '10901870'] },
+    ]);
   });
 
   it('list_chores prefers an attribute category_id over the relationship ref', async () => {
@@ -124,6 +152,44 @@ describe('chore tools', () => {
     });
     const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
     expect(JSON.parse(out.content[0].text)[0].category_id).toBe('111');
+  });
+
+  it('list_chores stringifies an attribute category_id too', async () => {
+    // The attribute wins, but it must not come back in a different shape from
+    // the inlined ref — one list can never mix 111 and "111".
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{ id: '5b', type: 'chore', attributes: { summary: 'Laundry', category_id: 111 } }],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)[0].category_id).toBe('111');
+  });
+
+  it('list_chores falls back to the ref when the attribute is explicitly null', async () => {
+    // Rails serializers commonly emit `category_id: null` for an unset
+    // association; that must not suppress the ref that does carry the id.
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        {
+          id: '5c',
+          type: 'chore',
+          attributes: { summary: 'Laundry', category_id: null },
+          relationships: { category: { data: { id: '222', type: 'category' } } },
+        },
+      ],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)[0].category_id).toBe('222');
+  });
+
+  it('list_chores passes an unrecognised envelope through the shared flattener', async () => {
+    // A non-array `data` is not a shape this collection route produces; hand it
+    // over verbatim rather than answering a confident (and undiagnosable) [].
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'chore', attributes: { summary: 'Odd one out' } } });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'chore', summary: 'Odd one out' });
   });
 
   it('list_chores returns an empty list when the response carries no document', async () => {
