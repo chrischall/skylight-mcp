@@ -127,6 +127,10 @@
     {
       "name": "skylight_list_rewards",
       "description": "List rewards configured for a frame"
+    },
+    {
+      "name": "skylight_healthcheck",
+      "description": "Resolves the credential the way real tools do, then makes one authenticated request to app.ourskylight.com. Reports which source supplied the credential, whether app.ourskylight.com accepted it, the round-trip time, and a plain-English hint distinguishing 'no credential' from 'credential rejected' from a 'app.ourskylight.com-side problem'. Call this when a real tool fails and you want to know which hop broke. Read-only; never returns the credential itself."
     }
   ]
 }
