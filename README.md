@@ -15,8 +15,8 @@ The server uses a headless email+password OAuth2 authorization-code flow — no 
 On first tool call, the server performs four steps against `https://app.ourskylight.com`:
 1. `GET /auth/session/new` — fetch the Rails CSRF token and session cookie.
 2. `POST /auth/session` — log in with email + password (must happen before OAuth authorize).
-3. `GET /oauth/authorize` — receive the one-time authorization code via redirect.
-4. `POST /oauth/token` — exchange the code for a bearer `access_token` + `refresh_token` (7-day expiry).
+3. `GET /oauth/authorize` — send an S256 PKCE `code_challenge` (the server requires it) and receive the one-time authorization code via redirect.
+4. `POST /oauth/token` — exchange the code plus the matching `code_verifier` for a bearer `access_token` + `refresh_token` (currently a 24-hour expiry; the client reads the returned `expires_in` rather than assuming).
 
 The client then refreshes the token proactively (~60 s before expiry) and reactively on any 401. No bot wall has been observed — the headless flow works directly from Node.
 
