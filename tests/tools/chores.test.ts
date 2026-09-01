@@ -46,6 +46,97 @@ describe('chore tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  it('list_chores inlines the assignee from relationships.category', async () => {
+    // The assigned family member exists ONLY as the `relationships.category`
+    // ref (no category_id attribute), which the shared flattenJsonApi() drops —
+    // see flattenChores in src/tools/chores.ts.
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        {
+          id: '1',
+          type: 'chore',
+          attributes: { summary: 'Dishes', status: 'pending' },
+          relationships: { category: { data: { id: '10901869', type: 'category' } } },
+        },
+      ],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '1', type: 'chore', summary: 'Dishes', status: 'pending', category_id: '10901869' },
+    ]);
+  });
+
+  it('list_chores inlines completed_category_id for a completed up-for-grabs chore', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        {
+          id: '2',
+          type: 'chore',
+          attributes: { summary: 'Take out trash', status: 'complete' },
+          relationships: {
+            category: { data: { id: '10901869', type: 'category' } },
+            completed_category: { data: { id: '10901870', type: 'category' } },
+          },
+        },
+      ],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '2', type: 'chore', summary: 'Take out trash', status: 'complete', category_id: '10901869', completed_category_id: '10901870' },
+    ]);
+  });
+
+  it('list_chores stringifies a numeric relationship id', async () => {
+    // JSON:API ids are conventionally strings, but nothing pins what the
+    // Skylight API sends; category_id must come back in one shape either way.
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{ id: '3', type: 'chore', attributes: {}, relationships: { category: { data: { id: 42, type: 'category' } } } }],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)[0].category_id).toBe('42');
+  });
+
+  it('list_chores leaves a chore without relationships untouched', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [{ id: '4', type: 'chore', attributes: { summary: 'Sweep' }, relationships: { category: { data: null } } }],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '4', type: 'chore', summary: 'Sweep' }]);
+  });
+
+  it('list_chores prefers an attribute category_id over the relationship ref', async () => {
+    // If the API ever starts returning category_id as an attribute, the
+    // attribute value wins — the inlining only fills the gap.
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        {
+          id: '5',
+          type: 'chore',
+          attributes: { summary: 'Laundry', category_id: '111' },
+          relationships: { category: { data: { id: '222', type: 'category' } } },
+        },
+      ],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)[0].category_id).toBe('111');
+  });
+
+  it('list_chores returns an empty list when the response carries no document', async () => {
+    // SkylightClient.request() resolves to undefined for a 204/empty body; a
+    // list GET realistically always returns a document, but an empty result
+    // beats a "Cannot read properties of undefined" TypeError if one ever
+    // does not.
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([]);
+  });
+
   // ── skylight_create_chore ────────────────────────────────────────────────
 
   it('create_chore posts flat {summary, category_id} (no wrapper)', async () => {

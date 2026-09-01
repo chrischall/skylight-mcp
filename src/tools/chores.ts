@@ -3,18 +3,55 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
+/** A JSON:API resource identifier — the `{ id, type }` pointer in a relationship. */
+interface ResourceRef { id: string; type: string }
+interface ChoreResource extends ResourceRef {
+  attributes?: Record<string, unknown>;
+  relationships?: Record<string, { data?: ResourceRef | ResourceRef[] | null }>;
+}
+interface ChoreDoc { data?: ChoreResource | ChoreResource[] | null }
+
+/**
+ * Flatten chores, inlining each chore's assignee.
+ *
+ * LIVE-VERIFIED: a chore's assigned family member exists ONLY as the
+ * `relationships.category.data` ref — there is no `category_id` attribute —
+ * and `relationships.completed_category` records who actually completed an
+ * up-for-grabs chore. The shared `flattenJsonApi()` keeps only `attributes` +
+ * `id`/`type`, so both would be dropped and the caller could not tell whose
+ * chore it is. Per the JSON:API flattening convention (see `flattenSittings`
+ * in meals.ts), inline the relationship data — here as plain `category_id` /
+ * `completed_category_id`, because chores are fetched without `?include=` so
+ * a bare ref carries nothing but the id anyway, and `category_id` is the name
+ * the chore write tools already use for the same value.
+ */
+function flattenChores(doc: ChoreDoc | undefined): Record<string, unknown>[] {
+  const data = doc?.data;
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  return rows.map((chore) => {
+    const flat: Record<string, unknown> = { ...chore.attributes, id: chore.id, type: chore.type };
+    for (const [rel, key] of [['category', 'category_id'], ['completed_category', 'completed_category_id']] as const) {
+      const ref = chore.relationships?.[rel]?.data;
+      // Guarded on the attribute NOT already carrying the key, so if the API
+      // ever starts returning it directly the attribute value wins.
+      if (ref && !Array.isArray(ref) && flat[key] === undefined) flat[key] = String(ref.id);
+    }
+    return flat;
+  });
+}
+
 export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.tool(
     'skylight_list_chores',
-    'List chores for a Skylight frame within a required date range.',
+    'List chores for a Skylight frame within a required date range. Each chore carries its assignee in `category_id` (family-member category — resolve names via skylight_list_categories) and, for a completed up-for-grabs chore, who did it in `completed_category_id`.',
     {
       after: z.string().describe('YYYY-MM-DD inclusive lower bound (required by the API).'),
       before: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
       frameId: z.string().optional(),
     },
     frameScoped(getClient, async (c, f, { after, before }: { after: string; before: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('GET', `/frames/${f}/chores`, { query: { after, before } });
-      return textContent(flattenJsonApi(doc));
+      const doc = await c.request<ChoreDoc>('GET', `/frames/${f}/chores`, { query: { after, before } });
+      return textContent(flattenChores(doc));
     }),
   );
 
