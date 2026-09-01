@@ -66,6 +66,7 @@ outright.
 | `skylight_delete_meal` | `one` \| `future` \| `all` (required) | `future`, `all` | `one` |
 | `skylight_update_chore` | `this` \| `this_and_future` \| `all` (optional) | `this_and_future`, `all` | `this`, omitted |
 | `skylight_delete_chore` | `one` \| `all` (optional) | `all` | `one`, omitted |
+| `skylight_healthcheck()` | Is this connector working? Reports which credential resolved, whether app.ourskylight.com accepted it, and what to fix. Start here when another tool fails — an empty result can mean "no data" or "never authenticated", and this separates them. |
 
 A scope that acts immediately affects exactly what you named, so it costs no
 extra round-trip.
