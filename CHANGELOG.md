@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.1](https://github.com/chrischall/skylight-mcp/compare/v0.9.0...v0.9.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* **chores:** inline category_id assignee into skylight_list_chores output ([#148](https://github.com/chrischall/skylight-mcp/issues/148)) ([d663d4f](https://github.com/chrischall/skylight-mcp/commit/d663d4f2bd42ef8b87da7b0ddc42c5383986c82e))
+
+
+### Documentation
+
+* **health:** list skylight_healthcheck in manifest.json and the tool docs ([#145](https://github.com/chrischall/skylight-mcp/issues/145)) ([f7b8303](https://github.com/chrischall/skylight-mcp/commit/f7b8303e46488e2409177d0aa0fc0355d5c396cb))
+* **mint:** declare SKYLIGHT_BASE_URL in mint.yaml ([#149](https://github.com/chrischall/skylight-mcp/issues/149)) ([a7080bc](https://github.com/chrischall/skylight-mcp/commit/a7080bcfb8baf3fab262cdad860e59acdc7e45ca))
+* **server:** declare SKYLIGHT_BASE_URL in server.json too ([#151](https://github.com/chrischall/skylight-mcp/issues/151)) ([2f5baaf](https://github.com/chrischall/skylight-mcp/commit/2f5baaf6daa4e38822c78e8ac8fa29a89eb959c0)), closes [#150](https://github.com/chrischall/skylight-mcp/issues/150)
+
 ## [0.9.0](https://github.com/chrischall/skylight-mcp/compare/v0.8.2...v0.9.0) (2026-09-01)
 
 
