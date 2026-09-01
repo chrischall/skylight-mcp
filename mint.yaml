@@ -41,6 +41,13 @@ env:
     help: >-
       Absolute path for the token cache file. Defaults to
       $MCP_DATA_DIR/.skylight-mcp/tokens.json.
+  - name: SKYLIGHT_BASE_URL
+    required: false
+    help: >-
+      Override the API base (default https://app.ourskylight.com/api). The auth
+      origin is derived from it, so pointing this elsewhere moves the login flow
+      too — and the new host MUST be added to egress.allow below, or the fence
+      blocks every call.
 state:
   dataDir: true
   reason: >-
