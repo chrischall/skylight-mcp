@@ -5,7 +5,7 @@ description: Read and manage your Skylight Calendar family hub — calendar even
 
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 113 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 114 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
 
 - **npm:** [npmjs.com/package/skylight-mcp](https://www.npmjs.com/package/skylight-mcp)
 - **Source:** [github.com/chrischall/skylight-mcp](https://github.com/chrischall/skylight-mcp)

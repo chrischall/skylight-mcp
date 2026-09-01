@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## TL;DR
 
-MCP server for Skylight Calendar — 113 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member/category management (read+write, incl. preset and custom-photo avatars).
+MCP server for Skylight Calendar — 114 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member/category management (read+write, incl. preset and custom-photo avatars).
 
 Every request carries the `skylight-api-version: 2026-05-01` header (`src/client.ts`), matching the official mobile app — without it some features 422 with "API version does not support …".
 
@@ -63,7 +63,7 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 
 ## Tool surface
 
-113 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write + device rename), `settings.ts` (5 frame-settings writes incl. the global reminder profile), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (10 people/category tools). Counts: 9 frame + 5 settings + 10 calendar + 10 member, 10 event tools (incl. both notification-settings read+write), 12 list tools (2R+10W), 10 chore tools (3R+7W), 7 reward tools (1R+6W), 11 meal tools (4R+7W), 15 message/album tools (3R+12W), 4 task-box tools (1R+3W), 8 AI auto-creation tools (4R+4W), 2 photo tools (`skylight_upload_photo`, `skylight_import_events_from_photo`).
+114 tools total. The former monolithic `frames.ts` (24 tools) is now split into four focused modules: `frames.ts` (8 core frame/device/account reads + the device-album write + device rename), `settings.ts` (5 frame-settings writes incl. the global reminder profile), `calendars.ts` (10 calendar + reminder tools), and `members.ts` (10 people/category tools). Counts: 9 frame + 5 settings + 10 calendar + 10 member, 10 event tools (incl. both notification-settings read+write), 12 list tools (2R+10W), 10 chore tools (3R+7W), 7 reward tools (1R+6W), 11 meal tools (4R+7W), 15 message/album tools (3R+12W), 4 task-box tools (1R+3W), 8 AI auto-creation tools (4R+4W), 2 photo tools (`skylight_upload_photo`, `skylight_import_events_from_photo`), and 1 healthcheck.
 
 | Module | Tools |
 |---|---|
@@ -80,6 +80,7 @@ The Skylight API returns JSON:API envelopes (`{ data: { id, type, attributes, re
 | tasks.ts | `skylight_list_tasks`, `skylight_create_task`, `skylight_update_task`, `skylight_delete_task` |
 | ai.ts | `skylight_generate_meal_plan`, `skylight_generate_activity_ideas`, `skylight_get_auto_creation_intent`, `skylight_list_auto_creation_intents`, `skylight_list_auto_creation_drafts`, `skylight_list_auto_creation_items`, `skylight_approve_auto_creation`, `skylight_undo_auto_creation` |
 | photos.ts | `skylight_upload_photo`, `skylight_import_events_from_photo` *(best-effort)* |
+| health.ts | `skylight_healthcheck` |
 
 ### Confirm gates
 

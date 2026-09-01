@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/skylight-mcp)](https://www.npmjs.com/package/skylight-mcp)
 [![license](https://img.shields.io/npm/l/skylight-mcp)](LICENSE)
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 113 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 114 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -143,6 +143,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | ai | `skylight_undo_auto_creation` | W | Undo/discard an AI auto-creation intent and its drafts |
 | photos | `skylight_upload_photo` | W | Upload a photo/video from a local file to the frame (dry-run unless `confirm:true`) |
 | photos | `skylight_import_events_from_photo` | W | Import calendar events from a photo of a flyer/invite using Skylight's AI (best-effort) |
+| health | `skylight_healthcheck` | R | Report whether the connector is working: which credential resolved, whether Skylight accepted it, and what to fix |
 
 ## Configuration
 
