@@ -49,6 +49,7 @@ Everything is scoped to a **frame** (your family hub); pass an optional `frameId
 | Shared lists | `skylight_list_lists`, `skylight_get_list_items`, `skylight_create_list`, `skylight_add_list_item`, `skylight_update_list_item`, `skylight_delete_list_item` |
 | Chores & rewards | `skylight_list_chores`, `skylight_create_chore`, `skylight_complete_chore`, `skylight_list_rewards` |
 | Meals | `skylight_list_meals`, `skylight_list_recipes`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_plan_meal`, `skylight_update_meal`, `skylight_delete_meal`, `skylight_add_recipe_to_grocery_list` |
+| Health | `skylight_healthcheck` — is this connector working? Reports which credential resolved, whether Skylight accepted it, and what to fix. Start here when another tool fails: an empty result can mean "no data" or "never authenticated", and only this separates them. |
 
 ## Confirm gates on recurrence-scoped writes
 
@@ -66,7 +67,6 @@ outright.
 | `skylight_delete_meal` | `one` \| `future` \| `all` (required) | `future`, `all` | `one` |
 | `skylight_update_chore` | `this` \| `this_and_future` \| `all` (optional) | `this_and_future`, `all` | `this`, omitted |
 | `skylight_delete_chore` | `one` \| `all` (optional) | `all` | `one`, omitted |
-| `skylight_healthcheck()` | Is this connector working? Reports which credential resolved, whether app.ourskylight.com accepted it, and what to fix. Start here when another tool fails — an empty result can mean "no data" or "never authenticated", and this separates them. |
 
 A scope that acts immediately affects exactly what you named, so it costs no
 extra round-trip.
