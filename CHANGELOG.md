@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/chrischall/skylight-mcp/compare/v0.8.1...v0.8.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **auth:** send S256 PKCE on the authorization-code login ([#141](https://github.com/chrischall/skylight-mcp/issues/141)) ([de6909f](https://github.com/chrischall/skylight-mcp/commit/de6909f52d8b36bfd55d29c5602667e2d0161761))
+
 ## [0.8.1](https://github.com/chrischall/skylight-mcp/compare/v0.8.0...v0.8.1) (2026-08-31)
 
 
