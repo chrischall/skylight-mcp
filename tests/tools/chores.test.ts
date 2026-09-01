@@ -136,6 +136,26 @@ describe('chore tools', () => {
     ]);
   });
 
+  it('list_chores emits completed_category_ids for a multi-member completion', async () => {
+    // The same array arm serves completed_category, so the tool description
+    // names both plurals; pin it here rather than leaving it implied.
+    const { tools, request } = harness();
+    request.mockResolvedValue({
+      data: [
+        {
+          id: '6b',
+          type: 'chore',
+          attributes: { summary: 'Garage', status: 'complete' },
+          relationships: { completed_category: { data: [{ id: '10901869', type: 'category' }, { id: '10901870', type: 'category' }] } },
+        },
+      ],
+    });
+    const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '6b', type: 'chore', summary: 'Garage', status: 'complete', completed_category_ids: ['10901869', '10901870'] },
+    ]);
+  });
+
   it('list_chores prefers an attribute category_id over the relationship ref', async () => {
     // If the API ever starts returning category_id as an attribute, the
     // attribute value wins — the inlining only fills the gap.

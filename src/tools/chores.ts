@@ -52,7 +52,7 @@ function flattenChores(doc: ChoreDoc): unknown {
 export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.tool(
     'skylight_list_chores',
-    'List chores for a Skylight frame within a required date range. Each chore carries its assignee in `category_id` (family-member category — resolve names via skylight_list_categories), or in `category_ids` when it is assigned to several members, and, for a completed up-for-grabs chore, who did it in `completed_category_id`.',
+    'List chores for a Skylight frame within a required date range. Each chore carries its assignee in `category_id` (a family-member category — resolve names via skylight_list_categories) and, for a completed up-for-grabs chore, who did it in `completed_category_id`. Either key is pluralised — `category_ids` / `completed_category_ids` — when the API links several members, so an absent singular key means unassigned, never multi-assigned.',
     {
       after: z.string().describe('YYYY-MM-DD inclusive lower bound (required by the API).'),
       before: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
