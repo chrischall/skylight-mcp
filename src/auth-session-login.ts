@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { CookieJar, createOAuth2Refresher, truncateErrorMessage } from '@chrischall/mcp-utils';
 
 export type HttpFetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -28,6 +29,29 @@ const DEVICE_PARAMS = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// PKCE (RFC 7636) — REQUIRED by Skylight's Doorkeeper as of 2026-08-31
+// ---------------------------------------------------------------------------
+
+/**
+ * Mint a PKCE verifier/challenge pair for one login.
+ *
+ * Skylight's authorization server enforces PKCE: a /oauth/authorize carrying
+ * no `code_challenge` answers HTTP 400 "Code challenge is required." and
+ * issues no code at all, so the login died at step 3 with the generic
+ * "could not extract authorization code" error. Reported and reproduced live
+ * on 2026-08-31.
+ *
+ * S256, not `plain`: the challenge travels in a URL (logs, Referer, history)
+ * while the verifier stays in the POST body, which is the whole point of the
+ * exchange. 32 random bytes base64url-encode to 43 chars, inside RFC 7636's
+ * 43–128 range with no padding to strip.
+ */
+function createPkcePair(): { verifier: string; challenge: string } {
+  const verifier = randomBytes(32).toString('base64url');
+  return { verifier, challenge: createHash('sha256').update(verifier).digest('base64url') };
+}
+
+// ---------------------------------------------------------------------------
 // Token normalization (login step 4)
 // ---------------------------------------------------------------------------
 
@@ -50,18 +74,7 @@ function normalizeTokenResponse(status: number, json: unknown): Tokens {
 // login() — OAuth2 authorization-code flow (LIVE-VERIFIED, 4 steps)
 // ---------------------------------------------------------------------------
 
-/**
- * Perform a full OAuth2 authorization-code login against Skylight.
- *
- * IMPORTANT ORDERING: steps must be performed in order 1→2→3→4.
- * Hitting /oauth/authorize before /auth/session poisons CSRF/session state.
- *
- * @param opts.authBaseUrl  Origin of the Skylight app, e.g. https://app.ourskylight.com
- * @param opts.email        Skylight account email
- * @param opts.password     Skylight account password
- * @param opts.deviceFingerprint  UUID to identify this "device"; generated if not supplied
- * @param httpFetch  Injectable fetch (defaults to global fetch). Must support redirect:"manual".
- */
+/** Default transport; swapped out wholesale in tests. */
 function globalFetch(url: string, init: RequestInit): Promise<Response> {
   return fetch(url, init);
 }
@@ -128,6 +141,21 @@ function describeTokenlessResponse(html: string, res: Response): string {
   return `HTTP ${status}, ${bytes} bytes of HTML — the login page markup may have changed`;
 }
 
+/**
+ * Perform a full OAuth2 authorization-code login against Skylight.
+ *
+ * IMPORTANT ORDERING: steps must be performed in order 1→2→3→4.
+ * Hitting /oauth/authorize before /auth/session poisons CSRF/session state.
+ *
+ * Step 3 carries a mandatory S256 PKCE challenge and step 4 the matching
+ * verifier; see {@link createPkcePair}.
+ *
+ * @param opts.authBaseUrl  Origin of the Skylight app, e.g. https://app.ourskylight.com
+ * @param opts.email        Skylight account email
+ * @param opts.password     Skylight account password
+ * @param opts.deviceFingerprint  UUID to identify this "device"; generated if not supplied
+ * @param httpFetch  Injectable fetch (defaults to global fetch). Must support redirect:"manual".
+ */
 export async function login(
   opts: { authBaseUrl: string; email: string; password: string; deviceFingerprint?: string },
   httpFetch: HttpFetch = globalFetch,
@@ -188,23 +216,28 @@ export async function login(
   }
 
   // -------------------------------------------------------------------------
-  // Step 3: GET /oauth/authorize — exchange session for authorization code
+  // Step 3: GET /oauth/authorize — exchange session for authorization code.
+  // The PKCE challenge is mandatory here; without it Doorkeeper 400s.
   // Follow up to 3 redirects, scanning each Location for a `code` param.
   // -------------------------------------------------------------------------
+  const { verifier, challenge } = createPkcePair();
   const authorizeUrl =
     `${authBaseUrl}/oauth/authorize` +
     `?client_id=${CLIENT_ID}&response_type=code&scope=${SCOPE}` +
-    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&code_challenge=${challenge}&code_challenge_method=S256`;
 
   let code: string | null = null;
   let nextUrl: string | null = authorizeUrl;
   let hops = 0;
+  let lastStatus = 0;
   while (nextUrl !== null && hops < 4) {
     const step3 = await httpFetch(nextUrl, {
       redirect: 'manual',
       headers: buildHeaders(),
     });
     jar.absorb(step3.headers);
+    lastStatus = step3.status;
     const loc = step3.headers.get('location') ?? '';
     const locParams = new URL(loc, authBaseUrl).searchParams;
     code = locParams.get('code');
@@ -215,7 +248,15 @@ export async function login(
   }
 
   if (!code) {
-    throw new Error('Skylight login failed: could not extract authorization code from /oauth/authorize redirect.');
+    // Name the status. A bare "no code" reads as a credential problem, but the
+    // server answers a rejected *request* with 4xx and no redirect at all —
+    // which is how the PKCE requirement presented, and why diagnosing it took
+    // a live probe of the authorize step rather than a reading of the error.
+    throw new Error(
+      `Skylight login failed: could not extract authorization code from /oauth/authorize ` +
+      `(last response HTTP ${lastStatus}). The authorization request was rejected — ` +
+      `the OAuth contract may have changed.`,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -229,6 +270,9 @@ export async function login(
     ...DEVICE_PARAMS,
     redirect_uri: REDIRECT_URI,
     code,
+    // Proves this exchange belongs to the same client that made step 3's
+    // request; omitting it against a PKCE-enforcing server yields invalid_grant.
+    code_verifier: verifier,
   }).toString();
 
   const step4 = await httpFetch(`${authBaseUrl}/oauth/token`, {
@@ -244,8 +288,8 @@ export async function login(
 }
 
 // ---------------------------------------------------------------------------
-// refresh() — OAuth2 refresh_token grant
-// NOTE: refresh grant implemented per OAuth2 standard; verify live when convenient.
+// refresh() — OAuth2 refresh_token grant (LIVE-VERIFIED 2026-08-31: returns a
+// new access token and rotates the refresh token; needs no PKCE verifier).
 // ---------------------------------------------------------------------------
 
 /**

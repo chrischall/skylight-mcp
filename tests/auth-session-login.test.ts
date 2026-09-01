@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { login, refresh, type HttpFetch } from '../src/auth-session-login.js';
 
 const AUTH_BASE = 'https://app.ourskylight.com';
@@ -179,6 +180,48 @@ describe('login', () => {
     const step2Headers = calls[1][1]?.headers as Record<string, string>;
     expect(step2Headers?.Origin).toBe(AUTH_BASE);
     expect(step2Headers?.Referer).toBe(`${AUTH_BASE}/auth/session/new`);
+  });
+
+  // -------------------------------------------------------------------------
+  // PKCE (issue: "Code challenge is required.")
+  //
+  // Skylight's Doorkeeper now enforces PKCE: a /oauth/authorize without a
+  // code_challenge answers HTTP 400 "Code challenge is required." and never
+  // issues a code. Verified live 2026-08-31.
+  // -------------------------------------------------------------------------
+
+  it('sends an S256 code_challenge on step 3', async () => {
+    const httpFetch = makeHappyFetch({});
+    await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+    const calls = (httpFetch as ReturnType<typeof vi.fn>).mock.calls;
+    const step3Url = new URL(calls[2][0] as string);
+    expect(step3Url.searchParams.get('code_challenge_method')).toBe('S256');
+    const challenge = step3Url.searchParams.get('code_challenge');
+    expect(challenge).toBeTruthy();
+    // base64url: no +, /, or = padding, and long enough to be a SHA-256 digest.
+    expect(challenge).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('sends the matching code_verifier on step 4', async () => {
+    const httpFetch = makeHappyFetch({});
+    await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+    const calls = (httpFetch as ReturnType<typeof vi.fn>).mock.calls;
+    const challenge = new URL(calls[2][0] as string).searchParams.get('code_challenge');
+    const verifier = new URLSearchParams(calls[3][1]?.body as string).get('code_verifier');
+    expect(verifier).toMatch(/^[A-Za-z0-9_-]{43,128}$/);
+    // The challenge must be the base64url SHA-256 of the verifier, or the
+    // token exchange 400s with invalid_grant.
+    expect(createHash('sha256').update(verifier!).digest('base64url')).toBe(challenge);
+  });
+
+  it('generates a fresh verifier per login', async () => {
+    const verifierFor = async () => {
+      const httpFetch = makeHappyFetch({});
+      await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
+      const calls = (httpFetch as ReturnType<typeof vi.fn>).mock.calls;
+      return new URLSearchParams(calls[3][1]?.body as string).get('code_verifier');
+    };
+    expect(await verifierFor()).not.toBe(await verifierFor());
   });
 
   it('step-3 uses redirect:manual', async () => {
@@ -532,6 +575,25 @@ describe('login', () => {
     });
     await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
       .rejects.toThrow(/could not extract authorization code/);
+  });
+
+  it('names the HTTP status when step 3 rejects the authorization request', async () => {
+    // The shape the PKCE regression took: 400, no Location, no code.
+    let callIndex = 0;
+    const httpFetch: HttpFetch = vi.fn().mockImplementation(async () => {
+      callIndex++;
+      if (callIndex === 1) return htmlResponse('<input name="authenticity_token" value="T">');
+      if (callIndex === 2) return redirectResponse(`${AUTH_BASE}/auth/session/success`);
+      return {
+        status: 400,
+        ok: false,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => 'Code challenge is required.',
+        json: async () => { throw new Error('no'); },
+      } as unknown as Response;
+    });
+    await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
+      .rejects.toThrow(/last response HTTP 400/);
   });
 
   it('handles step-3 response with no Location header (covers loc || null branch)', async () => {

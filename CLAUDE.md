@@ -8,27 +8,27 @@ MCP server for Skylight Calendar — 113 tools across calendar events (read+writ
 
 Every request carries the `skylight-api-version: 2026-05-01` header (`src/client.ts`), matching the official mobile app — without it some features 422 with "API version does not support …".
 
-Auth resolution lives in `src/auth.ts`. There is one auth path: headless email+password OAuth2 authorization-code flow (Node-direct). See "Auth resolution" below.
+Auth resolution lives in `src/auth.ts`. Two credentials are accepted: a `SKYLIGHT_REFRESH_TOKEN` you already hold (skips the login endpoint entirely), or `SKYLIGHT_EMAIL` + `SKYLIGHT_PASSWORD`, which mint one via a headless OAuth2 authorization-code flow (Node-direct). See "Auth resolution" below.
 
 The login is **lazy and cached**: `resolveAuth()` hands `SkylightClient` a bootstrap function rather than tokens, and `TokenManager` runs it only when the on-disk cache (`src/token-store.ts`) has nothing usable. A cached live token costs nothing; a cached expired one costs a refresh; only an empty or unusable cache spends a login. This matters because the login endpoint rate-limits (see the `refreshFn` note below) and a scale-to-zero host makes every start a cold one.
 
 ## Auth resolution
 
-`src/auth.ts` implements a single headless email+password OAuth2 authorization-code flow. (Skylight rejects `grant_type=password` with `unsupported_grant_type`; no browser-bridge proxy is needed — no observed bot wall.)
+`src/auth.ts` prefers a supplied `SKYLIGHT_REFRESH_TOKEN` and otherwise runs the headless email+password OAuth2 authorization-code flow below; with both set, a stale token falls back to logging in again. (Skylight rejects `grant_type=password` with `unsupported_grant_type`; no browser-bridge proxy is needed — no observed bot wall.)
 
 The flow `resolveAuth()` → `login()` performs all steps against `https://app.ourskylight.com`:
 
 1. `GET /auth/session/new` — scrape the Rails `authenticity_token`, hold the `_skylight_cloud_session` cookie.
 2. `POST /auth/session` (form: authenticity_token, email, password; `Origin`/`Referer` = app.ourskylight.com) — 302 to `/auth/session/success` on success. Login **must** happen before the OAuth authorize step — hitting authorize first poisons the CSRF/session state.
-3. `GET /oauth/authorize?client_id=skylight-mobile&response_type=code&scope=everything&redirect_uri=https://ourskylight.com/welcome` — 302 to `https://ourskylight.com/welcome?code=…`.
-4. `POST /oauth/token` (grant_type=authorization_code, client_id=skylight-mobile, scope=everything, code, redirect_uri, `skylight_api_client_device_*` device params, source=js-mobile) — returns `{ access_token, refresh_token, expires_in: 604800 (7d), token_type: Bearer }`.
+3. `GET /oauth/authorize?client_id=skylight-mobile&response_type=code&scope=everything&redirect_uri=https://ourskylight.com/welcome&code_challenge=…&code_challenge_method=S256` — 302 to `https://ourskylight.com/welcome?code=…`. **PKCE is mandatory**: without `code_challenge` the server answers HTTP 400 "Code challenge is required." and issues no code (verified live 2026-08-31).
+4. `POST /oauth/token` (grant_type=authorization_code, client_id=skylight-mobile, scope=everything, code, `code_verifier` matching step 3's challenge, redirect_uri, `skylight_api_client_device_*` device params, source=js-mobile) — returns `{ access_token, refresh_token, expires_in: 86400 (24h, observed 2026-08-31 — it was 604800 when this flow was first captured, so read it from the response, never assume), token_type: Bearer }`.
 
 No bot wall has been observed; the headless flow works directly. The server logs in once per process start, then relies on token refresh.
 
 - `src/auth.ts` — `resolveAuth()`: resolves credentials via `loadAccount()`, runs the authorization-code login, returns a `SkylightClient` ready to make API calls.
-- `src/auth-session-login.ts` — `login()`: implements the four-step headless authorization-code flow above.
-- `src/config.ts` — `loadAccount()`: reads `SKYLIGHT_EMAIL`, `SKYLIGHT_PASSWORD`, optional `SKYLIGHT_FRAME_ID`, `SKYLIGHT_NAME`, `SKYLIGHT_BASE_URL` from env. Exposes both `baseUrl` (the `/api` base) and `authBaseUrl` (the origin). Returns an `Account` or throws with an actionable message. No partial-config fallthrough — both email and password are required.
-- `src/client.ts` — `SkylightClient`: accepts a `refreshFn` (POST `/oauth/token` grant_type=refresh_token) for proactive (~60 s before expiry) and reactive (on 401, one retry) token refresh. All API calls are Node-direct. Note: the refresh grant follows the standard Doorkeeper contract; it was not live-verified due to login rate-limiting during testing.
+- `src/auth-session-login.ts` — `login()`: implements the four-step headless authorization-code flow above, including the mandatory S256 PKCE pair (`createPkcePair()`).
+- `src/config.ts` — `loadAccount()`: reads `SKYLIGHT_REFRESH_TOKEN`, `SKYLIGHT_EMAIL`, `SKYLIGHT_PASSWORD`, optional `SKYLIGHT_FRAME_ID`, `SKYLIGHT_NAME`, `SKYLIGHT_BASE_URL` from env. Exposes both `baseUrl` (the `/api` base) and `authBaseUrl` (the origin). Returns an `Account` or throws with an actionable message. A refresh token is a complete config on its own; without one, **both** email and password are required (no partial-config fallthrough).
+- `src/client.ts` — `SkylightClient`: accepts a `refreshFn` (POST `/oauth/token` grant_type=refresh_token) for proactive (~60 s before expiry) and reactive (on 401, one retry) token refresh. All API calls are Node-direct. The refresh grant is **LIVE-VERIFIED** (2026-08-31): it returns a new access token, rotates the refresh token, and is unaffected by the PKCE requirement on `/oauth/authorize` — which is why `SKYLIGHT_REFRESH_TOKEN` kept working while password login was broken.
 
 **No env vars → clean start:** `resolveAuth()` is called lazily (on first tool invocation). The deferred-config-error pattern lives in `src/get-client.ts` (`makeGetClient`): a `CookieSessionManager` (`@chrischall/mcp-utils/session`) runs `resolveAuth()` once on the first tool call, caches a genuine missing-config error (message carrying `NO_ENV_CONFIG_MARKER` from `src/config.ts`) via `isPermanentError`, and single-flights concurrent first calls. The server starts without error so MCP hosts can list tools before credentials are configured; transient login failures (network/5xx/rate-limit) are not cached and retry on the next call.
 
