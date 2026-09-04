@@ -2,7 +2,7 @@
   "name": "skylight-mcp",
   "version": "0.9.1",
   "mcpName": "io.github.chrischall/skylight-mcp",
-  "description": "Skylight Calendar MCP — read/write family calendar events, chores, rewards, and shared lists.",
+  "description": "Skylight Calendar MCP \u2014 read/write family calendar events, chores, rewards, and shared lists.",
   "author": "Claude Code (AI) <https://www.anthropic.com/claude>",
   "repository": {
     "type": "git",
@@ -41,7 +41,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@chrischall/mcp-utils": "^0.19.3",
+    "@chrischall/mcp-utils": "^0.23.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"

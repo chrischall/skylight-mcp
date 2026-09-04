@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { textContent, flattenJsonApi, pruneUndefined } from '../../src/tools/_shared.js';
 
 describe('_shared', () => {
-  it('textContent wraps JSON', () => {
-    expect(textContent({ a: 1 })).toEqual({ content: [{ type: 'text', text: JSON.stringify({ a: 1 }, null, 2) }] });
+  it('textContent wraps JSON, minified', () => {
+    expect(textContent({ a: 1 })).toEqual({ content: [{ type: 'text', text: JSON.stringify({ a: 1 }) }] });
   });
 
   it('flattenJsonApi merges id+type+attributes', () => {
