@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/chrischall/skylight-mcp/compare/v0.9.1...v0.10.0) (2026-09-04)
+
+
+### Features
+
+* **tools:** compact by default — strip media URLs, and minify every response ([#158](https://github.com/chrischall/skylight-mcp/issues/158)) ([dc274b8](https://github.com/chrischall/skylight-mcp/commit/dc274b807e09cbd7084450f30a17dd54867a509d))
+
+
+### Refactor
+
+* **tools:** migrate all 113 tools to registerTool with read/write annotations ([#161](https://github.com/chrischall/skylight-mcp/issues/161)) ([763e1fc](https://github.com/chrischall/skylight-mcp/commit/763e1fc9f10106e32c10a43a4550a750fb1febce))
+
 ## [0.9.1](https://github.com/chrischall/skylight-mcp/compare/v0.9.0...v0.9.1) (2026-09-01)
 
 
