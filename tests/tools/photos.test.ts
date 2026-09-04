@@ -28,7 +28,7 @@ function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
   // Tools register with an optional annotations arg before the callback
   // (server.tool(name, desc, schema[, annotations], cb)); the handler is always last.
-  const server = { tool: (name: string, ...rest: any[]) => { tools[name] = rest[rest.length - 1]; } } as any;
+  const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = cb; } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerPhotoTools(server, async () => client);
   return { tools, request, resolveFrameId };

@@ -4,7 +4,7 @@ import { makeClient } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  const server = { tool: (n: string, _d: string, _s: any, cb: any) => { tools[n] = cb; } } as any;
+  const server = { registerTool: (n: string, _cfg: any, cb: any) => { tools[n] = cb; } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerEventTools(server, async () => client);
   return { tools, request, resolveFrameId };

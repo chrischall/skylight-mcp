@@ -4,7 +4,7 @@ import { makeClient } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (args: any) => Promise<any>> = {};
-  const server = { tool: (name: string, _desc: string, _schema: any, cb: any) => { tools[name] = cb; } } as any;
+  const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = cb; } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerCalendarTools(server, async () => client);
   return { tools, request, resolveFrameId };

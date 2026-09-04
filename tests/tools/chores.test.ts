@@ -4,15 +4,14 @@ import { makeClient } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  // Take the LAST argument as the handler: tools registered with an
-  // annotations object (destructiveHint on the gated update/delete) use the
-  // 5-arg form, and a fixed 4th-arg read captures the annotations instead.
+  // `registerTool(name, config, handler)` carries the schema and annotations in
+  // one config object, so both are read from it by name rather than by position.
   const annotations: Record<string, any> = {};
   const schemas: Record<string, any> = {};
-  const server = { tool: (n: string, ...rest: any[]) => {
-    tools[n] = rest[rest.length - 1];
-    schemas[n] = rest[1];
-    if (rest.length === 4) annotations[n] = rest[2];
+  const server = { registerTool: (n: string, cfg: any, cb: any) => {
+    tools[n] = cb;
+    schemas[n] = cfg.inputSchema;
+    annotations[n] = cfg.annotations;
   } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerChoreTools(server, async () => client);

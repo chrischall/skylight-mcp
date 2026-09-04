@@ -18,8 +18,8 @@ import { makeClient } from './tools/_setup.js';
 function registeredApplyToEnums(): Record<string, string[]> {
   const schemas: Record<string, any> = {};
   const server = {
-    tool: (name: string, ...rest: any[]) => {
-      schemas[name] = rest[1];
+    registerTool: (name: string, cfg: any) => {
+      schemas[name] = cfg.inputSchema;
     },
   } as any;
   const { client } = makeClient();
