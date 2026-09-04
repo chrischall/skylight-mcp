@@ -5,19 +5,17 @@ import { makeClient } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  // Take the LAST argument as the handler: tools registered with an annotations
-  // object (e.g. skylight_delete_meal's destructiveHint) use the 5-arg form.
+  // `registerTool(name, config, handler)` carries description, schema and
+  // annotations in one config object, so both are read from it by name.
   const annotations: Record<string, any> = {};
-  // `rest` is [description, schema, handler] or, for the 5-arg form,
-  // [description, schema, annotations, handler].
   // Schemas are captured too: the harness calls handlers DIRECTLY, so zod never
   // runs on this path and schema-level rules (e.g. instance_date's format) are
   // invisible to a handler test. They have to be asserted against the schema.
   const schemas: Record<string, any> = {};
-  const server = { tool: (name: string, ...rest: any[]) => {
-    tools[name] = rest[rest.length - 1];
-    schemas[name] = rest[1];
-    if (rest.length === 4) annotations[name] = rest[2];
+  const server = { registerTool: (name: string, cfg: any, cb: any) => {
+    tools[name] = cb;
+    schemas[name] = cfg.inputSchema;
+    annotations[name] = cfg.annotations;
   } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerMealTools(server, async () => client);
@@ -504,8 +502,8 @@ it('update_meal flattens a single-resource data object, not just an array', asyn
 
   it('update_meal is annotated destructive — apply_to one/future split the series', async () => {
     const { annotations } = harness();
-    expect(annotations.skylight_update_meal).toEqual({ destructiveHint: true });
-    expect(annotations.skylight_delete_meal).toEqual({ destructiveHint: true });
+    expect(annotations.skylight_update_meal).toEqual({ readOnlyHint: false, destructiveHint: true });
+    expect(annotations.skylight_delete_meal).toEqual({ readOnlyHint: false, destructiveHint: true });
   });
 
   it('delete_meal falls back to a summary object on a 200 with no sittings in it', async () => {

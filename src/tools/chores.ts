@@ -50,13 +50,16 @@ function flattenChores(doc: ChoreDoc): unknown {
 }
 
 export function registerChoreTools(server: McpServer, getClient: GetClient) {
-  server.tool(
+  server.registerTool(
     'skylight_list_chores',
-    'List chores for a Skylight frame within a required date range. Each chore carries its assignee in `category_id` (a family-member category — resolve names via skylight_list_categories) and, for a completed up-for-grabs chore, who did it in `completed_category_id`. Either key is pluralised — `category_ids` / `completed_category_ids` — when the API links several members, so an absent singular key means unassigned, never multi-assigned.',
     {
-      after: z.string().describe('YYYY-MM-DD inclusive lower bound (required by the API).'),
-      before: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
-      frameId: z.string().optional(),
+      description: 'List chores for a Skylight frame within a required date range. Each chore carries its assignee in `category_id` (a family-member category — resolve names via skylight_list_categories) and, for a completed up-for-grabs chore, who did it in `completed_category_id`. Either key is pluralised — `category_ids` / `completed_category_ids` — when the API links several members, so an absent singular key means unassigned, never multi-assigned.',
+      inputSchema: {
+        after: z.string().describe('YYYY-MM-DD inclusive lower bound (required by the API).'),
+        before: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
+        frameId: z.string().optional(),
+      },
+      annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { after, before }: { after: string; before: string; frameId?: string }) => {
       const doc = await c.request<ChoreDoc | undefined>('GET', `/frames/${f}/chores`, { query: { after, before } });
@@ -66,16 +69,19 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
 
   // LIVE-VERIFIED: create_chore requires flat {summary, category_id} — category_id is mandatory
   // (422 "Category is required" without it). The `name` field does not exist; use `summary`.
-  server.tool(
+  server.registerTool(
     'skylight_create_chore',
-    'Create a chore on a Skylight frame.',
     {
-      summary: z.string().describe('Chore title.'),
-      category_id: idParam.describe('Category / family-member id the chore belongs to (required). Get ids from skylight_list_categories.'),
-      start: z.string().optional().describe('YYYY-MM-DD start date.'),
-      description: z.string().optional(),
-      reward_points: z.number().optional().describe('Reward points/stars for completing.'),
-      frameId: z.string().optional(),
+      description: 'Create a chore on a Skylight frame.',
+      inputSchema: {
+        summary: z.string().describe('Chore title.'),
+        category_id: idParam.describe('Category / family-member id the chore belongs to (required). Get ids from skylight_list_categories.'),
+        start: z.string().optional().describe('YYYY-MM-DD start date.'),
+        description: z.string().optional(),
+        reward_points: z.number().optional().describe('Reward points/stars for completing.'),
+        frameId: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { summary, category_id, start, description, reward_points }: { summary: string; category_id: string | number; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/chores`, { body: pruneUndefined({ summary, category_id, start, description, reward_points }) });
@@ -88,22 +94,25 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   // Routines = the same call with routine:true (use BYHOUR in the RRULE for time-of-day).
   // up_for_grabs:true works because the client sends the skylight-api-version header.
   // The response is `{ data: [...] }` (array).
-  server.tool(
+  server.registerTool(
     'skylight_create_recurring_chore',
-    'Create a recurring chore or routine (repeats per an RRULE; verified live).',
     {
-      summary: z.string().describe('Chore title.'),
-      recurrence: z.string().describe('iCalendar RRULE without the "RRULE:" prefix, e.g. "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE,FR" (daily: "FREQ=DAILY;INTERVAL=1"). Use BYHOUR for routine time-of-day.'),
-      category_ids: idArrayParam.optional().describe('Family-member category ids to assign (omit only with up_for_grabs).'),
-      start: z.string().describe('YYYY-MM-DD first occurrence date.'),
-      start_time: z.string().optional().describe('HH:mm time of day (e.g. "17:00").'),
-      recurring_until: z.string().optional().describe('ISO datetime the recurrence ends (e.g. "2026-12-31T23:59:59.999Z").'),
-      reward_points: z.number().optional(),
-      emoji_icon: z.string().optional(),
-      description: z.string().optional(),
-      routine: z.boolean().optional().describe('Set true to create a routine (habit-style recurring task) instead of a chore.'),
-      up_for_grabs: z.boolean().optional().describe('Set true for an unassigned "anyone can do it" chore (requires no category_ids).'),
-      frameId: z.string().optional(),
+      description: 'Create a recurring chore or routine (repeats per an RRULE; verified live).',
+      inputSchema: {
+        summary: z.string().describe('Chore title.'),
+        recurrence: z.string().describe('iCalendar RRULE without the "RRULE:" prefix, e.g. "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE,FR" (daily: "FREQ=DAILY;INTERVAL=1"). Use BYHOUR for routine time-of-day.'),
+        category_ids: idArrayParam.optional().describe('Family-member category ids to assign (omit only with up_for_grabs).'),
+        start: z.string().describe('YYYY-MM-DD first occurrence date.'),
+        start_time: z.string().optional().describe('HH:mm time of day (e.g. "17:00").'),
+        recurring_until: z.string().optional().describe('ISO datetime the recurrence ends (e.g. "2026-12-31T23:59:59.999Z").'),
+        reward_points: z.number().optional(),
+        emoji_icon: z.string().optional(),
+        description: z.string().optional(),
+        routine: z.boolean().optional().describe('Set true to create a routine (habit-style recurring task) instead of a chore.'),
+        up_for_grabs: z.boolean().optional().describe('Set true for an unassigned "anyone can do it" chore (requires no category_ids).'),
+        frameId: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { summary, recurrence, category_ids, start, start_time, recurring_until, reward_points, emoji_icon, description, routine, up_for_grabs }: { summary: string; recurrence: string; category_ids?: (string | number)[]; start: string; start_time?: string; recurring_until?: string; reward_points?: number; emoji_icon?: string; description?: string; routine?: boolean; up_for_grabs?: boolean; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/chores/create_multiple`, {
@@ -117,10 +126,13 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   // (the old POST /complete was 404 and the PATCH /frames/{f}/chores/{id} was a no-op — status stayed
   // pending). This is the whole-chore completion; for a single recurring occurrence use
   // skylight_complete_chore_instance.
-  server.tool(
+  server.registerTool(
     'skylight_complete_chore',
-    'Mark a chore complete.',
-    { id: z.string(), frameId: z.string().optional() },
+    {
+      description: 'Mark a chore complete.',
+      inputSchema: { id: z.string(), frameId: z.string().optional() },
+      annotations: { readOnlyHint: false },
+    },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: { status: 'complete' } });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ completed: id });
@@ -144,25 +156,27 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     return textContent(flattenJsonApi(doc));
   });
 
-  server.tool(
+  server.registerTool(
     'skylight_update_chore',
-    'Update a chore.',
     {
-      id: z.string(),
-      summary: z.string().optional(),
-      category_id: idParam.optional(),
-      start: z.string().optional(),
-      start_time: z.string().optional(),
-      description: z.string().optional(),
-      reward_points: z.number().optional(),
-      emoji_icon: z.string().optional(),
-      recurrence: z.string().optional().describe('iCalendar RRULE without the "RRULE:" prefix; edits the whole series.'),
-      recurring_until: z.string().optional().describe('ISO datetime the recurrence ends.'),
-      apply_to: z.enum(['this', 'this_and_future', 'all']).optional().describe('For recurring chores: which occurrences to update.'),
-      frameId: z.string().optional(),
-      confirm: schemaConfirm,
+      description: 'Update a chore.',
+      inputSchema: {
+        id: z.string(),
+        summary: z.string().optional(),
+        category_id: idParam.optional(),
+        start: z.string().optional(),
+        start_time: z.string().optional(),
+        description: z.string().optional(),
+        reward_points: z.number().optional(),
+        emoji_icon: z.string().optional(),
+        recurrence: z.string().optional().describe('iCalendar RRULE without the "RRULE:" prefix; edits the whole series.'),
+        recurring_until: z.string().optional().describe('ISO datetime the recurrence ends.'),
+        apply_to: z.enum(['this', 'this_and_future', 'all']).optional().describe('For recurring chores: which occurrences to update.'),
+        frameId: z.string().optional(),
+        confirm: schemaConfirm,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    { destructiveHint: true },
     async (args: UpdateChoreArgs) => {
       // 'this_and_future' and 'all' rewrite occurrences the caller did not
       // name; 'this' and an omitted apply_to edit only the one they did.
@@ -191,15 +205,18 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   // and category_id must be OMITTED for a normally-assigned chore (sending it returns
   // 422 "category_id must be blank"); it's only supplied for an up-for-grabs/shared chore
   // to record who grabbed it. instance_time selects a specific time-of-day routine occurrence.
-  server.tool(
+  server.registerTool(
     'skylight_complete_chore_instance',
-    'Mark a specific occurrence of a recurring chore complete.',
     {
-      id: z.string(),
-      instance_date: z.string().describe('YYYY-MM-DD occurrence date (required).'),
-      instance_time: z.string().optional().describe('HH:MM — only for a time-of-day routine with multiple daily occurrences.'),
-      category_id: idParam.optional().describe('Only for an up-for-grabs/shared chore: which member completed it. Omit for a normally-assigned chore (sending it 422s).'),
-      frameId: z.string().optional(),
+      description: 'Mark a specific occurrence of a recurring chore complete.',
+      inputSchema: {
+        id: z.string(),
+        instance_date: z.string().describe('YYYY-MM-DD occurrence date (required).'),
+        instance_time: z.string().optional().describe('HH:MM — only for a time-of-day routine with multiple daily occurrences.'),
+        category_id: idParam.optional().describe('Only for an up-for-grabs/shared chore: which member completed it. Omit for a normally-assigned chore (sending it 422s).'),
+        frameId: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time, category_id }: { id: string; instance_date: string; instance_time?: string; category_id?: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'complete', instance_date, instance_time, category_id }) });
@@ -210,14 +227,17 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   // LIVE-VERIFIED: uncomplete reverses a completion — PUT the completions endpoint with
   // {status:'pending'} reopens a whole chore; add instance_date (+ instance_time) to reopen
   // a single recurring occurrence.
-  server.tool(
+  server.registerTool(
     'skylight_uncomplete_chore',
-    'Reopen (un-complete) a chore, or a single occurrence of a recurring chore (pass instance_date).',
     {
-      id: z.string(),
-      instance_date: z.string().optional().describe('YYYY-MM-DD — reopen just this recurring occurrence instead of the whole chore.'),
-      instance_time: z.string().optional().describe('HH:MM — for a time-of-day routine occurrence.'),
-      frameId: z.string().optional(),
+      description: 'Reopen (un-complete) a chore, or a single occurrence of a recurring chore (pass instance_date).',
+      inputSchema: {
+        id: z.string(),
+        instance_date: z.string().optional().describe('YYYY-MM-DD — reopen just this recurring occurrence instead of the whole chore.'),
+        instance_time: z.string().optional().describe('HH:MM — for a time-of-day routine occurrence.'),
+        frameId: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time }: { id: string; instance_date?: string; instance_time?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'pending', instance_date, instance_time }) });
@@ -235,16 +255,18 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     return doc ? textContent(flattenJsonApi(doc)) : textContent({ deleted: id });
   });
 
-  server.tool(
+  server.registerTool(
     'skylight_delete_chore',
-    'Delete a chore (optionally a single occurrence or the whole series).',
     {
-      id: z.string(),
-      apply_to: z.enum(['one', 'all']).optional().describe('For a recurring chore: delete just this occurrence ("one") or the whole series ("all").'),
-      frameId: z.string().optional(),
-      confirm: schemaConfirm,
+      description: 'Delete a chore (optionally a single occurrence or the whole series).',
+      inputSchema: {
+        id: z.string(),
+        apply_to: z.enum(['one', 'all']).optional().describe('For a recurring chore: delete just this occurrence ("one") or the whole series ("all").'),
+        frameId: z.string().optional(),
+        confirm: schemaConfirm,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    { destructiveHint: true },
     async (args: DeleteChoreArgs) => {
       // Gated ONLY at 'all', which destroys the whole series. A plain delete
       // (no apply_to) and 'one' each remove exactly the thing the caller
@@ -265,15 +287,18 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
 
   // LIVE-VERIFIED: search surfaces unscheduled/template chores that the date-range list can't return.
   // GET /frames/{f}/chores/search?search_query=…&include_up_for_grabs=…&limit=…&ended_chore_lookback_days=…
-  server.tool(
+  server.registerTool(
     'skylight_search_chores',
-    "Search chores (incl. unscheduled/template chores the date-range list can't return).",
     {
-      search_query: z.string().describe('Text to search chore summaries.'),
-      include_up_for_grabs: z.boolean().optional(),
-      limit: z.number().optional(),
-      ended_chore_lookback_days: z.number().optional().describe('How many days back to include ended chores.'),
-      frameId: z.string().optional(),
+      description: "Search chores (incl. unscheduled/template chores the date-range list can't return).",
+      inputSchema: {
+        search_query: z.string().describe('Text to search chore summaries.'),
+        include_up_for_grabs: z.boolean().optional(),
+        limit: z.number().optional(),
+        ended_chore_lookback_days: z.number().optional().describe('How many days back to include ended chores.'),
+        frameId: z.string().optional(),
+      },
+      annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { search_query, include_up_for_grabs, limit, ended_chore_lookback_days }: { search_query: string; include_up_for_grabs?: boolean; limit?: number; ended_chore_lookback_days?: number; frameId?: string }) => {
       const query: Record<string, string | number> = { search_query };
@@ -285,13 +310,16 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     }),
   );
 
-  server.tool(
+  server.registerTool(
     'skylight_list_rewards',
-    'List redeemed rewards for a Skylight frame, defaulting to the last 30 days.',
     {
-      redeemed_at_min: z.string().optional(),
-      redeemed_at_max: z.string().optional(),
-      frameId: z.string().optional(),
+      description: 'List redeemed rewards for a Skylight frame, defaulting to the last 30 days.',
+      inputSchema: {
+        redeemed_at_min: z.string().optional(),
+        redeemed_at_max: z.string().optional(),
+        frameId: z.string().optional(),
+      },
+      annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { redeemed_at_min, redeemed_at_max }: { redeemed_at_min?: string; redeemed_at_max?: string; frameId?: string }) => {
       const now = new Date();
