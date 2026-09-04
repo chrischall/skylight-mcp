@@ -5,7 +5,7 @@
 
 ### Features
 
-* **tools:** compact by default — strip media URLs, and minify every response ([#158](https://github.com/chrischall/skylight-mcp/issues/158)) ([dc274b8](https://github.com/chrischall/skylight-mcp/commit/dc274b807e09cbd7084450f30a17dd54867a509d))
+* **tools:** minify every response — no formatting whitespace on any payload ([#158](https://github.com/chrischall/skylight-mcp/issues/158)) ([dc274b8](https://github.com/chrischall/skylight-mcp/commit/dc274b807e09cbd7084450f30a17dd54867a509d))
 
 
 ### Refactor
