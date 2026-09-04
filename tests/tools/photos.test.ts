@@ -26,8 +26,9 @@ const CREDS_DOC_WRAPPED = {
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  // Tools register with an optional annotations arg before the callback
-  // (server.tool(name, desc, schema[, annotations], cb)); the handler is always last.
+  // Minimal `registerTool(name, config, handler)` stand-in: this harness only
+  // needs the handler, so the config is ignored here. `tool-annotations.test.ts`
+  // is what reads the config and holds every tool to declaring `readOnlyHint`.
   const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = cb; } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerPhotoTools(server, async () => client);
