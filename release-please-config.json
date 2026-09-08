@@ -4,8 +4,6 @@
     ".": {
       "package-name": "skylight-mcp",
       "release-type": "node",
-      "include-v-in-tag": true,
-      "include-component-in-tag": false,
       "changelog-sections": [
         {
           "type": "feat",
@@ -84,7 +82,9 @@
           "jsonpath": "$.metadata.version"
         },
         "src/index.ts"
-      ]
+      ],
+      "include-v-in-tag": true,
+      "include-component-in-tag": false
     }
   }
 }
