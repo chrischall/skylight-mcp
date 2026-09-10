@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.1](https://github.com/chrischall/skylight-mcp/compare/v0.10.0...v0.10.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **deps:** @chrischall/mcp-utils 0.26.1 ([#172](https://github.com/chrischall/skylight-mcp/issues/172)) ([30ceab5](https://github.com/chrischall/skylight-mcp/commit/30ceab5f842da7feb178539c65d09bc5e14b290b))
+* **deps:** bump hono from 4.13.0 to 4.13.7 ([#170](https://github.com/chrischall/skylight-mcp/issues/170)) ([29d28c3](https://github.com/chrischall/skylight-mcp/commit/29d28c33b57f9b5185135917ddcbe3dea6642a0e))
+* **deps:** declare the peer floors mcp-utils 0.26.1 requires ([#173](https://github.com/chrischall/skylight-mcp/issues/173)) ([6398914](https://github.com/chrischall/skylight-mcp/commit/6398914f4916bef714acb2c15ecf24fa1ea862d7))
+
 ## [0.10.0](https://github.com/chrischall/skylight-mcp/compare/v0.9.1...v0.10.0) (2026-09-04)
 
 
