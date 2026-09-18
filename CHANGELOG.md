@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/chrischall/skylight-mcp/compare/v0.10.1...v0.10.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* **auth:** resolve relative OAuth redirects and restrict cookie destinations ([be2534e](https://github.com/chrischall/skylight-mcp/commit/be2534eebb4ea0eddec023b3377dc20479199cc3))
+
 ## [0.10.1](https://github.com/chrischall/skylight-mcp/compare/v0.10.0...v0.10.1) (2026-09-10)
 
 
