@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { z } from 'zod';
 import { registerMealTools } from '../src/tools/meals.js';
 import { registerChoreTools } from '../src/tools/chores.js';
 import { makeClient } from './tools/_setup.js';
