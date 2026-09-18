@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 const INCLUDE = 'categories,calendar_account,event_notification_setting';
@@ -22,12 +22,12 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_list_events',
     {
       description: 'List calendar events in a date range for a Skylight frame.',
-      inputSchema: {
+      inputSchema: z.object({
         date_min: z.string().describe('YYYY-MM-DD inclusive lower bound.'),
         date_max: z.string().describe('YYYY-MM-DD inclusive upper bound.'),
         timezone: z.string().optional().describe('IANA tz; defaults to the frame timezone.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { date_min, date_max, timezone }: { date_min: string; date_max: string; timezone?: string; frameId?: string }) => {
@@ -42,9 +42,9 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_get_event',
     {
       description: 'Get one calendar event by id.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(), frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
@@ -55,7 +55,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_create_event',
     {
       description: 'Create a calendar event on a Skylight frame.',
-      inputSchema: { ...eventAttrs, frameId: z.string().optional() },
+      inputSchema: z.object({ ...eventAttrs, frameId: z.string().optional() }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { frameId: _frameId, ...attrs }) => {
@@ -68,7 +68,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_update_event',
     {
       description: 'Update a calendar event by id.',
-      inputSchema: { id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional() },
+      inputSchema: z.object({ id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional() }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, frameId: _frameId, ...attrs }: { id: string; frameId?: string } & Record<string, unknown>) => {
@@ -81,7 +81,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_delete_event',
     {
       description: 'Delete a calendar event by id.',
-      inputSchema: { id: z.string(), frameId: z.string().optional() },
+      inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
@@ -94,7 +94,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_list_categories',
     {
       description: 'List calendar/chore categories for a Skylight frame.',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
@@ -105,7 +105,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_list_source_calendars',
     {
       description: 'List linked source calendars (Google, etc.) for a frame.',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
@@ -116,7 +116,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_list_recent_invited_emails',
     {
       description: 'List recently-invited email addresses (handy for filling create_event invited_emails).',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
@@ -127,7 +127,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_get_event_notification_settings',
     {
       description: "Get the frame's calendar-event notification settings.",
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/event_notification_settings`)))),
@@ -137,12 +137,12 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     'skylight_update_event_notification_settings',
     {
       description: 'Update calendar-event notification settings.',
-      inputSchema: {
+      inputSchema: z.object({
         on_time: z.boolean().optional(),
         early: z.boolean().optional(),
         early_minutes_before: z.number().optional(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { on_time, early, early_minutes_before }: { on_time?: boolean; early?: boolean; early_minutes_before?: number; frameId?: string }) => {

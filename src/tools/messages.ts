@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerMessageTools(server: McpServer, getClient: GetClient) {
@@ -7,9 +7,9 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_list_messages',
     {
       description: 'List messages posted to the Skylight frame.',
-      inputSchema: {
+      inputSchema: z.object({
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
@@ -20,9 +20,9 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_list_albums',
     {
       description: 'List photo albums on the Skylight frame.',
-      inputSchema: {
+      inputSchema: z.object({
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
@@ -33,10 +33,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_get_message',
     {
       description: 'Get one frame message.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
@@ -47,10 +47,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_create_album',
     {
       description: 'Create a photo album.',
-      inputSchema: {
+      inputSchema: z.object({
         title: z.string(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { title }: { title: string; frameId?: string }) =>
@@ -61,10 +61,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_delete_album',
     {
       description: 'Delete a photo album.',
-      inputSchema: {
+      inputSchema: z.object({
         id: idParam,
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
@@ -77,12 +77,12 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_update_album',
     {
       description: 'Update a photo album (rename, hide from slideshow).',
-      inputSchema: {
+      inputSchema: z.object({
         id: idParam,
         title: z.string().optional(),
         exclude_from_slideshow: z.boolean().optional().describe('Hide this album from the frame slideshow.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, title, exclude_from_slideshow }: { id: string | number; title?: string; exclude_from_slideshow?: boolean; frameId?: string }) => {
@@ -95,11 +95,11 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_add_to_album',
     {
       description: 'Add messages/photos to albums.',
-      inputSchema: {
+      inputSchema: z.object({
         album_ids: idArrayParam,
         message_ids: idArrayParam,
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
@@ -110,11 +110,11 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_remove_from_album',
     {
       description: 'Remove messages/photos from albums.',
-      inputSchema: {
+      inputSchema: z.object({
         album_ids: idArrayParam,
         message_ids: idArrayParam,
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
@@ -125,11 +125,11 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_copy_messages_to_frames',
     {
       description: 'Copy messages/photos from this frame to other frames on the account (inferred from the app bundle, not live-verified).',
-      inputSchema: {
+      inputSchema: z.object({
         message_ids: idArrayParam.describe('Message/photo ids to copy.'),
         new_frame_ids: idArrayParam.describe('Destination frame ids (see skylight_list_frames).'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { message_ids, new_frame_ids }: { message_ids: Array<string | number>; new_frame_ids: Array<string | number>; frameId?: string }) => {
@@ -142,11 +142,11 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_add_message_comment',
     {
       description: 'Comment on a frame message/photo.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         body: z.string().describe('Comment text.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, body }: { id: string; body: string; frameId?: string }) =>
@@ -157,11 +157,11 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_set_message_caption',
     {
       description: 'Set a message/photo caption.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         caption: z.string(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, caption }: { id: string; caption: string; frameId?: string }) =>
@@ -172,10 +172,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_like_message',
     {
       description: 'Like a frame message/photo.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
@@ -188,10 +188,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_unlike_message',
     {
       description: 'Remove a like from a message/photo.',
-      inputSchema: {
+      inputSchema: z.object({
         id: idParam,
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
@@ -204,10 +204,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_delete_messages',
     {
       description: 'Bulk-delete messages/photos from the frame.',
-      inputSchema: {
+      inputSchema: z.object({
         message_ids: idArrayParam.describe('Message/photo ids to delete.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { message_ids }: { message_ids: Array<string | number>; frameId?: string }) => {
@@ -221,10 +221,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     'skylight_delete_message',
     {
       description: 'Delete a frame message/photo.',
-      inputSchema: {
+      inputSchema: z.object({
         id: idParam,
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {

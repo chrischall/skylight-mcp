@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { textContent, flattenJsonApi, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerFrameTools(server: McpServer, getClient: GetClient) {
@@ -7,7 +7,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_list_frames',
     {
       description: 'List Skylight frames (family hubs) on this account.',
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => {
@@ -20,7 +20,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_get_frame',
     {
       description: 'Get one Skylight frame and its settings.',
-      inputSchema: { frameId: z.string().optional().describe('Frame id; defaults to the resolved frame.') },
+      inputSchema: z.object({ frameId: z.string().optional().describe('Frame id; defaults to the resolved frame.') }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', `/frames/${f}`)))),
@@ -30,7 +30,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_list_frame_members',
     {
       description: 'List members (frame_users) of a Skylight frame.',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/users`)))),
@@ -40,7 +40,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_list_devices',
     {
       description: 'List physical devices attached to a Skylight frame.',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/devices`)))),
@@ -50,7 +50,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_get_plus_access',
     {
       description: 'Get Skylight Plus subscription / entitlement status.',
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => {
@@ -63,7 +63,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_get_reward_points',
     {
       description: 'Get reward-point balances per family member (lifetime earned + current balance).',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/reward_points`)))),
@@ -73,7 +73,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_get_household_config',
     {
       description: 'Get household configuration for the frame.',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/household_config`)))),
@@ -84,11 +84,11 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_set_device_album',
     {
       description: 'Set which photo album a device displays.',
-      inputSchema: {
+      inputSchema: z.object({
         id: idParam.describe('Device id (from skylight_list_devices).'),
         current_album_id: idParam.describe('Album id to display on this device.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, current_album_id }: { id: string | number; current_album_id: string | number; frameId?: string }) => {
@@ -101,11 +101,11 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     'skylight_rename_device',
     {
       description: 'Rename a Skylight device.',
-      inputSchema: {
+      inputSchema: z.object({
         id: idParam.describe('Device id (from skylight_list_devices).'),
         name: z.string().describe('New device name.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, name }: { id: string | number; name: string; frameId?: string }) => {

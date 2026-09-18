@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerAiTools(server: McpServer, getClient: GetClient) {
@@ -7,14 +7,14 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_generate_meal_plan',
     {
       description: 'Generate an AI meal plan for the given dates (creates draft meal sittings — async; poll with skylight_get_auto_creation_intent, then approve).',
-      inputSchema: {
+      inputSchema: z.object({
         meal_category_id: idParam.describe('Meal category id (from skylight_list_meal_categories).'),
         dates: z.array(z.string()).describe('YYYY-MM-DD dates to generate meals for.'),
         mouths_to_feed: z.number().optional().describe('How many people to feed.'),
         add_to_grocery_list: z.boolean().optional(),
         recipe_source: z.string().optional().describe("Defaults to 'generate' (AI-generated)."),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { meal_category_id, dates, mouths_to_feed, add_to_grocery_list, recipe_source }: { meal_category_id: string | number; dates: string[]; mouths_to_feed?: number; add_to_grocery_list?: boolean; recipe_source?: string; frameId?: string }) => {
@@ -40,7 +40,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_generate_activity_ideas',
     {
       description: 'Generate AI activity/event ideas for a location and time range (creates draft events — async).',
-      inputSchema: {
+      inputSchema: z.object({
         category_ids: idArrayParam.describe('Family-member category ids the activities are for.'),
         physical_location: z.string().describe('Location, e.g. "Charlotte, NC, USA".'),
         activity_kind: z.string().optional().describe('e.g. "local_event".'),
@@ -48,7 +48,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
         datetime_range_start: z.string().describe('ISO datetime.'),
         datetime_range_end: z.string().describe('ISO datetime.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { category_ids, physical_location, activity_kind, budget, datetime_range_start, datetime_range_end }: { category_ids: Array<string | number>; physical_location: string; activity_kind?: string; budget?: string; datetime_range_start: string; datetime_range_end: string; frameId?: string }) => {
@@ -70,7 +70,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_get_auto_creation_intent',
     {
       description: 'Get an AI auto-creation intent (its status + draft results).',
-      inputSchema: { id: idParam, frameId: z.string().optional() },
+      inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
@@ -81,7 +81,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_list_auto_creation_intents',
     {
       description: 'List all AI auto-creation intents on the frame (find pending/completed drafting jobs and their ids).',
-      inputSchema: { frameId: z.string().optional() },
+      inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
@@ -92,7 +92,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_list_auto_creation_drafts',
     {
       description: 'List the events an AI intent drafted (for review before approving). For meal/activity engines the drafts are items, not events — use skylight_list_auto_creation_items instead.',
-      inputSchema: { id: idParam, frameId: z.string().optional() },
+      inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
@@ -103,7 +103,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_list_auto_creation_items',
     {
       description: 'List the draft items an AI intent created (the general draft reader — meal sittings, activities, list items, etc., which the event-only draft list does not surface).',
-      inputSchema: { id: idParam, frameId: z.string().optional() },
+      inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
@@ -114,11 +114,11 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_approve_auto_creation',
     {
       description: 'Approve AI-drafted events — turns them into real calendar events.',
-      inputSchema: {
+      inputSchema: z.object({
         id: idParam.describe('Auto-creation intent id.'),
         ids: idArrayParam.describe('Draft event ids to approve into real events.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, ids }: { id: string | number; ids: Array<string | number>; frameId?: string }) => {
@@ -131,7 +131,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     'skylight_undo_auto_creation',
     {
       description: 'Undo/discard an AI auto-creation intent and its drafts.',
-      inputSchema: { id: idParam, frameId: z.string().optional() },
+      inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {

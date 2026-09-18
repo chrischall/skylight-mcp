@@ -27,8 +27,8 @@ function registeredApplyToEnums(): Record<string, string[]> {
   registerChoreTools(server, async () => client);
 
   const out: Record<string, string[]> = {};
-  for (const [name, shape] of Object.entries(schemas)) {
-    const field = (shape as Record<string, unknown>)?.apply_to;
+  for (const [name, schema] of Object.entries(schemas)) {
+    const field = (schema as { shape?: Record<string, unknown> })?.shape?.apply_to;
     if (!field) continue;
     // Unwrap .optional() to reach the enum underneath.
     const inner = (field as any)._def?.innerType ?? field;

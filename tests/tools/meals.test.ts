@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { z } from 'zod';
 import { registerMealTools } from '../../src/tools/meals.js';
 import { makeClient } from './_setup.js';
 
@@ -400,7 +399,7 @@ describe('meal tools', () => {
     '%s rejects an instance_date that is not exactly YYYY-MM-DD',
     (tool) => {
       const { schemas } = harness();
-      const field = z.object(schemas[tool]).shape.instance_date;
+      const field = schemas[tool].shape.instance_date;
       expect(field.safeParse('2026-09-08').success).toBe(true);
       for (const bad of ['2026-09-08T00:00:00Z', '2026-9-8', '08-09-2026', '', 'today']) {
         expect(field.safeParse(bad).success, bad).toBe(false);

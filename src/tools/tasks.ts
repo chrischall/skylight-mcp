@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerTaskTools(server: McpServer, getClient: GetClient) {
@@ -7,9 +7,9 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
     'skylight_list_tasks',
     {
       description: "List task-box items (the frame's task list).",
-      inputSchema: {
+      inputSchema: z.object({
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
@@ -20,13 +20,13 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
     'skylight_create_task',
     {
       description: 'Create a task-box item.',
-      inputSchema: {
+      inputSchema: z.object({
         summary: z.string().describe('Task title.'),
         emoji_icon: z.string().optional(),
         reward_points: z.number().optional(),
         routine: z.boolean().optional(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { summary, emoji_icon, reward_points, routine }: { summary: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
@@ -39,14 +39,14 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
     'skylight_update_task',
     {
       description: 'Update a task-box item.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         summary: z.string().optional(),
         emoji_icon: z.string().optional(),
         reward_points: z.number().optional(),
         routine: z.boolean().optional(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, summary, emoji_icon, reward_points, routine }: { id: string; summary?: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
@@ -59,10 +59,10 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
     'skylight_delete_task',
     {
       description: 'Delete a task-box item.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {

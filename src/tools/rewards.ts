@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerRewardTools(server: McpServer, getClient: GetClient) {
@@ -7,7 +7,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'skylight_get_reward',
     {
       description: 'Get one reward.',
-      inputSchema: { id: z.string(), frameId: z.string().optional() },
+      inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
@@ -18,14 +18,14 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'skylight_create_reward',
     {
       description: 'Create a reward (live-verified fields: name + description + point_value + respawn_on_redemption + category_ids).',
-      inputSchema: {
+      inputSchema: z.object({
         name: z.string().describe('Reward name.'),
         description: z.string().optional(),
         point_value: z.number().describe('Points required to redeem (required).'),
         respawn_on_redemption: z.boolean().optional().describe('If true, the reward can be redeemed repeatedly (respawns after redemption).'),
         category_ids: idArrayParam.describe('Family-member category ids this reward applies to (required).'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { name, description, point_value, respawn_on_redemption, category_ids }: { name: string; description?: string; point_value: number; respawn_on_redemption?: boolean; category_ids: Array<string | number>; frameId?: string }) => {
@@ -38,13 +38,13 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'skylight_update_reward',
     {
       description: 'Update a reward.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         name: z.string().optional(),
         point_value: z.number().optional(),
         category_ids: idArrayParam.optional(),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, name, point_value, category_ids }: { id: string; name?: string; point_value?: number; category_ids?: Array<string | number>; frameId?: string }) => {
@@ -57,7 +57,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'skylight_delete_reward',
     {
       description: 'Delete a reward.',
-      inputSchema: { id: z.string(), frameId: z.string().optional() },
+      inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
@@ -70,11 +70,11 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'skylight_redeem_reward',
     {
       description: 'Redeem a reward.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         category_id: idParam.optional().describe('Member redeeming, if required.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
@@ -87,11 +87,11 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'skylight_unredeem_reward',
     {
       description: 'Reverse a reward redemption.',
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string(),
         category_id: idParam.optional().describe('Member who redeemed, if required to identify the redemption to reverse.'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
@@ -104,11 +104,11 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     'skylight_add_reward_points',
     {
       description: 'Grant (or deduct) reward points to family members.',
-      inputSchema: {
+      inputSchema: z.object({
         category_ids: idArrayParam.describe('Member category ids to grant points to.'),
         points: z.number().describe('Points to add (can be negative to deduct).'),
         frameId: z.string().optional(),
-      },
+      }),
       annotations: { readOnlyHint: false },
     },
     frameScoped(getClient, async (c, f, { category_ids, points }: { category_ids: Array<string | number>; points: number; frameId?: string }) => {
