@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/chrischall/skylight-mcp/compare/v1.0.0...v1.0.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **mcp:** serve modern stdio discovery through the SDK v2 entry point ([#182](https://github.com/chrischall/skylight-mcp/issues/182)) ([31f0249](https://github.com/chrischall/skylight-mcp/commit/31f02499964426d27c4b4d8d95e6ce1d28cc2d7c))
+
 ## [1.0.0](https://github.com/chrischall/skylight-mcp/compare/v0.10.2...v1.0.0) (2026-09-19)
 
 
