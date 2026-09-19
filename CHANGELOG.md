@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/chrischall/skylight-mcp/compare/v0.10.2...v1.0.0) (2026-09-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **mcp:** migrate server to SDK v2 ([#178](https://github.com/chrischall/skylight-mcp/issues/178))
+
+### Features
+
+* **mcp:** migrate server to SDK v2 ([#178](https://github.com/chrischall/skylight-mcp/issues/178)) ([23d41b1](https://github.com/chrischall/skylight-mcp/commit/23d41b13a61670ceaf1895cf22485e436ec64f9e))
+
 ## [0.10.2](https://github.com/chrischall/skylight-mcp/compare/v0.10.1...v0.10.2) (2026-09-18)
 
 
