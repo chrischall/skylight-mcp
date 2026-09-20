@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/chrischall/skylight-mcp/compare/v1.0.1...v1.1.0) (2026-09-19)
+
+
+### Features
+
+* **deps:** take mcp-utils 1.0.0 ([#187](https://github.com/chrischall/skylight-mcp/issues/187)) ([4be9003](https://github.com/chrischall/skylight-mcp/commit/4be9003ffa110bce7bf0054d19c4e07f6ee19a01))
+
 ## [1.0.1](https://github.com/chrischall/skylight-mcp/compare/v1.0.0...v1.0.1) (2026-09-19)
 
 
