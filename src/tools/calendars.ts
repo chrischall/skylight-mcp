@@ -47,7 +47,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         sync_url: z.string().describe('Public webcal/ICS URL to subscribe the frame to.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { sync_url }: { sync_url: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/webcal_accounts`, { body: { sync_url } })))),
@@ -62,7 +62,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         active_calendars: idArrayParam.describe('Calendar ids to keep active.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, active_calendars }: { id: string; active_calendars: Array<string | number>; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/calendars/${id}`, { body: { active_calendars } })))),
@@ -73,7 +73,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Remove a connected source calendar (incl. webcal subscriptions).',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/source_calendars/${id}`);
@@ -89,7 +89,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         id: idParam.describe('Source-calendar id to make the default for new events.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
@@ -106,7 +106,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         app_specific_password: z.string().describe('An app-specific password generated at appleid.apple.com (NOT your normal Apple password).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { email, app_specific_password }: { email: string; app_specific_password: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/calendars/apple`, { body: { email, app_specific_password } });
@@ -123,7 +123,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         category_ids: idArrayParam.describe("Family-member category ids whose members this calendar's events are attributed to."),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, category_ids }: { id: string | number; category_ids: Array<string | number>; frameId?: string }) => {
       const categorizations = category_ids.map((cid) => ({ category_id: cid }));
@@ -140,7 +140,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         attributes: z.record(z.string(), z.unknown()).describe('Provider-specific source-calendar attributes.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { attributes }: { attributes: Record<string, unknown>; frameId?: string }) => {
       // NOTE: generic passthrough; attribute shape is provider-specific.

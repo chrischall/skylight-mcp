@@ -89,7 +89,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
         current_album_id: idParam.describe('Album id to display on this device.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, current_album_id }: { id: string | number; current_album_id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/devices/${id}`, { body: { current_album_id } });
@@ -106,7 +106,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
         name: z.string().describe('New device name.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, name }: { id: string | number; name: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/devices/${id}`, { body: { name } });

@@ -15,7 +15,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
         recipe_source: z.string().optional().describe("Defaults to 'generate' (AI-generated)."),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { meal_category_id, dates, mouths_to_feed, add_to_grocery_list, recipe_source }: { meal_category_id: string | number; dates: string[]; mouths_to_feed?: number; add_to_grocery_list?: boolean; recipe_source?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
@@ -49,7 +49,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
         datetime_range_end: z.string().describe('ISO datetime.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { category_ids, physical_location, activity_kind, budget, datetime_range_start, datetime_range_end }: { category_ids: Array<string | number>; physical_location: string; activity_kind?: string; budget?: string; datetime_range_start: string; datetime_range_end: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
@@ -119,7 +119,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
         ids: idArrayParam.describe('Draft event ids to approve into real events.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, ids }: { id: string | number; ids: Array<string | number>; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/auto_creation_intents/${id}/created_events/bulk_approve`, { body: { ids } });
@@ -132,7 +132,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Undo/discard an AI auto-creation intent and its drafts.',
       inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/auto_creation_intents/${id}/undo`);

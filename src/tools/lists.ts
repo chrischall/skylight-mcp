@@ -40,7 +40,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         kind: z.enum(['shopping', 'to_do']).describe('List type (required).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { label, color, kind }: { label: string; color: string; kind: 'shopping' | 'to_do'; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists`, { body: pruneUndefined({ label, color, kind }) });
@@ -57,7 +57,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         label: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, label }: { listId: string; label: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists/${listId}/list_items`, { body: pruneUndefined({ label }) });
@@ -77,7 +77,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         section: z.string().nullable().optional().describe('Section name (null to clear).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, itemId, label, checked, section }: { listId: string; itemId: string; label?: string; checked?: boolean; section?: string | null; frameId?: string }) => {
       const status = checked === undefined ? undefined : (checked ? 'completed' : 'pending');
@@ -95,7 +95,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         itemId: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId, itemId }: { listId: string; itemId: string; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/${itemId}`);
@@ -114,7 +114,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         kind: z.enum(['shopping', 'to_do']).optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, label, color, kind }: { listId: string; label?: string; color?: string; kind?: 'shopping' | 'to_do'; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/lists/${listId}`, { body: pruneUndefined({ label, color, kind }) });
@@ -130,7 +130,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         listId: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/lists/${listId}`);
@@ -148,7 +148,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         afterItemId: z.string().optional().describe('Place after this item id; omit to move to the top.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, itemId, afterItemId }: { listId: string; itemId: string; afterItemId?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/lists/${listId}/list_items/${itemId}/move`, { body: { after_item_id: afterItemId ?? null } });
@@ -166,7 +166,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         listId: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
       const doc = await c.request<{ data?: Array<{ id: string }> }>('GET', `/frames/${f}/lists/${listId}/list_items`);
@@ -185,7 +185,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         item_ids: idArrayParam.describe('List-item ids to delete.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId, item_ids }: { listId: string; item_ids: Array<string | number>; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids: item_ids } });
@@ -204,7 +204,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         section: z.string().nullable().optional().describe('Section name to assign (null/omit to clear the section).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, item_ids, section }: { listId: string; item_ids: Array<string | number>; section?: string | null; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/lists/${listId}/list_items/bulk_update_section`, { body: { item_ids, section: section ?? null } });

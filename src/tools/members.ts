@@ -43,7 +43,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
         email: z.string().describe('Email to invite to the frame.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { email }: { email: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/users`, { body: { email } })))),
@@ -54,7 +54,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Approve a pending frame user.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/users/${id}/approve`);
@@ -67,7 +67,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Remove a user from the frame.',
       inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/users/${id}`);
@@ -85,7 +85,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
         reassign_to_category_id: idParam.optional().describe("Move this member's items to another category id instead of orphaning them."),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id, reassign_to_category_id }: { id: string | number; reassign_to_category_id?: string | number; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/categories/${id}`, reassign_to_category_id !== undefined ? { body: { reassign_to_category_id } } : {});
@@ -103,7 +103,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
         dietary_preferences: z.string().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, birthday, dietary_preferences }: { id: string | number; birthday?: string; dietary_preferences?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}/family_member`, { body: pruneUndefined({ birthday, dietary_preferences }) });
@@ -164,7 +164,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
         avatar_id: idParam.optional().describe('Preset avatar id from skylight_list_avatars.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { label: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/categories`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
@@ -185,7 +185,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
         avatar_id: idParam.optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { id: string | number; label?: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
