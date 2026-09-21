@@ -28,10 +28,10 @@ import { makeClient } from './tools/_setup.js';
  * So this reads the REGISTERED config rather than a hand-kept list, the same
  * posture as `skill-gate-table.test.ts`.
  */
-function registeredAnnotations(): Record<string, { readOnlyHint?: unknown } | undefined> {
-  const seen: Record<string, { readOnlyHint?: unknown } | undefined> = {};
+function registeredAnnotations(): Record<string, Ann | undefined> {
+  const seen: Record<string, Ann | undefined> = {};
   const server = {
-    registerTool: (name: string, cfg: { annotations?: { readOnlyHint?: unknown } }) => {
+    registerTool: (name: string, cfg: { annotations?: Ann }) => {
       seen[name] = cfg.annotations;
     },
   } as never;
@@ -57,6 +57,8 @@ function registeredAnnotations(): Record<string, { readOnlyHint?: unknown } | un
   return seen;
 }
 
+interface Ann { readOnlyHint?: unknown; destructiveHint?: unknown }
+
 describe('every tool declares whether it is a read', () => {
   it('registers the full surface (guards against a registrar being dropped here)', () => {
     // A meta-test that silently stops covering half the tools is worse than no
@@ -69,5 +71,38 @@ describe('every tool declares whether it is a read', () => {
       .filter(([, a]) => typeof a?.readOnlyHint !== 'boolean')
       .map(([name]) => name);
     expect(missing).toEqual([]);
+  });
+
+  // The readOnlyHint check above cannot see the other half. `destructiveHint`
+  // DEFAULTS TO TRUE whenever readOnlyHint is false, so a new write tool that
+  // forgets to declare it is published as destructive and nothing fails — a
+  // considered `false` and a forgotten one leave identical annotations.
+  //
+  // The whole point of #190 was that a client which alarms on every write has
+  // said nothing, so the invariant worth pinning is that each write CHOOSES.
+  it('sets an explicit boolean destructiveHint on every write', () => {
+    const undeclared = Object.entries(registeredAnnotations())
+      .filter(([, a]) => a?.readOnlyHint === false && typeof a?.destructiveHint !== 'boolean')
+      .map(([name]) => name);
+    expect(undeclared).toEqual([]);
+  });
+
+  it('never lets a read claim to be destructive', () => {
+    // The cheap direction to get wrong, and invisible without asking.
+    const contradictory = Object.entries(registeredAnnotations())
+      .filter(([, a]) => a?.readOnlyHint === true && a?.destructiveHint === true)
+      .map(([name]) => name);
+    expect(contradictory).toEqual([]);
+  });
+
+  it('holds the destructive set at its measured size', () => {
+    // Counted off the built server, not derived — an earlier version of this
+    // test reasoned "16 DELETEs plus the three that reach a person" and
+    // asserted 20, which is wrong. A tripwire, in the same spirit as the 113
+    // above: growing this set should be a decision somebody makes, not a
+    // side effect of adding a tool.
+    const destructive = Object.entries(registeredAnnotations())
+      .filter(([, a]) => a?.readOnlyHint === false && a?.destructiveHint === true);
+    expect(destructive).toHaveLength(24);
   });
 });
