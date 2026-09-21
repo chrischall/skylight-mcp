@@ -56,7 +56,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Create a calendar event on a Skylight frame.',
       inputSchema: z.object({ ...eventAttrs, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { frameId: _frameId, ...attrs }) => {
       const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/calendar_events`, { body: pruneUndefined(attrs) });
@@ -69,7 +69,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Update a calendar event by id.',
       inputSchema: z.object({ id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, frameId: _frameId, ...attrs }: { id: string; frameId?: string } & Record<string, unknown>) => {
       const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/calendar_events/${id}`, { body: pruneUndefined(attrs) });
@@ -82,7 +82,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Delete a calendar event by id.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', `/frames/${f}/calendar_events/${id}`);
@@ -143,7 +143,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
         early_minutes_before: z.number().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { on_time, early, early_minutes_before }: { on_time?: boolean; early?: boolean; early_minutes_before?: number; frameId?: string }) => {
       const body = pruneUndefined({ on_time, early, early_minutes_before });

@@ -20,7 +20,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
         open_to_public: z.boolean().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { frameId: _frameId, ...rest }) => {
       const body = pruneUndefined(rest);
@@ -33,7 +33,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Rename a Skylight frame.',
       inputSchema: z.object({ name: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { name }: { name: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/rename`, { body: { name } })))),
@@ -48,7 +48,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
         birthday: z.string().optional().describe('YYYY-MM-DD'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { name, birthday }: { name?: string; birthday?: string; frameId?: string }) => {
       const body = pruneUndefined({ name, birthday });
@@ -65,7 +65,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
         disney_screensaver: z.boolean().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { disney_profile_pictures, disney_screensaver }: { disney_profile_pictures?: boolean; disney_screensaver?: boolean; frameId?: string }) => {
       const body = pruneUndefined({ disney_profile_pictures, disney_screensaver });
@@ -78,7 +78,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Set the global reminder cadence (how often Skylight nudges about reminders).',
       inputSchema: z.object({ interval_weeks: z.number().describe('How many weeks between reminder nudges.') }),
-      annotations: { readOnlyHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     async ({ interval_weeks }) => {
       const c = await getClient();
