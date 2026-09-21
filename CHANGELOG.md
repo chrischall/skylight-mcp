@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/chrischall/skylight-mcp/compare/v1.1.0...v1.1.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **tools:** derive destructiveHint from the HTTP verb ([#190](https://github.com/chrischall/skylight-mcp/issues/190)) ([1d1e998](https://github.com/chrischall/skylight-mcp/commit/1d1e998eb65722c763aa08e0533c0fa8b9d134e4))
+
 ## [1.1.0](https://github.com/chrischall/skylight-mcp/compare/v1.0.1...v1.1.0) (2026-09-19)
 
 
