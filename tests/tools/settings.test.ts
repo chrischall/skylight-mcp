@@ -27,6 +27,7 @@ describe('settings tools', () => {
       blur_effect: true,
       side_by_side: false,
       open_to_public: true,
+      confirm: true,
     });
     expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252', {
       body: {
@@ -60,6 +61,31 @@ describe('settings tools', () => {
     await tools.skylight_update_frame({ wakes_at: '06:30', frameId: '99' });
     expect(request).toHaveBeenCalledWith('PUT', '/frames/99', { body: { wakes_at: '06:30' } });
     expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── open_to_public is confirm-gated (fleet-audit#246) ────────────────────
+
+  it('update_frame with open_to_public:true and no confirm returns a preview and makes NO request', async () => {
+    const { tools, request } = harness();
+    const out = await tools.skylight_update_frame({ open_to_public: true, brightness: 40 });
+    expect(request).not.toHaveBeenCalled();
+    const preview = JSON.parse(out.content[0].text);
+    expect(preview).toMatchObject({
+      dryRun: true,
+      method: 'PUT',
+      path: '/frames/3435252',
+      willSend: { open_to_public: true, brightness: 40 },
+    });
+    expect(preview.action).toMatch(/public/i);
+  });
+
+  it('update_frame does not gate settings that grant no access (open_to_public:false or absent)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '3435252', type: 'frame', attributes: {} } });
+    await tools.skylight_update_frame({ open_to_public: false });
+    await tools.skylight_update_frame({ brightness: 10 });
+    expect(request).toHaveBeenNthCalledWith(1, 'PUT', '/frames/3435252', { body: { open_to_public: false } });
+    expect(request).toHaveBeenNthCalledWith(2, 'PUT', '/frames/3435252', { body: { brightness: 10 } });
   });
 
   // ── skylight_rename_frame ────────────────────────────────────────────────

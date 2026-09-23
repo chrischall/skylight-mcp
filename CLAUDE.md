@@ -103,6 +103,15 @@ Gated today: `skylight_update_meal`, `skylight_delete_meal`,
 `destructiveHint: true`, which is the separate machine-readable signal a host
 uses to decide whether to prompt — the gate does not replace it.
 
+A second, independent rule: **any grant of access or widening of visibility is
+gated**, regardless of blast radius — `skylight_invite_user`,
+`skylight_approve_user`, and `skylight_update_frame` when `open_to_public: true`
+(fleet-audit#246). Read tools return third-party-authored text verbatim
+(captions, comments, subscribed-feed event descriptions, AI drafts), so a
+prompt-injected "invite helper@attacker.example" is a real path to persistent
+access to the family's calendar and photos; the preview names the email/user
+and frame so the user sees it before it happens.
+
 ### Known unknowns — write payload shapes
 
 Write-tool payload shapes have been partially verified live:

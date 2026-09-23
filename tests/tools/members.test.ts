@@ -81,7 +81,7 @@ describe('member tools', () => {
   it('invite_user POSTs email with default frame', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'frame_user', attributes: { email: 'a@b.com' } } });
-    const out = await tools.skylight_invite_user({ email: 'a@b.com' });
+    const out = await tools.skylight_invite_user({ email: 'a@b.com', confirm: true });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/users', { body: { email: 'a@b.com' } });
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '9', type: 'frame_user', email: 'a@b.com' });
   });
@@ -89,7 +89,7 @@ describe('member tools', () => {
   it('invite_user with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'frame_user', attributes: {} } });
-    await tools.skylight_invite_user({ email: 'c@d.com', frameId: '99' });
+    await tools.skylight_invite_user({ email: 'c@d.com', frameId: '99', confirm: true });
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/users', { body: { email: 'c@d.com' } });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
@@ -99,7 +99,7 @@ describe('member tools', () => {
   it('approve_user POSTs and flattens a returned doc', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'frame_user', attributes: { status: 'active' } } });
-    const out = await tools.skylight_approve_user({ id: '9' });
+    const out = await tools.skylight_approve_user({ id: '9', confirm: true });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/users/9/approve');
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '9', type: 'frame_user', status: 'active' });
   });
@@ -107,7 +107,7 @@ describe('member tools', () => {
   it('approve_user returns {approved:id} when no doc is returned', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
-    const out = await tools.skylight_approve_user({ id: '9' });
+    const out = await tools.skylight_approve_user({ id: '9', confirm: true });
     expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/users/9/approve');
     expect(JSON.parse(out.content[0].text)).toEqual({ approved: '9' });
   });
@@ -115,9 +115,35 @@ describe('member tools', () => {
   it('approve_user with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue(undefined);
-    await tools.skylight_approve_user({ id: '9', frameId: '99' });
+    await tools.skylight_approve_user({ id: '9', frameId: '99', confirm: true });
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/users/9/approve');
     expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  // ── access grants are confirm-gated (fleet-audit#246) ────────────────────
+
+  it('invite_user without confirm returns a preview naming the email and frame, and makes NO request', async () => {
+    const { tools, request } = harness();
+    const out = await tools.skylight_invite_user({ email: 'helper@attacker.example' });
+    expect(request).not.toHaveBeenCalled();
+    const preview = JSON.parse(out.content[0].text);
+    expect(preview).toMatchObject({
+      dryRun: true,
+      method: 'POST',
+      path: '/frames/3435252/users',
+      willSend: { email: 'helper@attacker.example' },
+    });
+    expect(preview.action).toMatch(/helper@attacker\.example/);
+    expect(preview.action).toMatch(/3435252/);
+  });
+
+  it('approve_user without confirm returns a preview naming the user, and makes NO request', async () => {
+    const { tools, request } = harness();
+    const out = await tools.skylight_approve_user({ id: '9' });
+    expect(request).not.toHaveBeenCalled();
+    const preview = JSON.parse(out.content[0].text);
+    expect(preview).toMatchObject({ dryRun: true, method: 'POST', path: '/frames/3435252/users/9/approve' });
+    expect(preview.action).toMatch(/user 9/);
   });
 
   // ── skylight_remove_user ─────────────────────────────────────────────────
