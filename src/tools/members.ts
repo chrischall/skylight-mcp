@@ -1,13 +1,16 @@
 import { z } from 'zod';
-import { extname } from 'node:path';
 import { fileBlob } from '@chrischall/mcp-utils';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { vetUploadFile, type VettedUpload } from '../upload-guard.js';
 import { previewFileUploadUnlessConfirmed, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 const AVATAR_MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', gif: 'image/gif', webp: 'image/webp',
 };
+
+/** Avatars are small; a cap far above any real one still refuses a multi-GB file. */
+const MAX_AVATAR_BYTES = 20 * 1024 * 1024;
 
 export function registerMemberTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -135,11 +138,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
   // LIVE-VERIFIED: a custom photo avatar is a multipart/form-data PUT to the category with a
   // `profile_picture` file part (NOT the S3 cloud-upload flow); the server pushes it to Cloudinary
   // and fills in `profile_picture_urls`. Preset emoji avatars use `avatar_id` instead (no upload).
-  const setMemberAvatar = frameScoped(getClient, async (c, f, { id, image_path }: { id: string | number; image_path: string; frameId?: string }) => {
-    const ext = extname(image_path).slice(1).toLowerCase() || 'png';
+  const setMemberAvatar = frameScoped(getClient, async (c, f, { id, file }: { id: string | number; file: VettedUpload; frameId?: string }) => {
     const formData = new FormData();
     // fileBlob streams the file off disk (file-backed Blob) instead of buffering it.
-    formData.append('profile_picture', await fileBlob(image_path, { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
+    formData.append('profile_picture', await fileBlob(file.resolved, { type: file.mime }), `avatar.${file.ext}`);
     const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/categories/${id}`, { formData });
     return textContent(flattenJsonApi(doc));
   });
@@ -150,16 +152,17 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       description: "Set a family member's avatar to a custom photo from a local image file (uploaded as multipart/form-data). For a preset emoji avatar, use skylight_list_avatars + the avatar_id on create/update instead. Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO network call; with confirm:true it uploads.",
       inputSchema: z.object({
         id: idParam.describe('Category/member id.'),
-        image_path: z.string().describe('Absolute path to a local image file (jpg, png, heic, …).'),
+        image_path: z.string().describe('Absolute path to a local image file (jpg, jpeg, png, heic, gif, webp; max 20 MiB). Anything else — or a symlink, or a file whose contents do not match its extension — is refused.'),
         frameId: z.string().optional(),
         confirm: schemaConfirm,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     async (args: { id: string | number; image_path: string; frameId?: string; confirm?: boolean }) => {
-      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, "Upload a local file as a member's avatar", 'PUT', '/frames/{frame}/categories/{id}', AVATAR_MIME, 'png', { id: args.id });
+      const file = await vetUploadFile(args.image_path, { mimeByExt: AVATAR_MIME, maxBytes: MAX_AVATAR_BYTES });
+      const gate = previewFileUploadUnlessConfirmed(args.confirm, file, "Upload a local file as a member's avatar", 'PUT', '/frames/{frame}/categories/{id}', { id: args.id });
       if (gate) return gate;
-      return setMemberAvatar(args);
+      return setMemberAvatar({ ...args, file });
     },
   );
 

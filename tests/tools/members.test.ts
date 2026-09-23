@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerMemberTools } from '../../src/tools/members.js';
 import { makeClient } from './_setup.js';
 import { fileBlob } from '@chrischall/mcp-utils';
+import { extname } from 'node:path';
+import { vetUploadFile } from '../../src/upload-guard.js';
 
 // Partial-mock @chrischall/mcp-utils so only fileBlob is stubbed (avatar upload
 // streams the file via a file-backed Blob); the mock returns a Blob carrying the
@@ -11,13 +13,22 @@ vi.mock('@chrischall/mcp-utils', async (orig) => ({
   fileBlob: vi.fn(),
 }));
 const fileBlobMock = vi.mocked(fileBlob);
-beforeEach(() =>
+// The guard's rules are exercised against real files in upload-guard.test.ts;
+// stubbed here so these tests stay about what the avatar tool does with its verdict.
+vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn() }));
+const vetMock = vi.mocked(vetUploadFile);
+const STUB_MIME: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png' };
+beforeEach(() => {
   fileBlobMock
     .mockReset()
     .mockImplementation(async (_path: string, opts?: { type?: string }) =>
       new Blob([Buffer.from('imgbytes')], opts),
-    ),
-);
+    );
+  vetMock.mockReset().mockImplementation(async (p: string) => {
+    const ext = extname(p).slice(1).toLowerCase();
+    return { resolved: `/abs${p}`, ext, mime: STUB_MIME[ext]!, size: 8 };
+  });
+});
 
 function harness() {
   const tools: Record<string, (args: any) => Promise<any>> = {};
@@ -323,7 +334,7 @@ describe('member tools', () => {
     expect(request).not.toHaveBeenCalled();
     const preview = JSON.parse(out.content[0].text);
     expect(preview.dryRun).toBe(true);
-    expect(preview.willSend).toEqual({ id: '9', image_path: '/tmp/secret.png', mime: 'image/png' });
+    expect(preview.willSend).toEqual({ id: '9', image_path: '/abs/tmp/secret.png', mime: 'image/png', bytes: 8 });
     expect(preview.note).toMatch(/confirm: true/);
   });
 
@@ -332,7 +343,7 @@ describe('member tools', () => {
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: { profile_picture_urls: { original: 'https://cdn/x.png' } } } });
     const out = await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.png', confirm: true });
 
-    expect(fileBlobMock).toHaveBeenCalledWith('/tmp/face.png', { type: 'image/png' });
+    expect(fileBlobMock).toHaveBeenCalledWith('/abs/tmp/face.png', { type: 'image/png' });
     const [method, path, opts] = request.mock.calls[0];
     expect(method).toBe('PUT');
     expect(path).toBe('/frames/3435252/categories/9');
@@ -352,19 +363,22 @@ describe('member tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
-  it('set_member_avatar defaults an extensionless path to a png part', async () => {
-    const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
-    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/rawface', confirm: true });
-    const file = request.mock.calls[0][2].formData.get('profile_picture') as File;
-    expect(file.type).toBe('image/png');
-    expect(file.name).toBe('avatar.png');
+  it('set_member_avatar vets the path against the image allowlist and a size cap', async () => {
+    const { tools } = harness();
+    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.png' });
+    expect(vetMock).toHaveBeenCalledWith('/tmp/face.png', {
+      mimeByExt: expect.objectContaining({ png: 'image/png', jpg: 'image/jpeg' }),
+      maxBytes: 20 * 1024 * 1024,
+    });
+    expect(vetMock.mock.calls[0]![1].mimeByExt).not.toHaveProperty('mp4');
   });
 
-  it('set_member_avatar uses octet-stream for an unrecognized extension', async () => {
+  it('set_member_avatar uploads nothing when the guard refuses the file, even with confirm:true', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
-    await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/face.bmp', confirm: true });
-    expect((request.mock.calls[0][2].formData.get('profile_picture') as File).type).toBe('application/octet-stream');
+    vetMock.mockRejectedValueOnce(new Error('Refusing to upload /home/u/.aws/credentials'));
+    await expect(tools.skylight_set_member_avatar({ id: '9', image_path: '~/.aws/credentials', confirm: true }))
+      .rejects.toThrow(/Refusing to upload/);
+    expect(fileBlobMock).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 });

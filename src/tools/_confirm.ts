@@ -1,6 +1,6 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
-import { extname, resolve } from 'node:path';
 import { minifiedResult, schemaConfirm } from '@chrischall/mcp-utils';
+import type { VettedUpload } from '../upload-guard.js';
 
 export { schemaConfirm };
 
@@ -57,24 +57,24 @@ export function previewUnlessConfirmed(
 
 /**
  * Confirm-gate for a tool that reads a LOCAL file and ships its bytes off-machine
- * (photo/avatar uploads). Without `confirm: true` it returns a no-network,
- * no-S3 dry-run that echoes the RESOLVED ABSOLUTE path and the mime detected
- * from the file extension — so a prompt-injected `image_path` (e.g. a secret on
- * disk) is visible and interceptable before any byte leaves the machine. With
- * `confirm: true` it returns `null` so the caller proceeds with the upload.
+ * (photo/avatar uploads). Takes the file only AFTER `vetUploadFile` has accepted
+ * it, so the preview echoes the resolved absolute path, the sniffed-and-allowed
+ * mime and the size — a prompt-injected `image_path` is visible before any byte
+ * leaves the machine. With `confirm: true` it returns `null` so the caller
+ * proceeds with the upload.
  */
 export function previewFileUploadUnlessConfirmed(
   confirm: boolean | undefined,
-  imagePath: string,
+  file: VettedUpload,
   action: string,
   method: string,
   path: string,
-  mimeByExt: Record<string, string>,
-  defaultExt: string,
   extra?: Record<string, unknown>,
 ): CallToolResult | null {
-  const resolved = resolve(imagePath);
-  const ext = extname(resolved).slice(1).toLowerCase() || defaultExt;
-  const mime = mimeByExt[ext] ?? 'application/octet-stream';
-  return previewUnlessConfirmed(confirm, action, method, path, { ...extra, image_path: resolved, mime });
+  return previewUnlessConfirmed(confirm, action, method, path, {
+    ...extra,
+    image_path: file.resolved,
+    mime: file.mime,
+    bytes: file.size,
+  });
 }
