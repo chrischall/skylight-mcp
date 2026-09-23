@@ -176,6 +176,13 @@ used first, and if it has expired the login quietly mints a replacement. With a
 token alone, an expired token is reported as expired — the server says so
 plainly rather than claiming it is unconfigured.
 
+**A supplied refresh token is single-use.** Skylight rotates the refresh token
+every time it is spent, so the server's first start uses up
+`SKYLIGHT_REFRESH_TOKEN` and keeps working on the rotated one — which lives only
+in the [token cache](#token-cache). With a token alone, keep that cache enabled
+and writable, and never share one token between two hosts: a start that finds
+the env token already spent cannot recover without the login pair.
+
 ### Optional
 
 | Env var | Default | Purpose |
@@ -209,7 +216,11 @@ Set `SKYLIGHT_TOKEN_CACHE=false` to turn it off and log in on every start, or
 `SKYLIGHT_TOKEN_FILE` to put the cache somewhere specific.
 
 If a write fails (read-only or full data dir) the server logs to stderr and
-keeps working on the in-memory token — only the next start pays for it.
+keeps working on the in-memory token — only the next start pays for it. With
+the login pair that cost is one login. With only `SKYLIGHT_REFRESH_TOKEN` it is
+a lockout, because the rotated token was never saved: the server says so loudly
+on stderr, and warns at startup if `SKYLIGHT_TOKEN_CACHE=false` is set without
+a login pair.
 
 ## Local dev
 

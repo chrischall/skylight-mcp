@@ -3,12 +3,19 @@ import { registerPhotoTools } from '../../src/tools/photos.js';
 import { makeClient } from './_setup.js';
 import { readFile } from 'node:fs/promises';
 import { s3Upload } from '../../src/s3-upload.js';
+import { vetUploadFile } from '../../src/upload-guard.js';
+import { extname } from 'node:path';
 
 vi.mock('node:fs/promises', () => ({ readFile: vi.fn() }));
 vi.mock('../../src/s3-upload.js', () => ({ s3Upload: vi.fn() }));
+// The guard's own rules are exercised against real files in upload-guard.test.ts;
+// here it is stubbed so these tests stay about what the TOOLS do with its verdict.
+vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn() }));
 
 const readFileMock = vi.mocked(readFile);
 const s3UploadMock = vi.mocked(s3Upload);
+const vetMock = vi.mocked(vetUploadFile);
+const STUB_MIME: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png', mp4: 'video/mp4' };
 
 const CREDS = {
   access_key_id: 'AKID', secret_access_key: 'secret', session_token: 'tok',
@@ -38,6 +45,10 @@ function harness() {
 beforeEach(() => {
   readFileMock.mockReset().mockResolvedValue(Buffer.from('imgbytes'));
   s3UploadMock.mockReset().mockResolvedValue('"etag-xyz"');
+  vetMock.mockReset().mockImplementation(async (p: string) => {
+    const ext = extname(p).slice(1).toLowerCase();
+    return { resolved: `/abs${p}`, ext, mime: STUB_MIME[ext]!, size: 8 };
+  });
 });
 
 const UUID_RE = /^uploads\/10730517\/[0-9a-f-]{36}\.jpg$/;
@@ -54,7 +65,7 @@ describe('photo tools', () => {
     expect(request).not.toHaveBeenCalled();
     const preview = JSON.parse(out.content[0].text);
     expect(preview.dryRun).toBe(true);
-    expect(preview.willSend).toEqual({ image_path: '/tmp/secret.jpg', mime: 'image/jpeg' });
+    expect(preview.willSend).toEqual({ image_path: '/abs/tmp/secret.jpg', mime: 'image/jpeg', bytes: 8 });
     expect(preview.note).toMatch(/confirm: true/);
   });
 
@@ -66,7 +77,7 @@ describe('photo tools', () => {
     expect(request).not.toHaveBeenCalled();
     const preview = JSON.parse(out.content[0].text);
     expect(preview.dryRun).toBe(true);
-    expect(preview.willSend).toEqual({ image_path: '/tmp/flyer.png', mime: 'image/png' });
+    expect(preview.willSend).toEqual({ image_path: '/abs/tmp/flyer.png', mime: 'image/png', bytes: 8 });
   });
 
   // ── skylight_upload_photo ───────────────────────────────────────────────
@@ -79,7 +90,7 @@ describe('photo tools', () => {
 
     const out = await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg', caption: 'Hi', confirm: true });
 
-    expect(readFileMock).toHaveBeenCalledWith('/tmp/pic.jpg');
+    expect(readFileMock).toHaveBeenCalledWith('/abs/tmp/pic.jpg');
     expect(request).toHaveBeenNthCalledWith(1, 'GET', '/messages/cloud_upload_credentials');
 
     // s3Upload got the credentials, region, bucket, a uuid key, the bytes + mime.
@@ -128,29 +139,31 @@ describe('photo tools', () => {
     expect(request.mock.calls[1][2].body.ext).toBe('mp4');
   });
 
-  it('upload_photo: defaults an extensionless path to a jpg', async () => {
-    const { tools, request } = harness();
-    request
-      .mockResolvedValueOnce(CREDS_DOC)
-      .mockResolvedValueOnce({ data: { id: '1', type: 'message', attributes: {} } });
+  // ── local-file guard (fleet-audit#248) ──────────────────────────────────
 
-    await tools.skylight_upload_photo({ image_path: '/tmp/rawphoto', confirm: true });
+  it.each(['skylight_upload_photo', 'skylight_import_events_from_photo'])(
+    '%s vets the path against the photo/video allowlist and a size cap',
+    async (tool) => {
+      const { tools } = harness();
+      await tools[tool]!({ image_path: '/tmp/pic.jpg' });
+      expect(vetMock).toHaveBeenCalledWith('/tmp/pic.jpg', {
+        mimeByExt: expect.objectContaining({ jpg: 'image/jpeg', mp4: 'video/mp4', mov: 'video/quicktime' }),
+        maxBytes: 200 * 1024 * 1024,
+      });
+    },
+  );
 
-    expect(s3UploadMock.mock.calls[0][0].contentType).toBe('image/jpeg');
-    expect(request.mock.calls[1][2].body.ext).toBe('jpg');
-  });
-
-  it('upload_photo: uses octet-stream for an unrecognized extension', async () => {
-    const { tools, request } = harness();
-    request
-      .mockResolvedValueOnce(CREDS_DOC)
-      .mockResolvedValueOnce({ data: { id: '1', type: 'message', attributes: {} } });
-
-    await tools.skylight_upload_photo({ image_path: '/tmp/scan.xyz', confirm: true });
-
-    expect(s3UploadMock.mock.calls[0][0].contentType).toBe('application/octet-stream');
-    expect(request.mock.calls[1][2].body.ext).toBe('xyz');
-  });
+  it.each(['skylight_upload_photo', 'skylight_import_events_from_photo'])(
+    '%s uploads nothing when the guard refuses the file, even with confirm:true',
+    async (tool) => {
+      const { tools, request } = harness();
+      vetMock.mockRejectedValueOnce(new Error('Refusing to upload /home/u/.ssh/id_ed25519'));
+      await expect(tools[tool]!({ image_path: '~/.ssh/id_ed25519', confirm: true })).rejects.toThrow(/Refusing to upload/);
+      expect(readFileMock).not.toHaveBeenCalled();
+      expect(s3UploadMock).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
 
   it('upload_photo: reads credentials from a JSON:API attributes wrapper too', async () => {
     const { tools, request } = harness();

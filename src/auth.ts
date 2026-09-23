@@ -59,11 +59,39 @@ export async function resolveAuth(
       if (loginPair) return doLogin();
       throw new Error(
         'Skylight rejected the supplied refresh token — SKYLIGHT_REFRESH_TOKEN has expired or been revoked. ' +
+          'A refresh token is single-use: Skylight rotates it on every refresh, so if this one was already spent ' +
+          '(by an earlier start whose token cache was disabled or unwritable, or by another host sharing it) it cannot work again. ' +
           'Supply a fresh token, or set SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD so a new one can be minted automatically. ' +
           `(upstream: ${err instanceof Error ? err.message : String(err)})`,
       );
     }
   };
+
+  const persistence =
+    opts.persistence !== undefined
+      ? opts.persistence
+      : createTokenPersistence(
+          process.env,
+          // Bind the cache to whichever credential actually minted the pair,
+          // so replacing that credential discards the cache instead of
+          // letting a token from the old one keep working.
+          account.refreshToken
+            ? { refreshToken: account.refreshToken }
+            : { email: account.email!, password: account.password! },
+        );
+
+  // Token-only + no cache is a lockout on the next start: Skylight rotates the
+  // refresh token on first use, and without the cache the rotated one is gone
+  // when this process exits (fleet-audit#245). Only the operator's own
+  // SKYLIGHT_TOKEN_CACHE=false gets here — an injected `null` is a test seam.
+  const refreshTokenOnly = !loginPair;
+  if (refreshTokenOnly && persistence === null && opts.persistence === undefined) {
+    console.error(
+      '[skylight-mcp] WARNING: SKYLIGHT_TOKEN_CACHE=false with only SKYLIGHT_REFRESH_TOKEN set. Skylight rotates the ' +
+        'refresh token on first use, so this process will spend the env token and the rotated one will be lost when it ' +
+        'exits — the next start will fail. Re-enable the token cache, or set SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD.',
+    );
+  }
 
   const client = new SkylightClient({
     account,
@@ -71,21 +99,11 @@ export async function resolveAuth(
     // has nothing usable. Skylight's login endpoint rate-limits, so a cold start
     // that can reuse a token should not spend one.
     tokens: mintTokens,
-    persistence:
-      opts.persistence !== undefined
-        ? opts.persistence
-        : createTokenPersistence(
-            process.env,
-            // Bind the cache to whichever credential actually minted the pair,
-            // so replacing that credential discards the cache instead of
-            // letting a token from the old one keep working.
-            account.refreshToken
-              ? { refreshToken: account.refreshToken }
-              : { email: account.email!, password: account.password! },
-          ),
-    // Report rather than throw: the tokens are re-mintable from the environment,
-    // so a lost write costs the next start a login, not access.
-    onPersistError: reportCacheWriteFailure,
+    persistence,
+    // Report rather than throw: the tokens in memory are valid, so failing the
+    // request would cost access now. For a token-only deployment the report is
+    // a lockout warning, not a "next start logs in" note — see token-store.ts.
+    onPersistError: (err) => reportCacheWriteFailure(err, { refreshTokenOnly }),
     refreshFn: (refreshToken) => refresh({ authBaseUrl: account.authBaseUrl, refreshToken }, httpFetch),
     httpFetch,
   });

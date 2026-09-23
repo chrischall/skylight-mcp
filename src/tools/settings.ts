@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerSettingsTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_update_frame',
     {
-      description: 'Update Skylight frame display/sleep settings.',
+      description: 'Update Skylight frame display/sleep settings. Setting open_to_public:true makes the frame publicly reachable, so that one change returns a dry-run preview and makes NO request unless confirm:true is passed; every other setting applies directly.',
       inputSchema: z.object({
         brightness: z.number().optional(),
         slideshow_speed: z.number().optional(),
@@ -19,12 +20,20 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
         side_by_side: z.boolean().optional(),
         open_to_public: z.boolean().optional(),
         frameId: z.string().optional(),
+        confirm: schemaConfirm,
       }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    frameScoped(getClient, async (c, f, { frameId: _frameId, ...rest }) => {
+    frameScoped(getClient, async (c, f, { frameId: _frameId, confirm, ...rest }) => {
       const body = pruneUndefined(rest);
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}`, { body })));
+      const path = apiPath`/frames/${f}`;
+      // Opening the frame to the public is an access grant, not a display
+      // setting (fleet-audit#246) — gate that one change, and only that one.
+      if (rest.open_to_public === true) {
+        const gate = previewUnlessConfirmed(confirm, `Make frame ${f} open to the public — anyone can then reach it`, 'PUT', path, body);
+        if (gate) return gate;
+      }
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', path, { body })));
     }),
   );
 
@@ -36,7 +45,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { name }: { name: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/rename`, { body: { name } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/rename`, { body: { name } })))),
   );
 
   server.registerTool(
@@ -52,7 +61,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { name, birthday }: { name?: string; birthday?: string; frameId?: string }) => {
       const body = pruneUndefined({ name, birthday });
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/profile`, { body })));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/profile`, { body })));
     }),
   );
 
@@ -69,7 +78,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { disney_profile_pictures, disney_screensaver }: { disney_profile_pictures?: boolean; disney_screensaver?: boolean; frameId?: string }) => {
       const body = pruneUndefined({ disney_profile_pictures, disney_screensaver });
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', `/frames/${f}/household_config`, { body })));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/household_config`, { body })));
     }),
   );
 

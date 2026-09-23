@@ -1,16 +1,19 @@
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
-import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
 import { s3Upload, type S3Credentials } from '../s3-upload.js';
+import { vetUploadFile, type VettedUpload } from '../upload-guard.js';
 
 const MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic',
   gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime',
 };
+
+/** The photo path buffers the whole file for the S3 PUT, so it is capped. */
+const MAX_PHOTO_BYTES = 200 * 1024 * 1024;
 
 interface CloudCreds {
   credentials: S3Credentials;
@@ -23,11 +26,12 @@ interface CloudCreds {
  *  Returns { bucket, key, ext } so callers (e.g. event_importer) can reference it. */
 async function uploadFile(
   c: { request: <T = unknown>(m: string, p: string, o?: { body?: unknown }) => Promise<T> },
-  imagePath: string,
+  file: VettedUpload,
 ): Promise<{ bucket: string; key: string; etag: string; ext: string }> {
-  const body = await readFile(imagePath);
-  const ext = extname(imagePath).slice(1).toLowerCase() || 'jpg';
-  const contentType = MIME[ext] ?? 'application/octet-stream';
+  // Only ever a path `vetUploadFile` accepted — allowlisted type, regular file,
+  // not a symlink, under the cap, contents matching the extension.
+  const body = await readFile(file.resolved);
+  const { ext, mime: contentType } = file;
   const credsDoc = await c.request<{ data?: ({ attributes?: CloudCreds } & Partial<CloudCreds>) } & Partial<CloudCreds>>(
     'GET', '/messages/cloud_upload_credentials',
   );
@@ -45,8 +49,8 @@ async function uploadFile(
 }
 
 export function registerPhotoTools(server: McpServer, getClient: GetClient) {
-  const uploadPhoto = frameScoped(getClient, async (c, f, { image_path, caption, frame_ids }: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string }) => {
-    const { bucket, key, etag, ext } = await uploadFile(c, image_path);
+  const uploadPhoto = frameScoped(getClient, async (c, f, { file, caption, frame_ids }: { file: VettedUpload; caption?: string; frame_ids?: Array<string | number>; frameId?: string }) => {
+    const { bucket, key, etag, ext } = await uploadFile(c, file);
     const frames = frame_ids && frame_ids.length ? frame_ids : [f];
     // Register returns `{ data: { message_ids: [...] } }`; the photo then transcodes
     // server-side (status "processing") before it shows on the frame.
@@ -61,7 +65,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Upload a photo or video from a local file to the Skylight frame (it appears in the slideshow). Two-step: signs an S3 upload with temporary credentials, then registers it as a frame message. Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO S3/network call; with confirm:true it uploads.',
       inputSchema: z.object({
-        image_path: z.string().describe('Absolute path to a local image/video file (jpg, png, heic, mp4, …).'),
+        image_path: z.string().describe('Absolute path to a local image/video file (jpg, jpeg, png, heic, gif, webp, mp4, mov; max 200 MiB). Anything else — or a symlink, or a file whose contents do not match its extension — is refused.'),
         caption: z.string().optional().describe('Caption shown with the photo.'),
         frame_ids: idArrayParam.optional().describe('Frame ids to post to; defaults to the resolved frame.'),
         frameId: z.string().optional(),
@@ -70,17 +74,18 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     async (args: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string; confirm?: boolean }) => {
-      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, 'Upload a local file to the Skylight frame (S3)', 'POST', '/messages/uploads', MIME, 'jpg');
+      const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });
+      const gate = previewFileUploadUnlessConfirmed(args.confirm, file, 'Upload a local file to the Skylight frame (S3)', 'POST', '/messages/uploads');
       if (gate) return gate;
-      return uploadPhoto(args);
+      return uploadPhoto({ ...args, file });
     },
   );
 
-  const importEvents = frameScoped(getClient, async (c, f, { image_path, category_ids }: { image_path: string; category_ids?: Array<string | number>; frameId?: string }) => {
-    const { ext } = await uploadFile(c, image_path);
+  const importEvents = frameScoped(getClient, async (c, f, { file, category_ids }: { file: VettedUpload; category_ids?: Array<string | number>; frameId?: string }) => {
+    const { ext } = await uploadFile(c, file);
     // NOTE: the event_importer intent references the just-uploaded photo (created_via app_photo_picker);
     // the exact server-side linkage to the upload is inferred from captured traffic.
-    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
+    const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/auto_creation_intents`, {
       body: pruneUndefined({ ext, engine: 'event_importer', category_ids, created_via: 'app_photo_picker' }),
     });
     return textContent(flattenJsonApi(doc));
@@ -91,7 +96,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     {
       description: "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Best-effort/UNVERIFIED: uploads the photo to S3 then posts an event_importer intent that references the latest upload (the server-side photo↔intent link is inferred from captured traffic, not confirmed). Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO S3/network call; with confirm:true it uploads. Poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
       inputSchema: z.object({
-        image_path: z.string().describe('Absolute path to a local image of the events to import.'),
+        image_path: z.string().describe('Absolute path to a local image of the events to import (same types and 200 MiB cap as skylight_upload_photo).'),
         category_ids: idArrayParam.optional().describe('Family-member category ids to assign the imported events to.'),
         frameId: z.string().optional(),
         confirm: schemaConfirm,
@@ -99,9 +104,10 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     async (args: { image_path: string; category_ids?: Array<string | number>; frameId?: string; confirm?: boolean }) => {
-      const gate = previewFileUploadUnlessConfirmed(args.confirm, args.image_path, 'Upload a local photo to the Skylight frame (S3) and start an event_importer intent', 'POST', '/frames/{frame}/auto_creation_intents', MIME, 'jpg');
+      const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });
+      const gate = previewFileUploadUnlessConfirmed(args.confirm, file, 'Upload a local photo to the Skylight frame (S3) and start an event_importer intent', 'POST', '/frames/{frame}/auto_creation_intents');
       if (gate) return gate;
-      return importEvents(args);
+      return importEvents({ ...args, file });
     },
   );
 }

@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { previewUnlessConfirmed, previewFileUploadUnlessConfirmed } from '../../src/tools/_confirm.js';
 
-const MIME = { jpg: 'image/jpeg', png: 'image/png' };
-
 describe('previewUnlessConfirmed', () => {
   it('returns null (proceed) when confirm is true', () => {
     expect(previewUnlessConfirmed(true, 'act', 'POST', '/x', { a: 1 })).toBeNull();
@@ -27,40 +25,25 @@ describe('previewUnlessConfirmed', () => {
 });
 
 describe('previewFileUploadUnlessConfirmed', () => {
+  const FILE = { resolved: '/tmp/pic.jpg', ext: 'jpg', mime: 'image/jpeg', size: 1234 };
+
   it('returns null (proceed) when confirm is true', () => {
-    expect(previewFileUploadUnlessConfirmed(true, '/tmp/pic.jpg', 'Upload', 'POST', '/u', MIME, 'jpg')).toBeNull();
+    expect(previewFileUploadUnlessConfirmed(true, FILE, 'Upload', 'POST', '/u')).toBeNull();
   });
 
-  it('echoes the resolved absolute path + detected mime as a dry-run (no side effects)', () => {
-    const out = previewFileUploadUnlessConfirmed(undefined, '/tmp/pic.jpg', 'Upload', 'POST', '/u', MIME, 'jpg');
+  it('echoes the vetted absolute path, mime and size as a dry-run (no side effects)', () => {
+    const out = previewFileUploadUnlessConfirmed(undefined, FILE, 'Upload', 'POST', '/u');
     expect(JSON.parse(out!.content[0].text as string)).toEqual({
       dryRun: true, action: 'Upload', method: 'POST', path: '/u',
-      willSend: { image_path: '/tmp/pic.jpg', mime: 'image/jpeg' },
+      willSend: { image_path: '/tmp/pic.jpg', mime: 'image/jpeg', bytes: 1234 },
       note: 'Re-run with confirm: true to execute.',
     });
   });
 
-  it('resolves a relative path to an absolute one', () => {
-    const out = previewFileUploadUnlessConfirmed(undefined, 'sub/pic.png', 'Upload', 'POST', '/u', MIME, 'jpg');
-    const sent = JSON.parse(out!.content[0].text as string).willSend;
-    expect(sent.image_path).toBe(`${process.cwd()}/sub/pic.png`);
-    expect(sent.mime).toBe('image/png');
-  });
-
-  it('falls back to the default extension for an extensionless path', () => {
-    const out = previewFileUploadUnlessConfirmed(undefined, '/tmp/rawphoto', 'Upload', 'POST', '/u', MIME, 'jpg');
-    expect(JSON.parse(out!.content[0].text as string).willSend.mime).toBe('image/jpeg');
-  });
-
-  it('uses octet-stream for an unrecognized extension', () => {
-    const out = previewFileUploadUnlessConfirmed(undefined, '/tmp/scan.xyz', 'Upload', 'POST', '/u', MIME, 'jpg');
-    expect(JSON.parse(out!.content[0].text as string).willSend.mime).toBe('application/octet-stream');
-  });
-
   it('merges extra fields (e.g. the target id) into willSend', () => {
-    const out = previewFileUploadUnlessConfirmed(undefined, '/tmp/pic.jpg', 'Upload', 'PUT', '/u', MIME, 'jpg', { id: '9' });
+    const out = previewFileUploadUnlessConfirmed(undefined, FILE, 'Upload', 'PUT', '/u', { id: '9' });
     expect(JSON.parse(out!.content[0].text as string).willSend).toEqual({
-      id: '9', image_path: '/tmp/pic.jpg', mime: 'image/jpeg',
+      id: '9', image_path: '/tmp/pic.jpg', mime: 'image/jpeg', bytes: 1234,
     });
   });
 });

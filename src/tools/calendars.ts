@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerCalendarTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -10,7 +10,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
-    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/calendars`)))),
+    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendars`)))),
   );
 
   server.registerTool(
@@ -21,7 +21,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/calendars/${id}`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendars/${id}`)))),
   );
 
   server.registerTool(
@@ -36,7 +36,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { after, before }: { after: string; before: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/nudges`, { query: { after, before } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/nudges`, { query: { after, before } })))),
   );
 
   server.registerTool(
@@ -50,7 +50,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { sync_url }: { sync_url: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/webcal_accounts`, { body: { sync_url } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/webcal_accounts`, { body: { sync_url } })))),
   );
 
   server.registerTool(
@@ -65,7 +65,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, active_calendars }: { id: string; active_calendars: Array<string | number>; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/calendars/${id}`, { body: { active_calendars } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/calendars/${id}`, { body: { active_calendars } })))),
   );
 
   server.registerTool(
@@ -76,7 +76,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/source_calendars/${id}`);
+      await c.request('DELETE', apiPath`/frames/${f}/source_calendars/${id}`);
       return textContent({ deleted: id });
     }),
   );
@@ -92,7 +92,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
+      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
       return textContent(doc ? flattenJsonApi(doc) : { default: id });
     }),
   );
@@ -109,7 +109,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { email, app_specific_password }: { email: string; app_specific_password: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/calendars/apple`, { body: { email, app_specific_password } });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/calendars/apple`, { body: { email, app_specific_password } });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -127,7 +127,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { id, category_ids }: { id: string | number; category_ids: Array<string | number>; frameId?: string }) => {
       const categorizations = category_ids.map((cid) => ({ category_id: cid }));
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/source_calendars/${id}/source_calendar_categorizations`, { body: { categorizations } });
+      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/source_calendars/${id}/source_calendar_categorizations`, { body: { categorizations } });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -144,7 +144,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { attributes }: { attributes: Record<string, unknown>; frameId?: string }) => {
       // NOTE: generic passthrough; attribute shape is provider-specific.
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/source_calendars`, { body: { attributes } });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/source_calendars`, { body: { attributes } });
       return textContent(flattenJsonApi(doc));
     }),
   );

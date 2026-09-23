@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerListTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -13,7 +13,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/lists`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/lists`)))),
   );
 
   server.registerTool(
@@ -27,7 +27,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/lists/${listId}/list_items`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/lists/${listId}/list_items`)))),
   );
 
   server.registerTool(
@@ -43,7 +43,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { label, color, kind }: { label: string; color: string; kind: 'shopping' | 'to_do'; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists`, { body: pruneUndefined({ label, color, kind }) });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/lists`, { body: pruneUndefined({ label, color, kind }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -60,7 +60,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, label }: { listId: string; label: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/lists/${listId}/list_items`, { body: pruneUndefined({ label }) });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/lists/${listId}/list_items`, { body: pruneUndefined({ label }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -81,7 +81,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { listId, itemId, label, checked, section }: { listId: string; itemId: string; label?: string; checked?: boolean; section?: string | null; frameId?: string }) => {
       const status = checked === undefined ? undefined : (checked ? 'completed' : 'pending');
-      const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: pruneUndefined({ label, status, section }) });
+      const doc = await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/lists/${listId}/list_items/${itemId}`, { body: pruneUndefined({ label, status, section }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -98,7 +98,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId, itemId }: { listId: string; itemId: string; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/${itemId}`);
+      await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}/list_items/${itemId}`);
       return textContent({ deleted: itemId });
     }),
   );
@@ -117,7 +117,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, label, color, kind }: { listId: string; label?: string; color?: string; kind?: 'shopping' | 'to_do'; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/lists/${listId}`, { body: pruneUndefined({ label, color, kind }) });
+      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/lists/${listId}`, { body: pruneUndefined({ label, color, kind }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -133,7 +133,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/lists/${listId}`);
+      await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}`);
       return textContent({ deleted: listId });
     }),
   );
@@ -151,7 +151,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, itemId, afterItemId }: { listId: string; itemId: string; afterItemId?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/lists/${listId}/list_items/${itemId}/move`, { body: { after_item_id: afterItemId ?? null } });
+      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/lists/${listId}/list_items/${itemId}/move`, { body: { after_item_id: afterItemId ?? null } });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ moved: itemId });
     }),
   );
@@ -169,9 +169,9 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
-      const doc = await c.request<{ data?: Array<{ id: string }> }>('GET', `/frames/${f}/lists/${listId}/list_items`);
+      const doc = await c.request<{ data?: Array<{ id: string }> }>('GET', apiPath`/frames/${f}/lists/${listId}/list_items`);
       const ids = (doc?.data ?? []).map((i) => i.id);
-      if (ids.length) await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids } });
+      if (ids.length) await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids } });
       return textContent({ cleared: listId, removed: ids.length });
     }),
   );
@@ -188,7 +188,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { listId, item_ids }: { listId: string; item_ids: Array<string | number>; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids: item_ids } });
+      await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids: item_ids } });
       return textContent({ deleted: item_ids.length });
     }),
   );
@@ -207,7 +207,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { listId, item_ids, section }: { listId: string; item_ids: Array<string | number>; section?: string | null; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/lists/${listId}/list_items/bulk_update_section`, { body: { item_ids, section: section ?? null } });
+      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/lists/${listId}/list_items/bulk_update_section`, { body: { item_ids, section: section ?? null } });
       return textContent(flattenJsonApi(doc));
     }),
   );

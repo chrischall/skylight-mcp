@@ -140,6 +140,22 @@ describe('reportCacheWriteFailure', () => {
   });
 });
 
+describe('reportCacheWriteFailure for a refresh-token-only deployment', () => {
+  it('warns that the rotated token is lost instead of promising a re-login', () => {
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      reportCacheWriteFailure(new Error('ENOSPC'), { refreshTokenOnly: true });
+      const msg = String(warn.mock.calls[0]![0]);
+      expect(msg).toContain('ENOSPC');
+      expect(msg).toMatch(/SKYLIGHT_REFRESH_TOKEN/);
+      expect(msg).toMatch(/next (re)?start will fail/i);
+      expect(msg).not.toMatch(/re-run the login/);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('credential binding', () => {
   const creds = { email: 'a@b.com', password: 'pw1' };
 

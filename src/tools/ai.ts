@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerAiTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -18,7 +18,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { meal_category_id, dates, mouths_to_feed, add_to_grocery_list, recipe_source }: { meal_category_id: string | number; dates: string[]; mouths_to_feed?: number; add_to_grocery_list?: boolean; recipe_source?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/auto_creation_intents`, {
         body: {
           engine: 'meal_sittings_generator',
           text: '',
@@ -52,7 +52,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { category_ids, physical_location, activity_kind, budget, datetime_range_start, datetime_range_end }: { category_ids: Array<string | number>; physical_location: string; activity_kind?: string; budget?: string; datetime_range_start: string; datetime_range_end: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/auto_creation_intents`, {
         body: {
           engine: 'activity_ideas_generator',
           text: '',
@@ -74,7 +74,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/auto_creation_intents/${id}`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents/${id}`)))),
   );
 
   server.registerTool(
@@ -85,7 +85,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/auto_creation_intents`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents`)))),
   );
 
   server.registerTool(
@@ -96,7 +96,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/auto_creation_intents/${id}/created_events`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents/${id}/created_events`)))),
   );
 
   server.registerTool(
@@ -107,7 +107,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/auto_creation_intents/${id}/created_items`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents/${id}/created_items`)))),
   );
 
   server.registerTool(
@@ -122,7 +122,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, ids }: { id: string | number; ids: Array<string | number>; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/auto_creation_intents/${id}/created_events/bulk_approve`, { body: { ids } });
+      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/auto_creation_intents/${id}/created_events/bulk_approve`, { body: { ids } });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ approved: ids.length });
     }),
   );
@@ -135,7 +135,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/auto_creation_intents/${id}/undo`);
+      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/auto_creation_intents/${id}/undo`);
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ undone: id });
     }),
   );

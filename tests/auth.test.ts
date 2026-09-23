@@ -277,6 +277,72 @@ describe('resolveAuth token cache', () => {
     }
   });
 
+  // ── refresh-token-only deployments (fleet-audit#245) ─────────────────────
+  // Skylight ROTATES the refresh token on every refresh grant. With no login
+  // pair, the rotated token living in the cache is the ONLY thing that keeps
+  // the next start working: the env token has already been spent.
+
+  it('says loudly that a token-only deployment will lock out when the cache write fails', async () => {
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
+    mockRefresh.mockResolvedValue(GOOD_TOKENS);
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const httpFetch = vi.fn().mockResolvedValue(okResponse());
+      const { client } = await resolveAuth({
+        httpFetch,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        persistence: { load: () => null, save: () => { throw new Error('EROFS'); } } as any,
+      });
+      await expect(client.request('GET', '/frames')).resolves.toBeDefined();
+      const msg = warn.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(msg).toMatch(/SKYLIGHT_REFRESH_TOKEN/);
+      expect(msg).toMatch(/rotated|spent|single-use/i);
+      expect(msg).toMatch(/next (re)?start will fail/i);
+      // The password-path wording is false here — there is no login to re-run.
+      expect(msg).not.toMatch(/re-run the login/);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns at startup when a token-only deployment disables the cache', async () => {
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
+    process.env.SKYLIGHT_TOKEN_CACHE = 'false';
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await resolveAuth({ httpFetch: vi.fn() }); // default persistence → disabled by env
+      const msg = warn.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(msg).toMatch(/SKYLIGHT_TOKEN_CACHE=false/);
+      expect(msg).toMatch(/SKYLIGHT_REFRESH_TOKEN/);
+      expect(msg).toMatch(/rotat/i);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn about a disabled cache when a login pair can recover', async () => {
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    process.env.SKYLIGHT_TOKEN_CACHE = 'false';
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await resolveAuth({ httpFetch: vi.fn() });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('names the likely cause when a token-only deployment finds its token already spent', async () => {
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'SPENT_RT';
+    mockRefresh.mockRejectedValue(new Error('invalid_grant'));
+    const { client } = await resolveAuth({ ...noCache, httpFetch: vi.fn().mockResolvedValue(okResponse()) });
+    const err = await client.request('GET', '/frames').catch((e: Error) => e);
+    expect(String(err)).toMatch(/single-use|rotat/i);
+    expect(String(err)).toMatch(/token cache/i);
+  });
+
   it('uses the on-disk cache by default, under MCP_DATA_DIR', async () => {
     process.env.SKYLIGHT_EMAIL = 'a@b.com';
     process.env.SKYLIGHT_PASSWORD = 'pw';

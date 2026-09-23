@@ -86,18 +86,31 @@ export function createTokenPersistence(
 }
 
 /**
- * Report a cache write that failed. Deliberately not fatal: Skylight's tokens
- * are re-mintable from the credentials in the environment, so a lost write
- * costs the next start a login rather than locking anything out. It is still
- * worth saying — a read-only or full data dir otherwise looks exactly like a
- * server that simply never caches.
+ * Report a cache write that failed. Deliberately not fatal — the tokens already
+ * in memory are valid, so failing the request would cost access now to save it
+ * later. How bad the lost write is depends on the credential:
+ *
+ * - With a login pair, the next start simply logs in again.
+ * - With ONLY `SKYLIGHT_REFRESH_TOKEN` (`refreshTokenOnly`), it is a lockout in
+ *   waiting: Skylight rotates the refresh token on every refresh grant, so the
+ *   env token was spent minting this pair and the rotated one existed only in
+ *   the write that just failed. The next start re-presents the spent token and
+ *   gets "rejected the supplied refresh token" (fleet-audit#245). Say that,
+ *   loudly — the password-path wording ("re-run the login") is false here.
  *
  * stderr only; stdout is the JSON-RPC channel.
  */
-export function reportCacheWriteFailure(err: unknown): void {
+export function reportCacheWriteFailure(err: unknown, opts: { refreshTokenOnly?: boolean } = {}): void {
   const detail = err instanceof Error ? err.message : String(err);
-  console.error(
-    `[skylight-mcp] could not cache the OAuth tokens at ${tokenStorePath()} (${detail}); ` +
-      'continuing without the cache — every restart will re-run the login until this is fixed.',
-  );
+  const where = `[skylight-mcp] could not cache the OAuth tokens at ${tokenStorePath()} (${detail})`;
+  if (opts.refreshTokenOnly) {
+    console.error(
+      `${where}. WARNING: Skylight rotated SKYLIGHT_REFRESH_TOKEN when it minted this session, so the env token is now spent ` +
+        'and the rotated one was not saved. This process keeps working, but the next start will fail with ' +
+        '"rejected the supplied refresh token". Fix the token cache location (MCP_DATA_DIR / SKYLIGHT_TOKEN_FILE), ' +
+        'or set SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD so a new token can be minted.',
+    );
+    return;
+  }
+  console.error(`${where}; continuing without the cache — every restart will re-run the login until this is fixed.`);
 }
