@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/chrischall/skylight-mcp/compare/v1.1.2...v1.1.3) (2026-09-23)
+
+
+### Bug Fixes
+
+* **security:** encode path ids, gate frame access grants, vet upload files, warn on lost rotated refresh token ([#197](https://github.com/chrischall/skylight-mcp/issues/197)) ([788237f](https://github.com/chrischall/skylight-mcp/commit/788237f185718bbe5bc73c4cf346c8d2919276a4))
+
 ## [1.1.2](https://github.com/chrischall/skylight-mcp/compare/v1.1.1...v1.1.2) (2026-09-23)
 
 
