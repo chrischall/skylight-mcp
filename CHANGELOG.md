@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/chrischall/skylight-mcp/compare/v1.1.1...v1.1.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* **deps:** require zod ^4.6.5 to match @chrischall/mcp-utils 2.4.0 ([#196](https://github.com/chrischall/skylight-mcp/issues/196)) ([d6b2640](https://github.com/chrischall/skylight-mcp/commit/d6b2640ebce6ffc8f7bb590cd42e70b9a76cd2dd))
+* **deps:** upgrade @chrischall/mcp-utils to 2.4.0 and @fetchproxy/* to 3.2.0 ([#194](https://github.com/chrischall/skylight-mcp/issues/194)) ([4a5686d](https://github.com/chrischall/skylight-mcp/commit/4a5686d717e5816d1c9ae67aca77c9fac7b374e3))
+
 ## [1.1.1](https://github.com/chrischall/skylight-mcp/compare/v1.1.0...v1.1.1) (2026-09-21)
 
 
