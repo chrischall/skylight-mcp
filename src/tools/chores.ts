@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource } from './_shared.js';
 import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 interface ChoreDoc { data?: RelatedResource | RelatedResource[] | null }
@@ -62,7 +62,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { after, before }: { after: string; before: string; frameId?: string }) => {
-      const doc = await c.request<ChoreDoc | undefined>('GET', `/frames/${f}/chores`, { query: { after, before } });
+      const doc = await c.request<ChoreDoc | undefined>('GET', apiPath`/frames/${f}/chores`, { query: { after, before } });
       return doc ? textContent(flattenChores(doc)) : textContent([]);
     }),
   );
@@ -84,7 +84,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { summary, category_id, start, description, reward_points }: { summary: string; category_id: string | number; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/chores`, { body: pruneUndefined({ summary, category_id, start, description, reward_points }) });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores`, { body: pruneUndefined({ summary, category_id, start, description, reward_points }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -115,7 +115,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { summary, recurrence, category_ids, start, start_time, recurring_until, reward_points, emoji_icon, description, routine, up_for_grabs }: { summary: string; recurrence: string; category_ids?: (string | number)[]; start: string; start_time?: string; recurring_until?: string; reward_points?: number; emoji_icon?: string; description?: string; routine?: boolean; up_for_grabs?: boolean; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/chores/create_multiple`, {
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores/create_multiple`, {
         body: pruneUndefined({ summary, category_ids, recurrence_set: [`RRULE:${recurrence}`], start, start_time, recurring_until, reward_points, emoji_icon, description, routine, up_for_grabs }),
       });
       return textContent(flattenJsonApi(doc));
@@ -134,7 +134,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: { status: 'complete' } });
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', apiPath`/frames/${f}/chores/${id}/completions`, { body: { status: 'complete' } });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ completed: id });
     }),
   );
@@ -150,7 +150,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   }
 
   const updateChore = frameScoped(getClient, async (c, f, { id, summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence, recurring_until, apply_to }: UpdateChoreArgs) => {
-    const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/chores/${id}`, {
+    const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/chores/${id}`, {
       body: pruneUndefined({ summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence_set: recurrence !== undefined ? [`RRULE:${recurrence}`] : undefined, recurring_until, apply_to }),
     });
     return textContent(flattenJsonApi(doc));
@@ -219,7 +219,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time, category_id }: { id: string; instance_date: string; instance_time?: string; category_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'complete', instance_date, instance_time, category_id }) });
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', apiPath`/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'complete', instance_date, instance_time, category_id }) });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ completed: id, instance_date });
     }),
   );
@@ -240,7 +240,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time }: { id: string; instance_date?: string; instance_time?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('PUT', `/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'pending', instance_date, instance_time }) });
+      const doc = await c.request<JsonApiDoc | undefined>('PUT', apiPath`/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'pending', instance_date, instance_time }) });
       return doc ? textContent(flattenJsonApi(doc)) : textContent(pruneUndefined({ uncompleted: id, instance_date }));
     }),
   );
@@ -251,7 +251,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   interface DeleteChoreArgs { id: string; apply_to?: 'one' | 'all'; frameId?: string; confirm?: boolean }
 
   const deleteChore = frameScoped(getClient, async (c, f, { id, apply_to }: DeleteChoreArgs) => {
-    const doc = await c.request<JsonApiDoc | undefined>('DELETE', `/frames/${f}/chores/${id}`, apply_to ? { query: { apply_to } } : {});
+    const doc = await c.request<JsonApiDoc | undefined>('DELETE', apiPath`/frames/${f}/chores/${id}`, apply_to ? { query: { apply_to } } : {});
     return doc ? textContent(flattenJsonApi(doc)) : textContent({ deleted: id });
   });
 
@@ -305,7 +305,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       if (include_up_for_grabs !== undefined) query.include_up_for_grabs = String(include_up_for_grabs);
       if (limit !== undefined) query.limit = limit;
       if (ended_chore_lookback_days !== undefined) query.ended_chore_lookback_days = ended_chore_lookback_days;
-      const doc = await c.request<JsonApiDoc>('GET', `/frames/${f}/chores/search`, { query });
+      const doc = await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/chores/search`, { query });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -325,7 +325,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       const now = new Date();
       const min = redeemed_at_min ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const max = redeemed_at_max ?? now.toISOString();
-      const doc = await c.request<JsonApiDoc>('GET', `/frames/${f}/rewards`, { query: { redeemed_at_min: min, redeemed_at_max: max } });
+      const doc = await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/rewards`, { query: { redeemed_at_min: min, redeemed_at_max: max } });
       return textContent(flattenJsonApi(doc));
     }),
   );

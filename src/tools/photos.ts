@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
 import { s3Upload, type S3Credentials } from '../s3-upload.js';
 
@@ -80,7 +80,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     const { ext } = await uploadFile(c, image_path);
     // NOTE: the event_importer intent references the just-uploaded photo (created_via app_photo_picker);
     // the exact server-side linkage to the upload is inferred from captured traffic.
-    const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/auto_creation_intents`, {
+    const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/auto_creation_intents`, {
       body: pruneUndefined({ ext, engine: 'event_importer', category_ids, created_via: 'app_photo_picker' }),
     });
     return textContent(flattenJsonApi(doc));

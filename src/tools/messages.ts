@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerMessageTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -13,7 +13,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/messages`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/messages`)))),
   );
 
   server.registerTool(
@@ -26,7 +26,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/albums`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/albums`)))),
   );
 
   server.registerTool(
@@ -40,7 +40,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/messages/${id}`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/messages/${id}`)))),
   );
 
   server.registerTool(
@@ -54,7 +54,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { title }: { title: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/albums`, { body: { title } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/albums`, { body: { title } })))),
   );
 
   server.registerTool(
@@ -68,7 +68,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/albums/${id}`);
+      await c.request('DELETE', apiPath`/frames/${f}/albums/${id}`);
       return textContent({ deleted: id });
     }),
   );
@@ -87,7 +87,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { id, title, exclude_from_slideshow }: { id: string | number; title?: string; exclude_from_slideshow?: boolean; frameId?: string }) => {
       const body = pruneUndefined({ title, exclude_from_slideshow });
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', `/frames/${f}/albums/${id}`, { body })));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/albums/${id}`, { body })));
     }),
   );
 
@@ -103,7 +103,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/albums/add_to`, { body: { album_ids, message_ids } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/albums/add_to`, { body: { album_ids, message_ids } })))),
   );
 
   server.registerTool(
@@ -118,7 +118,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/albums/remove_from`, { body: { album_ids, message_ids } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/albums/remove_from`, { body: { album_ids, message_ids } })))),
   );
 
   server.registerTool(
@@ -133,7 +133,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { message_ids, new_frame_ids }: { message_ids: Array<string | number>; new_frame_ids: Array<string | number>; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/copy_to_frames`, { body: { message_ids, new_frame_ids } });
+      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/copy_to_frames`, { body: { message_ids, new_frame_ids } });
       return textContent(doc ? flattenJsonApi(doc) : { copied: message_ids.length, new_frame_ids });
     }),
   );
@@ -150,7 +150,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, body }: { id: string; body: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/messages/${id}/comments`, { body: { body } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/messages/${id}/comments`, { body: { body } })))),
   );
 
   server.registerTool(
@@ -165,7 +165,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, caption }: { id: string; caption: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/messages/${id}/caption`, { body: { caption } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/messages/${id}/caption`, { body: { caption } })))),
   );
 
   server.registerTool(
@@ -179,7 +179,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/messages/${id}/likes`);
+      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/messages/${id}/likes`);
       return textContent(doc ? flattenJsonApi(doc) : { liked: id });
     }),
   );
@@ -195,7 +195,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/messages/${id}/likes`);
+      await c.request('DELETE', apiPath`/frames/${f}/messages/${id}/likes`);
       return textContent({ unliked: id });
     }),
   );
@@ -212,7 +212,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { message_ids }: { message_ids: Array<string | number>; frameId?: string }) => {
       const qs = message_ids.map((id) => `message_ids[]=${encodeURIComponent(String(id))}`).join('&');
-      await c.request('DELETE', `/frames/${f}/messages/destroy_multiple?${qs}`);
+      await c.request('DELETE', apiPath`/frames/${f}/messages/destroy_multiple` + `?${qs}`);
       return textContent({ deleted: message_ids.length });
     }),
   );
@@ -228,7 +228,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/messages/${id}`);
+      await c.request('DELETE', apiPath`/frames/${f}/messages/${id}`);
       return textContent({ deleted: id });
     }),
   );

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc, type RelatedResource, type ResourceRef } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc, type RelatedResource, type ResourceRef } from './_shared.js';
 import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 // LIVE-VERIFIED: GET /frames/{f}/meals/sittings requires BOTH date_min and
@@ -74,7 +74,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/recipes`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/meals/recipes`)))),
   );
 
   server.registerTool(
@@ -87,7 +87,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/categories`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/meals/categories`)))),
   );
 
   server.registerTool(
@@ -102,7 +102,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { date_min, date_max }: { date_min: string; date_max: string; frameId?: string }) => {
-      const doc = await c.request<SittingDoc>('GET', `/frames/${f}/meals/sittings`, {
+      const doc = await c.request<SittingDoc>('GET', apiPath`/frames/${f}/meals/sittings`, {
         query: { date_min, date_max, include: SITTING_INCLUDE },
       });
       return textContent(flattenSittings(doc));
@@ -120,7 +120,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/meals/recipes/${id}?include=meal_category`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/meals/recipes/${id}?include=meal_category`)))),
   );
 
   server.registerTool(
@@ -136,7 +136,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { meal_category_id, summary, description }: { meal_category_id: string | number; summary: string; description?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/meals/recipes?include=meal_category`, {
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/meals/recipes?include=meal_category`, {
         body: pruneUndefined({ meal_category_id, summary, description }),
       });
       return textContent(flattenJsonApi(doc));
@@ -157,7 +157,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, meal_category_id, summary, description }: { id: string; meal_category_id?: string | number; summary?: string; description?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/meals/recipes/${id}?include=meal_category`, {
+      const doc = await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/meals/recipes/${id}?include=meal_category`, {
         body: pruneUndefined({ meal_category_id, summary, description }),
       });
       return textContent(flattenJsonApi(doc));
@@ -175,7 +175,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/meals/recipes/${id}`);
+      await c.request('DELETE', apiPath`/frames/${f}/meals/recipes/${id}`);
       return textContent({ deleted: id });
     }),
   );
@@ -200,7 +200,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { meal_recipe_id, meal_category_id, date, rrule, summary, description, note, add_to_grocery_list, saveToRecipeBox }: { meal_recipe_id?: string | number; meal_category_id: string | number; date: string; rrule?: string; summary: string; description?: string; note?: string; add_to_grocery_list?: boolean; saveToRecipeBox?: boolean; frameId?: string }) => {
       const body = pruneUndefined({ meal_recipe_id, meal_category_id, date, rrule, summary, description, note, add_to_grocery_list, saveToRecipeBox });
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/meals/sittings`, { body })));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/meals/sittings`, { body })));
     }),
   );
 
@@ -240,7 +240,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
 
   const updateMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to, summary, description, note, date, rrule, meal_category_id, meal_recipe_id }: UpdateMealArgs) => {
     const body = pruneUndefined({ summary, description, note, date, rrule, meal_category_id, meal_recipe_id });
-    const doc = await c.request<SittingDoc>('PATCH', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
+    const doc = await c.request<SittingDoc>('PATCH', apiPath`/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
       query: { apply_to, include: SITTING_INCLUDE },
       body,
     });
@@ -303,7 +303,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   );
 
   const deleteMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to }: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string }) => {
-    const doc = await c.request<SittingDoc>('DELETE', `/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
+    const doc = await c.request<SittingDoc>('DELETE', apiPath`/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
       query: { apply_to, include: SITTING_INCLUDE },
     });
     // A true 204 yields `undefined`, but a 200 {} or 200 {"data":[]} is truthy
@@ -368,7 +368,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { id, list_id }: { id: string; list_id?: string | number; frameId?: string }) => {
       // NOTE: add_to_grocery_list body (list_id) is inferred, not live-verified.
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/meals/recipes/${id}/add_to_grocery_list`, {
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/meals/recipes/${id}/add_to_grocery_list`, {
         body: pruneUndefined({ list_id }),
       });
       return doc ? textContent(flattenJsonApi(doc)) : textContent({ added: id });

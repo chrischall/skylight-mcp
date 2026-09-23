@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { extname } from 'node:path';
 import { fileBlob } from '@chrischall/mcp-utils';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
 const AVATAR_MIME: Record<string, string> = {
@@ -21,7 +21,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f, { name }: { name: string; frameId?: string }) => {
-      const cats = flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/categories`)) as Array<{ id: string; label?: string }>;
+      const cats = flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/categories`)) as Array<{ id: string; label?: string }>;
       const q = name.toLowerCase();
       const matches = cats.filter((cat) => String(cat.label ?? '').toLowerCase().includes(q));
       if (matches.length > 0) {
@@ -46,7 +46,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { email }: { email: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', `/frames/${f}/users`, { body: { email } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/users`, { body: { email } })))),
   );
 
   server.registerTool(
@@ -57,7 +57,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', `/frames/${f}/users/${id}/approve`);
+      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/users/${id}/approve`);
       return textContent(doc ? flattenJsonApi(doc) : { approved: id });
     }),
   );
@@ -70,7 +70,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/users/${id}`);
+      await c.request('DELETE', apiPath`/frames/${f}/users/${id}`);
       return textContent({ removed: id });
     }),
   );
@@ -88,7 +88,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id, reassign_to_category_id }: { id: string | number; reassign_to_category_id?: string | number; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/categories/${id}`, reassign_to_category_id !== undefined ? { body: { reassign_to_category_id } } : {});
+      await c.request('DELETE', apiPath`/frames/${f}/categories/${id}`, reassign_to_category_id !== undefined ? { body: { reassign_to_category_id } } : {});
       return textContent({ deleted: id });
     }),
   );
@@ -106,7 +106,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, birthday, dietary_preferences }: { id: string | number; birthday?: string; dietary_preferences?: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}/family_member`, { body: pruneUndefined({ birthday, dietary_preferences }) });
+      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/categories/${id}/family_member`, { body: pruneUndefined({ birthday, dietary_preferences }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -129,7 +129,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
     const formData = new FormData();
     // fileBlob streams the file off disk (file-backed Blob) instead of buffering it.
     formData.append('profile_picture', await fileBlob(image_path, { type: AVATAR_MIME[ext] ?? 'application/octet-stream' }), `avatar.${ext}`);
-    const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { formData });
+    const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/categories/${id}`, { formData });
     return textContent(flattenJsonApi(doc));
   });
 
@@ -167,7 +167,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { label: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/categories`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/categories`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -188,7 +188,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, label, color, linked_to_profile, selected_for_chore_chart, avatar_id }: { id: string | number; label?: string; color?: string; linked_to_profile?: boolean; selected_for_chore_chart?: boolean; avatar_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/categories/${id}`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
+      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/categories/${id}`, { body: pruneUndefined({ label, color, linked_to_profile, selected_for_chore_chart, avatar_id }) });
       return textContent(flattenJsonApi(doc));
     }),
   );

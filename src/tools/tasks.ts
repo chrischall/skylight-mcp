@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerTaskTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -13,7 +13,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: true },
     },
     frameScoped(getClient, async (c, f) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/task_box/items`)))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/task_box/items`)))),
   );
 
   server.registerTool(
@@ -30,7 +30,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { summary, emoji_icon, reward_points, routine }: { summary: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', `/frames/${f}/task_box/items`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/task_box/items`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -50,7 +50,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, summary, emoji_icon, reward_points, routine }: { id: string; summary?: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PATCH', `/frames/${f}/task_box/items/${id}`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
+      const doc = await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/task_box/items/${id}`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -66,7 +66,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
-      await c.request('DELETE', `/frames/${f}/task_box/items/${id}`);
+      await c.request('DELETE', apiPath`/frames/${f}/task_box/items/${id}`);
       return textContent({ deleted: id });
     }),
   );

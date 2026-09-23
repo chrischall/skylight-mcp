@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerFrameTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -23,7 +23,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({ frameId: z.string().optional().describe('Frame id; defaults to the resolved frame.') }),
       annotations: { readOnlyHint: true },
     },
-    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', `/frames/${f}`)))),
+    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}`)))),
   );
 
   server.registerTool(
@@ -33,7 +33,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
-    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/users`)))),
+    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}/users`)))),
   );
 
   server.registerTool(
@@ -43,7 +43,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
-    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', `/frames/${f}/devices`)))),
+    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}/devices`)))),
   );
 
   server.registerTool(
@@ -66,7 +66,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
-    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/reward_points`)))),
+    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/reward_points`)))),
   );
 
   server.registerTool(
@@ -76,7 +76,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true },
     },
-    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', `/frames/${f}/household_config`)))),
+    frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/household_config`)))),
   );
 
   // NOTE: device PUT body confirmed for current_album_id from the bundle; other device fields not yet exposed.
@@ -92,7 +92,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, current_album_id }: { id: string | number; current_album_id: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/devices/${id}`, { body: { current_album_id } });
+      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/devices/${id}`, { body: { current_album_id } });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -109,7 +109,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { id, name }: { id: string | number; name: string; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('PUT', `/frames/${f}/devices/${id}`, { body: { name } });
+      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/devices/${id}`, { body: { name } });
       return textContent(flattenJsonApi(doc));
     }),
   );

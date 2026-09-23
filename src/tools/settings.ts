@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerSettingsTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -24,7 +24,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { frameId: _frameId, ...rest }) => {
       const body = pruneUndefined(rest);
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}`, { body })));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}`, { body })));
     }),
   );
 
@@ -36,7 +36,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     frameScoped(getClient, async (c, f, { name }: { name: string; frameId?: string }) =>
-      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/rename`, { body: { name } })))),
+      textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/rename`, { body: { name } })))),
   );
 
   server.registerTool(
@@ -52,7 +52,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { name, birthday }: { name?: string; birthday?: string; frameId?: string }) => {
       const body = pruneUndefined({ name, birthday });
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', `/frames/${f}/profile`, { body })));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/profile`, { body })));
     }),
   );
 
@@ -69,7 +69,7 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
     },
     frameScoped(getClient, async (c, f, { disney_profile_pictures, disney_screensaver }: { disney_profile_pictures?: boolean; disney_screensaver?: boolean; frameId?: string }) => {
       const body = pruneUndefined({ disney_profile_pictures, disney_screensaver });
-      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', `/frames/${f}/household_config`, { body })));
+      return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/household_config`, { body })));
     }),
   );
 
