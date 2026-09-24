@@ -1,0 +1,17 @@
+{
+  "syncId": "00000000-0000-4000-8000-000000000001",
+  "frameId": "123456",
+  "account": "owner@example.com",
+  "calendarId": "REPLACE_WITH_MICROSOFT_CALENDAR_ID",
+  "timezone": "America/Toronto",
+  "graphTimezone": "Eastern Standard Time",
+  "excludedCategoryIds": ["REPLACE_WITH_OWN_PROFILE_ID"],
+  "excludedCalendarAccountIds": ["REPLACE_WITH_DESTINATION_OUTLOOK_SOURCE_ID"],
+  "legacyMarker": "One-time copy from Skylight",
+  "startHour": 8,
+  "endHour": 20,
+  "sourceContractVerified": false,
+  "allowDeletes": false,
+  "maxChanges": 30,
+  "maxDeletes": 5
+}

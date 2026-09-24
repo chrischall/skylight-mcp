@@ -2,6 +2,8 @@ node_modules/
 dist/
 coverage/
 .env
+.sync/
+state.enc
 *.log
 .DS_Store
 *.skill

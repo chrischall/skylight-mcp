@@ -27,12 +27,14 @@
     "dist",
     ".claude-plugin",
     "skills",
+    "examples/outlook-sync",
     ".mcp.json",
     "server.json",
     "mint.yaml"
   ],
   "scripts": {
-    "build": "tsc && npm run bundle",
+    "build": "tsc && npm run build:outlook-sync && npm run bundle",
+    "build:outlook-sync": "tsc -p examples/outlook-sync/tsconfig.json",
     "bundle": "esbuild src/index.ts --bundle --alias:zod/v4=./node_modules/zod/v4/index.cjs --platform=node --format=esm --external:dotenv --banner:js='import { createRequire as __createRequire } from \"module\"; const require = __createRequire(import.meta.url);' --outfile=dist/bundle.js",
     "dev": "node --env-file=.env dist/index.js",
     "test": "npm run build && vitest run",

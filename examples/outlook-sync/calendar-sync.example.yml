@@ -1,0 +1,37 @@
+name: Calendar sync
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply verified calendar changes (otherwise dry run)
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: calendar-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    if: vars.SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build:outlook-sync
+      - run: node examples/outlook-sync/dist/examples/outlook-sync/src/run.js
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_CONFIG: ${{ secrets.SYNC_CONFIG }}
+          SYNC_STATE_KEY: ${{ secrets.SYNC_STATE_KEY }}
+          MICROSOFT_CLIENT_ID: ${{ vars.MICROSOFT_CLIENT_ID }}
+          SYNC_APPLY: ${{ (github.event_name == 'schedule' && vars.SYNC_APPLY_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.apply == true) }}

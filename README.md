@@ -34,6 +34,10 @@ The client then refreshes the token proactively (~60 s before expiry) and reacti
 
 All data in Skylight is scoped to a *frame* (the family hub device). On first use the client auto-discovers the single frame on the account. If the account has more than one frame, set `SKYLIGHT_FRAME_ID` to the frame ID you want. Every tool that reads frame-scoped data accepts an optional `frameId` arg to override the default.
 
+## Outlook sync example
+
+The optional [Skylight to Outlook cloud sync](examples/outlook-sync/README.md) example mirrors a selected Skylight calendar into Outlook on a guarded GitHub Actions schedule. It runs without an LLM or an always-on computer, starts disabled and dry-run only, stores renewable credentials in encrypted state, and requires explicit validation before writes or deletion can be enabled.
+
 ## Tools
 
 | Module | Tool | R/W | Description |
