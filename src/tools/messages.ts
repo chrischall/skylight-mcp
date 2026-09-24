@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { confirmTokenParam, confirmWrite, nameSome } from './_confirm.js';
 
 export function registerMessageTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -203,16 +204,39 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_delete_messages',
     {
-      description: 'Bulk-delete messages/photos from the frame.',
+      description: 'Bulk-delete messages/photos from the frame — permanent; there is no trash, and a photo on the frame may exist nowhere else. Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview lists every id with its caption, and the token binds that exact set. For one message use skylight_delete_message.',
       inputSchema: z.object({
         message_ids: idArrayParam.describe('Message/photo ids to delete.'),
         frameId: z.string().optional(),
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    frameScoped(getClient, async (c, f, { message_ids }: { message_ids: Array<string | number>; frameId?: string }) => {
+    // Gated (fleet-audit#964): the caller names a SET, and nothing in the call
+    // shows what is in it. The frame's messages are read on both phases so the
+    // preview names each id by caption and the token binds the exact set.
+    frameScoped(getClient, async (c, f, { message_ids, confirmToken }: { message_ids: Array<string | number>; frameId?: string; confirmToken?: string }, ctx) => {
+      const all = flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/messages`)) as Array<{ id: string; caption?: unknown }>;
+      const messages = message_ids.map((id) => {
+        const m = all.find((x) => String(x.id) === String(id));
+        return { id, caption: m ? String(m.caption ?? '') : null };
+      });
+      const named = nameSome(messages.map((m) =>
+        m.caption === null ? `${m.id} (NOT on the frame)` : m.caption ? `${m.id} "${m.caption}"` : `${m.id} (no caption)`));
+      const path = apiPath`/frames/${f}/messages/destroy_multiple`;
+      const gate = await confirmWrite(ctx, {
+        tool: 'skylight_delete_messages',
+        action: 'message.delete_multiple',
+        description: `Permanently delete ${message_ids.length} message(s)/photo(s) from frame ${f}: ${named} — there is no trash, and a photo on the frame may exist nowhere else`,
+        target: message_ids.map(String).join(','),
+        method: 'DELETE',
+        path,
+        body: { message_ids, messages },
+        confirmToken,
+      });
+      if (gate) return gate;
       const qs = message_ids.map((id) => `message_ids[]=${encodeURIComponent(String(id))}`).join('&');
-      await c.request('DELETE', apiPath`/frames/${f}/messages/destroy_multiple` + `?${qs}`);
+      await c.request('DELETE', `${path}?${qs}`);
       return textContent({ deleted: message_ids.length });
     }),
   );

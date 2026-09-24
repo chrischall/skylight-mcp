@@ -1,13 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { registerCalendarTools } from '../../src/tools/calendars.js';
-import { makeClient } from './_setup.js';
+import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (args: any) => Promise<any>> = {};
-  const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = cb; } } as any;
+  const schemas: Record<string, any> = {};
+  // Handlers get the context of a client that cannot be prompted, so the
+  // confirm-gated Apple link runs the two-phase token flow.
+  const server = { registerTool: (name: string, cfg: any, cb: any) => { schemas[name] = cfg.inputSchema; tools[name] = (a: any) => cb(a, NO_ELICIT_CTX); } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerCalendarTools(server, async () => client);
-  return { tools, request, resolveFrameId };
+  return { tools, schemas, request, resolveFrameId };
 }
 
 describe('calendar tools', () => {
@@ -149,26 +152,128 @@ describe('calendar tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
-  // ── skylight_link_apple_calendar ─────────────────────────────────────────
+  // ── skylight_link_apple_calendar (env credential + confirm gate, fleet-audit#962 / #732) ──
 
-  it('link_apple_calendar POSTs email + app-specific password with default frame', async () => {
-    const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: { name: 'iCloud' } } });
-    const out = await tools.skylight_link_apple_calendar({ email: 'a@b.com', app_specific_password: 'xxxx-xxxx' });
-    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/calendars/apple', {
-      body: { email: 'a@b.com', app_specific_password: 'xxxx-xxxx' },
+  describe('link_apple_calendar', () => {
+    // A synthetic app-specific password in Apple's xxxx-xxxx-xxxx-xxxx shape. Not a real one.
+    const SECRET = 'abcd-efgh-ijkl-mnop';
+    const APPLE_KEYS = ['SKYLIGHT_APPLE_APP_PASSWORD', 'SKYLIGHT_APPLE_ID'] as const;
+    let saved: Record<string, string | undefined>;
+    beforeEach(() => {
+      saved = Object.fromEntries(APPLE_KEYS.map((k) => [k, process.env[k]]));
+      for (const k of APPLE_KEYS) delete process.env[k];
+      process.env.SKYLIGHT_APPLE_APP_PASSWORD = SECRET;
     });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'calendar', name: 'iCloud' });
-  });
+    afterEach(() => {
+      for (const k of APPLE_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
 
-  it('link_apple_calendar with explicit frameId uses it and skips resolveFrameId', async () => {
-    const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: {} } });
-    await tools.skylight_link_apple_calendar({ email: 'a@b.com', app_specific_password: 'xxxx-xxxx', frameId: '99' });
-    expect(request).toHaveBeenCalledWith('POST', '/frames/99/calendars/apple', {
-      body: { email: 'a@b.com', app_specific_password: 'xxxx-xxxx' },
+    it('no longer accepts the app-specific password as a tool argument', () => {
+      const { schemas } = harness();
+      const keys = Object.keys(schemas.skylight_link_apple_calendar.shape);
+      expect(keys).not.toContain('app_specific_password');
+      expect(keys).toContain('confirmToken');
     });
-    expect(resolveFrameId).not.toHaveBeenCalled();
+
+    it('refuses, before any request, when SKYLIGHT_APPLE_APP_PASSWORD is not set — and the error names the variable', async () => {
+      delete process.env.SKYLIGHT_APPLE_APP_PASSWORD;
+      const { tools, request } = harness();
+      await expect(tools.skylight_link_apple_calendar({ email: 'apple-id@example.test' }))
+        .rejects.toThrow(/SKYLIGHT_APPLE_APP_PASSWORD/);
+      expect(request).not.toHaveBeenCalled();
+    });
+
+    it('refuses when no Apple ID email is given and SKYLIGHT_APPLE_ID is unset', async () => {
+      const { tools, request } = harness();
+      await expect(tools.skylight_link_apple_calendar({})).rejects.toThrow(/SKYLIGHT_APPLE_ID/);
+      expect(request).not.toHaveBeenCalled();
+    });
+
+    it('phase 1 previews the Apple ID and frame with the password fingerprinted, never revealed, and makes NO request', async () => {
+      const { tools, request } = harness();
+      const out = phaseOne(await tools.skylight_link_apple_calendar({ email: 'apple-id@example.test' }));
+      expect(request).not.toHaveBeenCalled();
+      expect(out.status).toBe('confirmation-required');
+      expect(out.action).toBe('calendar.link_apple');
+      expect(out.preview).toMatchObject({ method: 'POST', path: '/frames/3435252/calendars/apple' });
+      expect(out.preview.willSend.email).toBe('apple-id@example.test');
+      expect(typeof out.preview.willSend.app_specific_password).toBe('string');
+      expect(out.preview.willSend.app_specific_password).toMatch(/SKYLIGHT_APPLE_APP_PASSWORD/);
+      expect(out.preview.description).toMatch(/apple-id@example\.test/);
+      expect(out.preview.description).toMatch(/3435252/);
+      expect(out.preview.description).toMatch(/iCloud|Apple/);
+      expect(JSON.stringify(out)).not.toContain(SECRET);
+      expect(JSON.stringify(out)).not.toContain('mnop');
+    });
+
+    it('a changed SKYLIGHT_APPLE_APP_PASSWORD between the phases changes the preview (the token binds the credential)', async () => {
+      const { tools } = harness();
+      const first = phaseOne(await tools.skylight_link_apple_calendar({ email: 'apple-id@example.test' }));
+      process.env.SKYLIGHT_APPLE_APP_PASSWORD = 'qrst-uvwx-yzab-cdef';
+      const second = phaseOne(await tools.skylight_link_apple_calendar({ email: 'apple-id@example.test' }));
+      expect(second.preview.willSend.app_specific_password).not.toBe(first.preview.willSend.app_specific_password);
+    });
+
+    it('the confirmed call POSTs the env password with the Apple ID, using the default frame', async () => {
+      const { tools, request } = harness();
+      request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: { name: 'iCloud' } } });
+      const out = await confirmed(tools.skylight_link_apple_calendar, { email: 'apple-id@example.test' });
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/calendars/apple', {
+        body: { email: 'apple-id@example.test', app_specific_password: SECRET },
+      });
+      expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'calendar', name: 'iCloud' });
+    });
+
+    it('defaults the Apple ID to SKYLIGHT_APPLE_ID when the email argument is omitted', async () => {
+      process.env.SKYLIGHT_APPLE_ID = 'env-apple-id@example.test';
+      const { tools, request } = harness();
+      request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: {} } });
+      const preview = phaseOne(await tools.skylight_link_apple_calendar({}));
+      expect(preview.preview.willSend.email).toBe('env-apple-id@example.test');
+      await confirmed(tools.skylight_link_apple_calendar, {});
+      expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/calendars/apple', {
+        body: { email: 'env-apple-id@example.test', app_specific_password: SECRET },
+      });
+    });
+
+    it('with explicit frameId uses it and skips resolveFrameId', async () => {
+      const { tools, request, resolveFrameId } = harness();
+      request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: {} } });
+      await confirmed(tools.skylight_link_apple_calendar, { email: 'apple-id@example.test', frameId: '99' });
+      expect(request).toHaveBeenCalledWith('POST', '/frames/99/calendars/apple', {
+        body: { email: 'apple-id@example.test', app_specific_password: SECRET },
+      });
+      expect(resolveFrameId).not.toHaveBeenCalled();
+    });
+
+    it('scrubs the password from a response that echoes it', async () => {
+      const { tools, request } = harness();
+      request.mockResolvedValue({
+        data: { id: '1', type: 'calendar', attributes: { email: 'apple-id@example.test', app_specific_password: SECRET, note: `sent ${SECRET} upstream` } },
+      });
+      const out = await confirmed(tools.skylight_link_apple_calendar, { email: 'apple-id@example.test' });
+      const text: string = out.content[0].text;
+      expect(text).not.toContain(SECRET);
+      expect(JSON.parse(text)).toMatchObject({ id: '1', email: 'apple-id@example.test' });
+    });
+
+    it('scrubs the password from an upstream error that echoes the request body', async () => {
+      const { tools, request } = harness();
+      request.mockRejectedValue(new Error(`Skylight 422: {"email":"apple-id@example.test","app_specific_password":"${SECRET}"}`));
+      let caught: unknown;
+      try {
+        await confirmed(tools.skylight_link_apple_calendar, { email: 'apple-id@example.test' });
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toMatch(/422/);
+      expect((caught as Error).message).not.toContain(SECRET);
+    });
   });
 
   // ── skylight_categorize_source_calendar ──────────────────────────────────

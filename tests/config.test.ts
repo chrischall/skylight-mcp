@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadAccount, NO_ENV_CONFIG_MARKER } from '../src/config.js';
+import { loadAccount, loadAppleCalendarCredential, NO_ENV_CONFIG_MARKER } from '../src/config.js';
 
 describe('loadAccount', () => {
   it('returns a session account from email+password', () => {
@@ -86,5 +86,23 @@ describe('loadAccount', () => {
 
   it('treats placeholder/blank values as unset', () => {
     expect(() => loadAccount({ SKYLIGHT_EMAIL: '  ', SKYLIGHT_PASSWORD: '${user.pw}' })).toThrow(/Missing Skylight auth config/);
+  });
+});
+
+describe('loadAppleCalendarCredential', () => {
+  it('reads the app-specific password and optional Apple ID from env', () => {
+    expect(loadAppleCalendarCredential({ SKYLIGHT_APPLE_APP_PASSWORD: 'abcd-efgh-ijkl-mnop', SKYLIGHT_APPLE_ID: 'apple-id@example.test' }))
+      .toEqual({ email: 'apple-id@example.test', appSpecificPassword: 'abcd-efgh-ijkl-mnop' });
+  });
+
+  it('leaves both undefined when unset, and treats placeholder values as unset', () => {
+    expect(loadAppleCalendarCredential({})).toEqual({ email: undefined, appSpecificPassword: undefined });
+    expect(loadAppleCalendarCredential({ SKYLIGHT_APPLE_APP_PASSWORD: '${user_config.apple_app_specific_password}', SKYLIGHT_APPLE_ID: 'undefined' }))
+      .toEqual({ email: undefined, appSpecificPassword: undefined });
+  });
+
+  it('does not require the Skylight login config to be present', () => {
+    // The Apple credential is independent of SKYLIGHT_EMAIL/PASSWORD/REFRESH_TOKEN.
+    expect(() => loadAppleCalendarCredential({ SKYLIGHT_APPLE_APP_PASSWORD: 'abcd-efgh-ijkl-mnop' })).not.toThrow();
   });
 });

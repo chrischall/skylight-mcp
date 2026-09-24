@@ -81,3 +81,30 @@ export function loadAccount(env: Record<string, string | undefined> = process.en
     frameId: readVar(env, 'SKYLIGHT_FRAME_ID'),
   };
 }
+
+/** Env var holding the Apple app-specific password `skylight_link_apple_calendar` sends. */
+export const APPLE_APP_PASSWORD_VAR = 'SKYLIGHT_APPLE_APP_PASSWORD';
+/** Env var holding the Apple ID email, overridable by the tool's `email` argument. */
+export const APPLE_ID_VAR = 'SKYLIGHT_APPLE_ID';
+
+/**
+ * The Apple/iCloud credential `skylight_link_apple_calendar` hands to Skylight.
+ *
+ * It lives in the environment, like every other secret the fleet handles, and
+ * is deliberately NOT a tool argument (fleet-audit#962, #732): an argument
+ * passes through the model, the chat transcript, the host's tool-call log and
+ * any client-side history — and an app-specific password grants CalDAV access
+ * to the whole iCloud account, which Skylight then keeps server-side.
+ * Independent of the Skylight login config: both fields are simply undefined
+ * when unset, and the tool reports which one is missing.
+ */
+export interface AppleCalendarCredential {
+  /** `SKYLIGHT_APPLE_ID` — the Apple ID email. */
+  email?: string;
+  /** `SKYLIGHT_APPLE_APP_PASSWORD` — an app-specific password from appleid.apple.com. */
+  appSpecificPassword?: string;
+}
+
+export function loadAppleCalendarCredential(env: Record<string, string | undefined> = process.env): AppleCalendarCredential {
+  return { email: readVar(env, APPLE_ID_VAR), appSpecificPassword: readVar(env, APPLE_APP_PASSWORD_VAR) };
+}

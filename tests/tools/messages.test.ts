@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { registerMessageTools } from '../../src/tools/messages.js';
-import { makeClient } from './_setup.js';
+import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  const server = { registerTool: (n: string, _cfg: any, cb: any) => { tools[n] = cb; } } as any;
+  // Handlers get the context of a client that cannot be prompted, so the
+  // confirm-gated bulk delete runs the two-phase token flow.
+  const server = { registerTool: (n: string, _cfg: any, cb: any) => { tools[n] = (a: any) => cb(a, NO_ELICIT_CTX); } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerMessageTools(server, async () => client);
   return { tools, request, resolveFrameId };
@@ -305,27 +307,70 @@ describe('message tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
-  // ── skylight_delete_messages ────────────────────────────────────────────
+  // ── skylight_delete_messages (confirm-gated, fleet-audit#964) ────────────
 
-  it('delete_messages DELETEs with a repeated message_ids[] query string', async () => {
+  /** GET /frames/{f}/messages → what the preview names each id by. */
+  const MESSAGES = {
+    data: [
+      { id: '1', type: 'message', attributes: { caption: 'Beach day' } },
+      { id: '2', type: 'message', attributes: { caption: '' } },
+    ],
+  };
+  function messagesThenDelete(request: ReturnType<typeof harness>['request']) {
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/messages$/.test(path)) return MESSAGES;
+      return undefined;
+    });
+  }
+  const deletes = (request: ReturnType<typeof harness>['request']) => request.mock.calls.filter((c) => c[0] === 'DELETE');
+
+  it('delete_messages phase 1 lists every id with its caption, binds the exact set, and issues NO DELETE', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue(undefined);
-    const out = await tools.skylight_delete_messages({ message_ids: ['1', 2, '3'] });
+    messagesThenDelete(request);
+    const out = phaseOne(await tools.skylight_delete_messages({ message_ids: ['1', 2, '3'] }));
+    expect(out.status).toBe('confirmation-required');
+    expect(out.action).toBe('message.delete_multiple');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/messages');
+    expect(deletes(request)).toEqual([]);
+    expect(out.preview).toMatchObject({
+      method: 'DELETE',
+      path: '/frames/3435252/messages/destroy_multiple',
+      willSend: {
+        message_ids: ['1', 2, '3'],
+        messages: [
+          { id: '1', caption: 'Beach day' },
+          { id: 2, caption: '' },
+          { id: '3', caption: null },
+        ],
+      },
+    });
+    expect(out.preview.description).toMatch(/3 /);
+    expect(out.preview.description).toMatch(/Beach day/);
+    expect(out.preview.description).toMatch(/permanent/i);
+    expect(out.preview.description).toMatch(/3435252/);
+  });
+
+  it('delete_messages DELETEs with a repeated message_ids[] query string only on the confirmed call', async () => {
+    const { tools, request } = harness();
+    messagesThenDelete(request);
+    const out = await confirmed(tools.skylight_delete_messages, { message_ids: ['1', 2, '3'] });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/messages/destroy_multiple?message_ids[]=1&message_ids[]=2&message_ids[]=3');
+    expect(deletes(request)).toHaveLength(1);
     expect(JSON.parse(out.content[0].text)).toEqual({ deleted: 3 });
   });
 
   it('delete_messages url-encodes ids', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue(undefined);
-    await tools.skylight_delete_messages({ message_ids: ['a b'] });
+    messagesThenDelete(request);
+    await confirmed(tools.skylight_delete_messages, { message_ids: ['a b'] });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/messages/destroy_multiple?message_ids[]=a%20b');
   });
 
   it('delete_messages with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue(undefined);
-    await tools.skylight_delete_messages({ message_ids: [7], frameId: '99' });
+    messagesThenDelete(request);
+    await confirmed(tools.skylight_delete_messages, { message_ids: [7], frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/messages');
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/messages/destroy_multiple?message_ids[]=7');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });

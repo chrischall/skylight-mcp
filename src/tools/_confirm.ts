@@ -43,6 +43,20 @@ export function framePath(frameId: string | undefined): string {
   return frameId === undefined ? '/frames/{frame}' : apiPath`/frames/${frameId}`;
 }
 
+/**
+ * How many named targets a preview `description` spells out before
+ * "+N more". A bulk delete of a hundred photos should still read as one
+ * sentence; the FULL list is always in `willSend`, which the token binds.
+ */
+export const PREVIEW_NAMES_MAX = 10;
+
+/** Join up to {@link PREVIEW_NAMES_MAX} names for a description, then "+N more". */
+export function nameSome(names: string[]): string {
+  const shown = names.slice(0, PREVIEW_NAMES_MAX).join(', ');
+  const rest = names.length - PREVIEW_NAMES_MAX;
+  return rest > 0 ? `${shown}, +${rest} more` : shown;
+}
+
 /** What a confirm-gated write is about to do. */
 export interface GatedWrite {
   /** The registered tool name the token is bound to. */
