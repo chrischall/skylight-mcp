@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/chrischall/skylight-mcp/compare/v1.1.3...v1.2.0) (2026-09-24)
+
+
+### Features
+
+* confirm writes with a preview token instead of confirm: true ([#199](https://github.com/chrischall/skylight-mcp/issues/199)) ([7e6e043](https://github.com/chrischall/skylight-mcp/commit/7e6e0430a547413d3d47b6ee16679d8fc1c134ed))
+
 ## [1.1.3](https://github.com/chrischall/skylight-mcp/compare/v1.1.2...v1.1.3) (2026-09-23)
 
 
