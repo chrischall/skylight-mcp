@@ -17,7 +17,9 @@
       "env": {
         "SKYLIGHT_REFRESH_TOKEN": "${user_config.skylight_refresh_token}",
         "SKYLIGHT_EMAIL": "${user_config.skylight_email}",
-        "SKYLIGHT_PASSWORD": "${user_config.skylight_password}"
+        "SKYLIGHT_PASSWORD": "${user_config.skylight_password}",
+        "SKYLIGHT_APPLE_APP_PASSWORD": "${user_config.apple_app_specific_password}",
+        "SKYLIGHT_APPLE_ID": "${user_config.apple_id}"
       }
     }
   },
@@ -41,6 +43,19 @@
       "description": "Skylight account password. Needed only if you are not supplying a refresh token above. Stored locally in the bundle config — keep it private.",
       "required": false,
       "sensitive": true
+    },
+    "apple_app_specific_password": {
+      "type": "string",
+      "title": "Apple app-specific password",
+      "description": "Optional. An app-specific password from appleid.apple.com, used only by skylight_link_apple_calendar to link an iCloud calendar to the frame. Kept here so it never has to be typed into chat — the tool takes no password argument.",
+      "required": false,
+      "sensitive": true
+    },
+    "apple_id": {
+      "type": "string",
+      "title": "Apple ID email",
+      "description": "Optional. The Apple ID whose calendars skylight_link_apple_calendar links; the tool's email argument overrides it.",
+      "required": false
     }
   },
   "tools": [

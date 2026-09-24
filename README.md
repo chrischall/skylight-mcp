@@ -59,13 +59,13 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_update_calendar` | W | Set which sub-calendars of a connected account are active |
 | frames | `skylight_delete_source_calendar` | W | Remove a connected source calendar (incl. webcal subscriptions) |
 | frames | `skylight_set_default_calendar` | W | Set the default source calendar for new events |
-| frames | `skylight_link_apple_calendar` | W | Link an Apple/iCloud calendar using an app-specific password |
+| frames | `skylight_link_apple_calendar` | W | Link an Apple/iCloud calendar; the app-specific password comes from `SKYLIGHT_APPLE_APP_PASSWORD`, never a tool argument (confirm-gated) |
 | frames | `skylight_categorize_source_calendar` | W | Attribute a source calendar's events to one or more family members |
 | frames | `skylight_create_source_calendar` | W | Create a source calendar from raw provider attributes (advanced) |
 | frames | `skylight_invite_user` | W | Invite a user to the frame by email (confirm-gated) |
 | frames | `skylight_approve_user` | W | Approve a pending frame user (confirm-gated) |
-| frames | `skylight_remove_user` | W | Remove a user from the frame |
-| frames | `skylight_delete_category` | W | Delete a category / family member (optional `reassign_to_category_id`, inferred) |
+| frames | `skylight_remove_user` | W | Remove a user from the frame (confirm-gated; the preview names the member) |
+| frames | `skylight_delete_category` | W | Delete a category / family member (optional `reassign_to_category_id`, inferred; confirm-gated, the preview names the member) |
 | frames | `skylight_update_family_member` | W | Update a family member's profile — birthday, dietary preferences (the name is the category label; set via `skylight_update_category`) |
 | frames | `skylight_update_category` | W | Update a category — rename/recolor, or convert a label into a family-member profile (`linked_to_profile`) |
 | frames | `skylight_create_category` | W | Create a category / family member (optional `linked_to_profile`, `avatar_id`) |
@@ -92,7 +92,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | lists | `skylight_delete_list_item` | W | Delete an item from a shared list |
 | lists | `skylight_delete_list_items` | W | Bulk-delete specific list items |
 | lists | `skylight_move_list_item` | W | Reorder a list item |
-| lists | `skylight_clear_list` | W | Remove all items from a list (single bulk delete) |
+| lists | `skylight_clear_list` | W | Remove all items from a list (single bulk delete; confirm-gated, the preview lists the items) |
 | lists | `skylight_set_list_item_section` | W | Move list items into a named section (or clear it) |
 | chores | `skylight_list_chores` | R | List chores within a date range |
 | chores | `skylight_search_chores` | R | Search chores (incl. unscheduled/template chores) |
@@ -136,7 +136,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | messages | `skylight_like_message` | W | Like a frame message/photo |
 | messages | `skylight_unlike_message` | W | Remove a like from a message/photo |
 | messages | `skylight_delete_message` | W | Delete a frame message/photo |
-| messages | `skylight_delete_messages` | W | Bulk-delete messages/photos from the frame |
+| messages | `skylight_delete_messages` | W | Bulk-delete messages/photos from the frame (confirm-gated, the preview lists each id with its caption) |
 | tasks | `skylight_list_tasks` | R | List task-box items |
 | tasks | `skylight_create_task` | W | Create a task-box item |
 | tasks | `skylight_update_task` | W | Update a task-box item |
@@ -190,15 +190,19 @@ the env token already spent cannot recover without the login pair.
 | `SKYLIGHT_FRAME_ID` | auto-discovered | Force a specific frame when the account has multiple |
 | `SKYLIGHT_NAME` | *(none)* | Friendly label used in startup logs |
 | `SKYLIGHT_BASE_URL` | `https://app.ourskylight.com/api` | Override the API base URL |
+| `SKYLIGHT_APPLE_APP_PASSWORD` | *(none)* | App-specific password (from appleid.apple.com) that `skylight_link_apple_calendar` sends to Skylight. Env-only by design: it is never a tool argument, so it never passes through the model, the transcript or the host's tool-call log |
+| `SKYLIGHT_APPLE_ID` | *(none)* | Apple ID email for `skylight_link_apple_calendar`; the tool's `email` argument overrides it |
 
 Treat `.env` like a password file — it is gitignored, do not commit it.
 
 ### Confirmations
 
 Some writes ask you to confirm before anything happens: uploading a local
-photo or avatar, inviting or approving a user, opening the frame to the public,
-and meal/chore edits or deletes whose `apply_to` reaches past the one occurrence
-named. A client that can show a confirmation prompt (Claude Code) shows one.
+photo or avatar; inviting, approving or removing a user; deleting a family
+member; linking an Apple calendar; opening the frame to the public; the two
+bulk deletes (`skylight_delete_messages`, `skylight_clear_list`), whose preview
+lists every item that would go; and meal/chore edits or deletes whose
+`apply_to` reaches past the one occurrence named. A client that can show a confirmation prompt (Claude Code) shows one.
 Elsewhere the first call makes no change and returns a preview of exactly what
 would be sent plus a `confirmToken`; only a repeat call with that token, and
 the same arguments, performs it — once.
