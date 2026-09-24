@@ -346,6 +346,8 @@ describe('message tools', () => {
     });
     expect(out.preview.description).toMatch(/3 /);
     expect(out.preview.description).toMatch(/Beach day/);
+    expect(out.preview.description).toMatch(/3 \(not in the frame's message list\)/);
+    expect(out.preview.description).toMatch(/2 \(no caption\)/);
     expect(out.preview.description).toMatch(/permanent/i);
     expect(out.preview.description).toMatch(/3435252/);
   });

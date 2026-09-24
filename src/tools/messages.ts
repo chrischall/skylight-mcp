@@ -222,7 +222,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         return { id, caption: m ? String(m.caption ?? '') : null };
       });
       const named = nameSome(messages.map((m) =>
-        m.caption === null ? `${m.id} (NOT on the frame)` : m.caption ? `${m.id} "${m.caption}"` : `${m.id} (no caption)`));
+        m.caption === null ? `${m.id} (not in the frame's message list)` : m.caption ? `${m.id} "${m.caption}"` : `${m.id} (no caption)`));
       const path = apiPath`/frames/${f}/messages/destroy_multiple`;
       const gate = await confirmWrite(ctx, {
         tool: 'skylight_delete_messages',
