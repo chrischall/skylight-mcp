@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerPhotoTools } from '../../src/tools/photos.js';
-import { makeClient } from './_setup.js';
+import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 import { readFile } from 'node:fs/promises';
 import { s3Upload } from '../../src/s3-upload.js';
 import { vetUploadFile } from '../../src/upload-guard.js';
@@ -36,7 +36,7 @@ function harness() {
   // Minimal `registerTool(name, config, handler)` stand-in: this harness only
   // needs the handler, so the config is ignored here. `tool-annotations.test.ts`
   // is what reads the config and holds every tool to declaring `readOnlyHint`.
-  const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = cb; } } as any;
+  const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = (a: any) => cb(a, NO_ELICIT_CTX); } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerPhotoTools(server, async () => client);
   return { tools, request, resolveFrameId };
@@ -54,30 +54,28 @@ beforeEach(() => {
 const UUID_RE = /^uploads\/10730517\/[0-9a-f-]{36}\.jpg$/;
 
 describe('photo tools', () => {
-  // ── confirm gate (dry-run) ──────────────────────────────────────────────
+  // ── confirm gate (phase 1 of the confirm-token flow) ────────────────────
 
-  it('upload_photo: without confirm, returns a dry-run preview and makes NO S3/network call', async () => {
+  it('upload_photo: phase 1 returns a preview + confirmToken and makes NO S3/network call', async () => {
     const { tools, request } = harness();
-    const out = await tools.skylight_upload_photo({ image_path: '/tmp/secret.jpg', caption: 'Hi' });
+    const out = phaseOne(await tools.skylight_upload_photo({ image_path: '/tmp/secret.jpg', caption: 'Hi' }));
     // No file read, no S3 upload, no API request happened.
     expect(readFileMock).not.toHaveBeenCalled();
     expect(s3UploadMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
-    const preview = JSON.parse(out.content[0].text);
-    expect(preview.dryRun).toBe(true);
-    expect(preview.willSend).toEqual({ image_path: '/abs/tmp/secret.jpg', mime: 'image/jpeg', bytes: 8 });
-    expect(preview.note).toMatch(/confirm: true/);
+    expect(out.status).toBe('confirmation-required');
+    expect(out.confirmToken).toEqual(expect.any(String));
+    expect(out.preview.willSend).toEqual({ caption: 'Hi', image_path: '/abs/tmp/secret.jpg', mime: 'image/jpeg', bytes: 8 });
   });
 
-  it('import_events_from_photo: without confirm, returns a dry-run preview and makes NO S3/network call', async () => {
+  it('import_events_from_photo: phase 1 returns a preview + confirmToken and makes NO S3/network call', async () => {
     const { tools, request } = harness();
-    const out = await tools.skylight_import_events_from_photo({ image_path: '/tmp/flyer.png' });
+    const out = phaseOne(await tools.skylight_import_events_from_photo({ image_path: '/tmp/flyer.png' }));
     expect(readFileMock).not.toHaveBeenCalled();
     expect(s3UploadMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
-    const preview = JSON.parse(out.content[0].text);
-    expect(preview.dryRun).toBe(true);
-    expect(preview.willSend).toEqual({ image_path: '/abs/tmp/flyer.png', mime: 'image/png', bytes: 8 });
+    expect(out.status).toBe('confirmation-required');
+    expect(out.preview.willSend).toEqual({ image_path: '/abs/tmp/flyer.png', mime: 'image/png', bytes: 8 });
   });
 
   // ── skylight_upload_photo ───────────────────────────────────────────────
@@ -88,7 +86,7 @@ describe('photo tools', () => {
       .mockResolvedValueOnce(CREDS_DOC) // GET cloud_upload_credentials
       .mockResolvedValueOnce({ data: { message_ids: [1753265440] } }); // POST /messages/uploads
 
-    const out = await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg', caption: 'Hi', confirm: true });
+    const out = await confirmed(tools.skylight_upload_photo, { image_path: '/tmp/pic.jpg', caption: 'Hi' });
 
     expect(readFileMock).toHaveBeenCalledWith('/abs/tmp/pic.jpg');
     expect(request).toHaveBeenNthCalledWith(1, 'GET', '/messages/cloud_upload_credentials');
@@ -119,7 +117,7 @@ describe('photo tools', () => {
       .mockResolvedValueOnce(CREDS_DOC)
       .mockResolvedValueOnce({ data: { id: '78', type: 'message', attributes: {} } });
 
-    await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg', frame_ids: ['11', 22], confirm: true });
+    await confirmed(tools.skylight_upload_photo, { image_path: '/tmp/pic.jpg', frame_ids: ['11', 22] });
 
     const body = request.mock.calls[1][2].body;
     expect(body.frame_ids).toEqual(['11', 22]);
@@ -132,7 +130,7 @@ describe('photo tools', () => {
       .mockResolvedValueOnce(CREDS_DOC)
       .mockResolvedValueOnce({ data: { id: '1', type: 'message', attributes: {} } });
 
-    await tools.skylight_upload_photo({ image_path: '/tmp/clip.MP4', confirm: true });
+    await confirmed(tools.skylight_upload_photo, { image_path: '/tmp/clip.MP4' });
 
     expect(s3UploadMock.mock.calls[0][0].contentType).toBe('video/mp4');
     expect(s3UploadMock.mock.calls[0][0].key).toMatch(/\.mp4$/);
@@ -154,11 +152,11 @@ describe('photo tools', () => {
   );
 
   it.each(['skylight_upload_photo', 'skylight_import_events_from_photo'])(
-    '%s uploads nothing when the guard refuses the file, even with confirm:true',
+    '%s uploads nothing when the guard refuses the file, even on the confirmed call',
     async (tool) => {
       const { tools, request } = harness();
       vetMock.mockRejectedValueOnce(new Error('Refusing to upload /home/u/.ssh/id_ed25519'));
-      await expect(tools[tool]!({ image_path: '~/.ssh/id_ed25519', confirm: true })).rejects.toThrow(/Refusing to upload/);
+      await expect(confirmed(tools[tool]!, { image_path: '~/.ssh/id_ed25519' })).rejects.toThrow(/Refusing to upload/);
       expect(readFileMock).not.toHaveBeenCalled();
       expect(s3UploadMock).not.toHaveBeenCalled();
       expect(request).not.toHaveBeenCalled();
@@ -171,7 +169,7 @@ describe('photo tools', () => {
       .mockResolvedValueOnce(CREDS_DOC_WRAPPED)
       .mockResolvedValueOnce({ data: { id: '1', type: 'message', attributes: {} } });
 
-    await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg', confirm: true });
+    await confirmed(tools.skylight_upload_photo, { image_path: '/tmp/pic.jpg' });
 
     expect(s3UploadMock.mock.calls[0][0].bucket).toBe('wrapped-bucket');
     expect(s3UploadMock.mock.calls[0][0].key).toMatch(/^uploads\/7\//);
@@ -183,7 +181,7 @@ describe('photo tools', () => {
       .mockResolvedValueOnce({ credentials: CREDS, region: 'us-east-1', bucket: 'flat-bucket', key_prefix: 'uploads/9/' })
       .mockResolvedValueOnce({ data: { id: '1', type: 'message', attributes: {} } });
 
-    await tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg', confirm: true });
+    await confirmed(tools.skylight_upload_photo, { image_path: '/tmp/pic.jpg' });
 
     expect(s3UploadMock.mock.calls[0][0].bucket).toBe('flat-bucket');
     expect(s3UploadMock.mock.calls[0][0].key).toMatch(/^uploads\/9\//);
@@ -192,7 +190,7 @@ describe('photo tools', () => {
   it('upload_photo: throws a clear error when the credentials response shape is unexpected', async () => {
     const { tools, request } = harness();
     request.mockResolvedValueOnce({ data: {} }); // no credentials/bucket/key_prefix
-    await expect(tools.skylight_upload_photo({ image_path: '/tmp/pic.jpg', confirm: true }))
+    await expect(confirmed(tools.skylight_upload_photo, { image_path: '/tmp/pic.jpg' }))
       .rejects.toThrow(/Unexpected cloud_upload_credentials response shape/);
     expect(s3UploadMock).not.toHaveBeenCalled();
   });
@@ -205,7 +203,7 @@ describe('photo tools', () => {
       .mockResolvedValueOnce(CREDS_DOC)
       .mockResolvedValueOnce({ data: { id: 'intent1', type: 'auto_creation_intent', attributes: { status: 'pending' } } });
 
-    const out = await tools.skylight_import_events_from_photo({ image_path: '/tmp/flyer.jpg', category_ids: ['5'], confirm: true });
+    const out = await confirmed(tools.skylight_import_events_from_photo, { image_path: '/tmp/flyer.jpg', category_ids: ['5'] });
 
     expect(s3UploadMock).toHaveBeenCalledOnce();
     expect(request).toHaveBeenNthCalledWith(2, 'POST', '/frames/3435252/auto_creation_intents', {
@@ -220,7 +218,7 @@ describe('photo tools', () => {
       .mockResolvedValueOnce(CREDS_DOC)
       .mockResolvedValueOnce({ data: { id: 'i2', type: 'auto_creation_intent', attributes: {} } });
 
-    await tools.skylight_import_events_from_photo({ image_path: '/tmp/flyer.jpg', frameId: '99', confirm: true });
+    await confirmed(tools.skylight_import_events_from_photo, { image_path: '/tmp/flyer.jpg', frameId: '99' });
 
     expect(resolveFrameId).not.toHaveBeenCalled();
     const [, path, opts] = request.mock.calls[1];

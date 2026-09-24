@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { registerMealTools } from '../../src/tools/meals.js';
-import { makeClient } from './_setup.js';
+import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
@@ -12,7 +12,7 @@ function harness() {
   // invisible to a handler test. They have to be asserted against the schema.
   const schemas: Record<string, any> = {};
   const server = { registerTool: (name: string, cfg: any, cb: any) => {
-    tools[name] = cb;
+    tools[name] = (a: any) => cb(a, NO_ELICIT_CTX);
     schemas[name] = cfg.inputSchema;
     annotations[name] = cfg.annotations;
   } } as any;
@@ -422,8 +422,8 @@ describe('meal tools', () => {
   it('update_meal prunes undefined fields from the body', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: [] });
-    await tools.skylight_update_meal({
-      id: '42', instance_date: '2026-09-08', apply_to: 'all', rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7, confirm: true,
+    await confirmed(tools.skylight_update_meal, {
+      id: '42', instance_date: '2026-09-08', apply_to: 'all', rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7,
     });
     const body = request.mock.calls[0][2].body;
     expect(body).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=TU', meal_recipe_id: 7 });
@@ -454,20 +454,26 @@ describe('meal tools', () => {
 
   // ── skylight_delete_meal ────────────────────────────────────────────────
 
-  it('delete_meal without confirm returns a dry-run preview and makes NO network call', async () => {
+  it('delete_meal phase 1 returns a preview + confirmToken and makes NO network call', async () => {
     const { tools, request } = harness();
-    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all' });
+    const out = phaseOne(await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all' }));
     expect(request).not.toHaveBeenCalled();
-    const preview = JSON.parse(out.content[0].text);
-    expect(preview.dryRun).toBe(true);
-    expect(preview.method).toBe('DELETE');
-    expect(preview.willSend).toEqual({ id: '42', instance_date: '2026-09-08', apply_to: 'all' });
+    expect(out.status).toBe('confirmation-required');
+    expect(out.preview.method).toBe('DELETE');
+    expect(out.preview.path).toBe('/frames/{frame}/meals/sittings/42/instances/2026-09-08?apply_to=all');
+    expect(out.preview.willSend).toEqual({ id: '42', instance_date: '2026-09-08', apply_to: 'all' });
   });
 
-  it('delete_meal with confirm DELETEs the instance route with apply_to', async () => {
+  it('delete_meal preview names an explicit frameId in its path', async () => {
+    const { tools } = harness();
+    const out = phaseOne(await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all', frameId: '99' }));
+    expect(out.preview.path).toBe('/frames/99/meals/sittings/42/instances/2026-09-08?apply_to=all');
+  });
+
+  it('delete_meal once confirmed DELETEs the instance route with apply_to', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: [] });
-    await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'future', confirm: true });
+    await confirmed(tools.skylight_delete_meal, { id: '42', instance_date: '2026-09-08', apply_to: 'future' });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/meals/sittings/42/instances/2026-09-08', {
       query: { apply_to: 'future', include: 'meal_category,meal_recipe,profiles' },
     });
@@ -476,7 +482,7 @@ describe('meal tools', () => {
   it('delete_meal falls back to a summary object when the API returns an empty body', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
-    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', confirm: true });
+    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
     expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08', apply_to: 'one' });
   });
 it('update_meal flattens a single-resource data object, not just an array', async () => {
@@ -512,7 +518,7 @@ it('update_meal flattens a single-resource data object, not just an array', asyn
     for (const body of [{}, { data: [] }, { data: null }]) {
       const { tools, request } = harness();
       request.mockResolvedValue(body);
-      const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', confirm: true });
+      const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
       expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08', apply_to: 'one' });
     }
   });
@@ -520,7 +526,7 @@ it('update_meal flattens a single-resource data object, not just an array', asyn
   it('delete_meal returns the deleted sittings when the API does send a body', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: [{ id: '42', type: 'meal_sitting', attributes: { summary: 'Tacos' } }] });
-    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'all', confirm: true });
+    const out = await confirmed(tools.skylight_delete_meal, { id: '42', instance_date: '2026-09-08', apply_to: 'all' });
     expect(JSON.parse(out.content[0].text)).toEqual([{ id: '42', type: 'meal_sitting', summary: 'Tacos' }]);
   });
 });
@@ -535,16 +541,17 @@ describe('meal confirm gate — scoped to blast radius', () => {
 
   it.each(['future', 'all'])('delete_meal gates apply_to:%s and makes NO request', async (scope) => {
     const { tools, request } = harness();
-    const res = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope });
+    const res = phaseOne(await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope }));
     expect(request).not.toHaveBeenCalled();
-    expect(JSON.parse(res.content[0].text).dryRun).toBe(true);
+    expect(res.status).toBe('confirmation-required');
   });
 
   it.each(['future', 'all'])('update_meal gates apply_to:%s and makes NO request', async (scope) => {
     const { tools, request } = harness();
-    const res = await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope, summary: 'x' });
+    const res = phaseOne(await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: scope, summary: 'x' }));
     expect(request).not.toHaveBeenCalled();
-    expect(JSON.parse(res.content[0].text).willSend).toEqual({ summary: 'x' });
+    expect(res.status).toBe('confirmation-required');
+    expect(res.preview.willSend).toEqual({ summary: 'x' });
   });
 
   it('update_meal does NOT gate apply_to:one', async () => {

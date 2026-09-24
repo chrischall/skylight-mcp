@@ -1,8 +1,9 @@
-import type { CallToolResult } from '@modelcontextprotocol/server';
-import { minifiedResult, schemaConfirm } from '@chrischall/mcp-utils';
+import type { ServerContext } from '@modelcontextprotocol/server';
+import { confirmationFromEnv, confirmTokenParam, requireConfirmationWithFallback } from '@chrischall/mcp-utils';
 import type { VettedUpload } from '../upload-guard.js';
+import { apiPath } from './_shared.js';
 
-export { schemaConfirm };
+export { confirmTokenParam };
 
 /**
  * `apply_to` scopes that destroy MORE than the occurrence the caller named.
@@ -33,48 +34,79 @@ export function affectsMultipleOccurrences(applyTo: string | undefined): boolean
 }
 
 /**
- * Confirm-gate for a mutating tool (the fleet convention). When `confirm` is not
- * `true`, returns a no-network dry-run preview of exactly what would be sent;
- * when it is `true`, returns `null` so the caller proceeds with the write.
+ * The `/frames/{f}` prefix of a preview path. A gate that runs BEFORE the frame
+ * is resolved (so its preview makes no request at all) shows the explicit
+ * `frameId` when one was passed and the `{frame}` placeholder otherwise — either
+ * way the choice is part of what the token binds.
  */
-export function previewUnlessConfirmed(
-  confirm: boolean | undefined,
-  action: string,
-  method: string,
-  path: string,
-  body?: unknown,
-): CallToolResult | null {
-  if (confirm === true) return null;
-  return minifiedResult({
-    dryRun: true,
-    action,
-    method,
-    path,
-    ...(body !== undefined ? { willSend: body } : {}),
-    note: 'Re-run with confirm: true to execute.',
-  });
+export function framePath(frameId: string | undefined): string {
+  return frameId === undefined ? '/frames/{frame}' : apiPath`/frames/${frameId}`;
+}
+
+/** What a confirm-gated write is about to do. */
+export interface GatedWrite {
+  /** The registered tool name the token is bound to. */
+  tool: string;
+  /** `<service>.<verb>` — the stable action id shown to the user. */
+  action: string;
+  /** One human sentence naming what happens and why it is gated. */
+  description: string;
+  /** The primary id acted on (bound into the token), or '' if none. */
+  target: string;
+  method: string;
+  path: string;
+  /** EXACTLY what the write sends — hashed into the token. */
+  body?: unknown;
+  /** The phase-2 token from the tool input, or undefined on phase 1. */
+  confirmToken?: string;
 }
 
 /**
- * Confirm-gate for a tool that reads a LOCAL file and ships its bytes off-machine
- * (photo/avatar uploads). Takes the file only AFTER `vetUploadFile` has accepted
- * it, so the preview echoes the resolved absolute path, the sniffed-and-allowed
- * mime and the size — a prompt-injected `image_path` is visible before any byte
- * leaves the machine. With `confirm: true` it returns `null` so the caller
- * proceeds with the upload.
+ * Confirm-gate for a mutating tool (the fleet convention, MCP_CONFIRM_MODE).
+ *
+ * A client that can show a prompt gets a real elicitation. One that cannot
+ * (claude.ai, Claude Desktop) gets the two-phase token flow: the first call
+ * writes nothing and returns the preview plus a confirmToken; only a repeat call
+ * with that token, and an unchanged `{ method, path, body }`, proceeds. Resolves
+ * `undefined` to proceed, or the result to return unchanged.
  */
-export function previewFileUploadUnlessConfirmed(
-  confirm: boolean | undefined,
+export function confirmWrite(ctx: ServerContext, w: GatedWrite) {
+  const preview: Record<string, unknown> = {
+    description: w.description,
+    method: w.method,
+    path: w.path,
+    ...(w.body !== undefined ? { willSend: w.body } : {}),
+  };
+  return requireConfirmationWithFallback(ctx, confirmationFromEnv({
+    action: w.action,
+    message: 'Review and confirm this change:',
+    details: preview,
+    tool: w.tool,
+    confirmToken: w.confirmToken,
+    subject: () => ({
+      target: w.target,
+      payload: { method: w.method, path: w.path, body: w.body },
+      preview,
+    }),
+  }));
+}
+
+/**
+ * {@link confirmWrite} for a tool that reads a LOCAL file and ships its bytes
+ * off-machine (photo/avatar uploads). Takes the file only AFTER `vetUploadFile`
+ * has accepted it, so the preview echoes the resolved absolute path, the
+ * sniffed-and-allowed mime and the size — a prompt-injected `image_path` is
+ * visible before any byte leaves the machine — and all three are bound into the
+ * token.
+ */
+export function confirmFileUpload(
+  ctx: ServerContext,
   file: VettedUpload,
-  action: string,
-  method: string,
-  path: string,
-  extra?: Record<string, unknown>,
-): CallToolResult | null {
-  return previewUnlessConfirmed(confirm, action, method, path, {
-    ...extra,
-    image_path: file.resolved,
-    mime: file.mime,
-    bytes: file.size,
+  w: Omit<GatedWrite, 'body'> & { extra?: Record<string, unknown> },
+) {
+  const { extra, ...rest } = w;
+  return confirmWrite(ctx, {
+    ...rest,
+    body: { ...extra, image_path: file.resolved, mime: file.mime, bytes: file.size },
   });
 }

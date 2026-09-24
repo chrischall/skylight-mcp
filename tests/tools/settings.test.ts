@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { registerSettingsTools } from '../../src/tools/settings.js';
-import { makeClient } from './_setup.js';
+import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (args: any) => Promise<any>> = {};
-  const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = cb; } } as any;
+  const server = { registerTool: (name: string, _cfg: any, cb: any) => { tools[name] = (a: any) => cb(a, NO_ELICIT_CTX); } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerSettingsTools(server, async () => client);
   return { tools, request, resolveFrameId };
@@ -16,7 +16,7 @@ describe('settings tools', () => {
   it('update_frame PUTs compacted settings body with default frame', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '3435252', type: 'frame', attributes: { brightness: 50 } } });
-    const out = await tools.skylight_update_frame({
+    const out = await confirmed(tools.skylight_update_frame, {
       brightness: 50,
       slideshow_speed: 10,
       slideshow_style: 'fit',
@@ -27,7 +27,6 @@ describe('settings tools', () => {
       blur_effect: true,
       side_by_side: false,
       open_to_public: true,
-      confirm: true,
     });
     expect(request).toHaveBeenCalledWith('PUT', '/frames/3435252', {
       body: {
@@ -65,18 +64,17 @@ describe('settings tools', () => {
 
   // ── open_to_public is confirm-gated (fleet-audit#246) ────────────────────
 
-  it('update_frame with open_to_public:true and no confirm returns a preview and makes NO request', async () => {
+  it('update_frame with open_to_public:true returns a phase-1 preview and makes NO request', async () => {
     const { tools, request } = harness();
-    const out = await tools.skylight_update_frame({ open_to_public: true, brightness: 40 });
+    const out = phaseOne(await tools.skylight_update_frame({ open_to_public: true, brightness: 40 }));
     expect(request).not.toHaveBeenCalled();
-    const preview = JSON.parse(out.content[0].text);
-    expect(preview).toMatchObject({
-      dryRun: true,
+    expect(out.status).toBe('confirmation-required');
+    expect(out.preview).toMatchObject({
       method: 'PUT',
       path: '/frames/3435252',
       willSend: { open_to_public: true, brightness: 40 },
     });
-    expect(preview.action).toMatch(/public/i);
+    expect(out.preview.description).toMatch(/public/i);
   });
 
   it('update_frame does not gate settings that grant no access (open_to_public:false or absent)', async () => {

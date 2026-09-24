@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/server';
+import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource } from './_shared.js';
-import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { affectsMultipleOccurrences, confirmTokenParam, confirmWrite, framePath } from './_confirm.js';
 
 interface ChoreDoc { data?: RelatedResource | RelatedResource[] | null }
 
@@ -146,7 +146,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     id: string; summary?: string; category_id?: string | number; start?: string;
     start_time?: string; description?: string; reward_points?: number; emoji_icon?: string;
     recurrence?: string; recurring_until?: string;
-    apply_to?: 'this' | 'this_and_future' | 'all'; frameId?: string; confirm?: boolean;
+    apply_to?: 'this' | 'this_and_future' | 'all'; frameId?: string; confirmToken?: string;
   }
 
   const updateChore = frameScoped(getClient, async (c, f, { id, summary, category_id, start, start_time, description, reward_points, emoji_icon, recurrence, recurring_until, apply_to }: UpdateChoreArgs) => {
@@ -159,7 +159,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_update_chore',
     {
-      description: 'Update a chore.',
+      description: "Update a chore. apply_to 'this_and_future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE).",
       inputSchema: z.object({
         id: z.string(),
         summary: z.string().optional(),
@@ -173,30 +173,33 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         recurring_until: z.string().optional().describe('ISO datetime the recurrence ends.'),
         apply_to: z.enum(['this', 'this_and_future', 'all']).optional().describe('For recurring chores: which occurrences to update.'),
         frameId: z.string().optional(),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    async (args: UpdateChoreArgs) => {
+    async (args: UpdateChoreArgs, ctx: ServerContext) => {
       // 'this_and_future' and 'all' rewrite occurrences the caller did not
       // name; 'this' and an omitted apply_to edit only the one they did.
       const gate = affectsMultipleOccurrences(args.apply_to)
-        ? previewUnlessConfirmed(
-            args.confirm,
-            `Update chore ${args.id} — scope '${args.apply_to}' rewrites MORE than this one occurrence`,
-            'PUT',
-            '/frames/{frame}/chores/{id}',
-            pruneUndefined({
+        ? await confirmWrite(ctx, {
+            tool: 'skylight_update_chore',
+            action: 'chore.update',
+            description: `Update chore ${args.id} — scope '${args.apply_to}' rewrites MORE than this one occurrence`,
+            target: args.id,
+            method: 'PUT',
+            path: `${framePath(args.frameId)}${apiPath`/chores/${args.id}`}`,
+            body: pruneUndefined({
               summary: args.summary, category_id: args.category_id, start: args.start,
               start_time: args.start_time, description: args.description,
               reward_points: args.reward_points, emoji_icon: args.emoji_icon,
               recurrence: args.recurrence, recurring_until: args.recurring_until,
               apply_to: args.apply_to,
             }),
-          )
-        : null;
+            confirmToken: args.confirmToken,
+          })
+        : undefined;
       if (gate) return gate;
-      return updateChore(args);
+      return updateChore(args, ctx);
     },
   );
 
@@ -248,7 +251,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   // LIVE-VERIFIED: series delete uses a query param — DELETE /frames/{f}/chores/{id}?apply_to=one|all.
   // "one" drops just this occurrence; "all" deletes the whole series. The API returns HTTP 200 with
   // no body, so fall back to a { deleted: id } acknowledgement.
-  interface DeleteChoreArgs { id: string; apply_to?: 'one' | 'all'; frameId?: string; confirm?: boolean }
+  interface DeleteChoreArgs { id: string; apply_to?: 'one' | 'all'; frameId?: string; confirmToken?: string }
 
   const deleteChore = frameScoped(getClient, async (c, f, { id, apply_to }: DeleteChoreArgs) => {
     const doc = await c.request<JsonApiDoc | undefined>('DELETE', apiPath`/frames/${f}/chores/${id}`, apply_to ? { query: { apply_to } } : {});
@@ -258,30 +261,33 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_delete_chore',
     {
-      description: 'Delete a chore (optionally a single occurrence or the whole series).',
+      description: "Delete a chore (optionally a single occurrence or the whole series). apply_to 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE).",
       inputSchema: z.object({
         id: z.string(),
         apply_to: z.enum(['one', 'all']).optional().describe('For a recurring chore: delete just this occurrence ("one") or the whole series ("all").'),
         frameId: z.string().optional(),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    async (args: DeleteChoreArgs) => {
+    async (args: DeleteChoreArgs, ctx: ServerContext) => {
       // Gated ONLY at 'all', which destroys the whole series. A plain delete
       // (no apply_to) and 'one' each remove exactly the thing the caller
       // named, so they cost no second round-trip.
       const gate = affectsMultipleOccurrences(args.apply_to)
-        ? previewUnlessConfirmed(
-            args.confirm,
-            `Delete chore ${args.id} — scope 'all' removes the ENTIRE series, not just one occurrence`,
-            'DELETE',
-            '/frames/{frame}/chores/{id}',
-            { id: args.id, apply_to: args.apply_to },
-          )
-        : null;
+        ? await confirmWrite(ctx, {
+            tool: 'skylight_delete_chore',
+            action: 'chore.delete',
+            description: `Delete chore ${args.id} — scope 'all' removes the ENTIRE series, not just one occurrence`,
+            target: args.id,
+            method: 'DELETE',
+            path: `${framePath(args.frameId)}${apiPath`/chores/${args.id}`}?apply_to=${args.apply_to}`,
+            body: { id: args.id, apply_to: args.apply_to },
+            confirmToken: args.confirmToken,
+          })
+        : undefined;
       if (gate) return gate;
-      return deleteChore(args);
+      return deleteChore(args, ctx);
     },
   );
 

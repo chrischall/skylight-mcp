@@ -7,7 +7,7 @@ import { vetUploadFile } from '../src/upload-guard.js';
 /**
  * fleet-audit#248: the photo/avatar upload tools read ANY local path the model
  * supplied and shipped it to Skylight — an unknown extension went up as
- * application/octet-stream, and a single injected call with confirm:true could
+ * application/octet-stream, and a single injected call with the (then) `confirm: true` flag could
  * upload ~/.ssh/id_ed25519. Nothing capped the size either.
  */
 const MIME = { jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', mp4: 'video/mp4', mov: 'video/quicktime' };

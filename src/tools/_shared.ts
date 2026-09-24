@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { flattenJsonApi, minifiedResult, pruneUndefined } from '@chrischall/mcp-utils';
+import type { ServerContext } from '@modelcontextprotocol/server';
 import type { SkylightClient } from '../client.js';
 
 // Tool-result wrapper + JSON:API flattening now come from @chrischall/mcp-utils.
@@ -32,16 +33,17 @@ export interface RelatedResource extends ResourceRef {
 export type GetClient = () => Promise<SkylightClient>;
 
 /** Wrap a frame-scoped tool handler: resolves the client + frame id once,
- *  then calls `handler(client, frameId, args)`. Eliminates the repeated
- *  getClient()/resolveFrameId() preamble. */
+ *  then calls `handler(client, frameId, args, ctx)`. Eliminates the repeated
+ *  getClient()/resolveFrameId() preamble. `ctx` is the MCP request context,
+ *  passed through for the tools that confirm a write. */
 export function frameScoped<A extends { frameId?: string }, R>(
   getClient: GetClient,
-  handler: (c: SkylightClient, frameId: string, args: A) => Promise<R>,
-): (args: A) => Promise<R> {
-  return async (args: A) => {
+  handler: (c: SkylightClient, frameId: string, args: A, ctx: ServerContext) => Promise<R>,
+): (args: A, ctx: ServerContext) => Promise<R> {
+  return async (args: A, ctx: ServerContext) => {
     const c = await getClient();
     const frameId = args.frameId ?? (await c.resolveFrameId());
-    return handler(c, frameId, args);
+    return handler(c, frameId, args, ctx);
   };
 }
 
