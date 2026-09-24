@@ -37,8 +37,9 @@ function formatLimit(bytes: number): string {
  * upload, BEFORE a byte of it leaves the machine (fleet-audit#248).
  *
  * The upload tools take a local path from the model, so a prompt-injected call
- * can name `~/.ssh/id_ed25519` or `~/.aws/credentials`; the confirm preview only
- * helps if something forces the round-trip, and nothing does. So: the extension
+ * can name `~/.ssh/id_ed25519` or `~/.aws/credentials`; the confirmation preview
+ * only helps if a human actually reads it, and under MCP_CONFIRM_MODE=auto
+ * nothing forces that. So: the extension
  * must be on the tool's allowlist (an extensionless path is refused — that is
  * what key and credential files look like), the path must be a regular file and
  * not a symlink, it must fit under `maxBytes` (the photo path buffers the whole

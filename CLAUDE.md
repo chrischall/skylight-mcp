@@ -50,7 +50,7 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `src/config.ts` — `loadAccount()`: env-var resolution, exposes `baseUrl` and `authBaseUrl`.
 - `src/client.ts` — `SkylightClient`: a thin wrapper over the shared `createApiClient` (`@chrischall/mcp-utils`) wired to the fleet `TokenManager` (`/session`). The shared client owns 429-retry, 401 mapping, redacted error formatting, and 204/empty handling; the `TokenManager` owns proactive (~60 s skew) + reactive (401-replay) refresh. Skylight-specific bits: the `skylight-api-version` `baseHeaders` and `resolveFrameId()` frame auto-discovery. Multipart uploads (avatars/photos) go through `RequestOpts.formData`.
 - `src/token-store.ts` — `tokenStorePath()` / `createTokenPersistence()`: the on-disk token cache (`$MCP_DATA_DIR/.skylight-mcp/tokens.json`, 0600) built on `createFileStatePersistence` + `resolveStateDir` (`@chrischall/mcp-utils/session`). Returns `null` when `SKYLIGHT_TOKEN_CACHE=false`, which puts `TokenManager` back to in-memory-only; `SKYLIGHT_TOKEN_FILE` overrides the path. Only the token pair is stored — never the email or password. The record is `boundTo` a salted digest of email+password, so rotating either discards the cache rather than leaving a token from the old credentials in play. `reportCacheWriteFailure` logs a failed write to stderr and does NOT throw (the in-memory tokens are valid). With a login pair a lost write costs the next start a login; with ONLY `SKYLIGHT_REFRESH_TOKEN` it is a lockout — the refresh grant rotates the token, so the env token is spent and the rotated one existed only in the failed write — and the message says so (`refreshTokenOnly`). `resolveAuth` likewise warns at startup when a token-only deployment sets `SKYLIGHT_TOKEN_CACHE=false` (fleet-audit#245).
-- `src/upload-guard.ts` — `vetUploadFile()`: runs before every photo/avatar upload, preview included. Refuses an extension off the tool's allowlist (extensionless included — that is what `~/.ssh/id_ed25519` looks like), a symlink, a non-regular file, anything over the cap (200 MiB photos/videos, 20 MiB avatars), and a file whose leading bytes do not match its extension (fleet-audit#248). The confirm preview alone was not enough: nothing forces the model to take the preview round-trip.
+- `src/upload-guard.ts` — `vetUploadFile()`: runs before every photo/avatar upload, preview included. Refuses an extension off the tool's allowlist (extensionless included — that is what `~/.ssh/id_ed25519` looks like), a symlink, a non-regular file, anything over the cap (200 MiB photos/videos, 20 MiB avatars), and a file whose leading bytes do not match its extension (fleet-audit#248). A confirmation alone was not enough: under `MCP_CONFIRM_MODE=auto` nothing forces a human to look at the preview before the token is used.
 - `src/get-client.ts` — `makeGetClient()`: the lazy `getClient` factory. Wraps `resolveAuth()` in a `CookieSessionManager` for single-flight first login + permanent-vs-transient (`NO_ENV_CONFIG_MARKER`) caching — see "No env vars → clean start" above.
 - `src/index.ts` — entry point. Boots the MCP server via `serveStdio` from the v2 SDK and `createMcpServer` from `@chrischall/mcp-utils`, wires `getClient` from `makeGetClient()`, registers the thirteen tool modules.
 - `src/tools/` — one file per domain: `frames.ts`, `settings.ts`, `calendars.ts`, `members.ts`, `events.ts`, `lists.ts`, `chores.ts`, `rewards.ts`, `meals.ts`, `messages.ts`, `tasks.ts`, `ai.ts`, `photos.ts`, plus `_shared.ts` for `textContent()`, `flattenJsonApi()`, and other helpers. `src/s3-upload.ts` holds the dependency-free SigV4 multipart S3 upload used by `photos.ts`.
@@ -111,7 +111,21 @@ gated**, regardless of blast radius — `skylight_invite_user`,
 (captions, comments, subscribed-feed event descriptions, AI drafts), so a
 prompt-injected "invite helper@attacker.example" is a real path to persistent
 access to the family's calendar and photos; the preview names the email/user
-and frame so the user sees it before it happens.
+and frame so the user sees it before it happens. The three local-file uploads
+(`skylight_upload_photo`, `skylight_import_events_from_photo`,
+`skylight_set_member_avatar`) are gated too, their preview echoing the vetted
+absolute path, mime and size.
+
+**How a gate works.** Every gate goes through `confirmWrite` /
+`confirmFileUpload` (`src/tools/_confirm.ts`), thin wrappers over mcp-utils'
+`requireConfirmationWithFallback` + `confirmationFromEnv`. A client that can be
+prompted gets a real elicitation. One that cannot (claude.ai, Claude Desktop)
+gets the two-phase token flow under `MCP_CONFIRM_MODE` (default `ask-user`): the
+first call writes nothing and returns `status: "confirmation-required"`, the
+preview (`description`, `method`, `path`, `willSend`) and a `confirmToken`;
+only a repeat call with that token proceeds. The token binds the tool, the
+target id and a hash of `{ method, path, body }`, so a changed argument is
+`DRAFT_CHANGED` and a replay is `TOKEN_REUSED`. There is no `confirm` parameter.
 
 ### Known unknowns — write payload shapes
 

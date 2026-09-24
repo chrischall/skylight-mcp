@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import type { McpServer } from '@modelcontextprotocol/server';
+import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
-import { previewFileUploadUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { confirmFileUpload, confirmTokenParam, framePath } from './_confirm.js';
 import { s3Upload, type S3Credentials } from '../s3-upload.js';
 import { vetUploadFile, type VettedUpload } from '../upload-guard.js';
 
@@ -63,21 +63,30 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_upload_photo',
     {
-      description: 'Upload a photo or video from a local file to the Skylight frame (it appears in the slideshow). Two-step: signs an S3 upload with temporary credentials, then registers it as a frame message. Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO S3/network call; with confirm:true it uploads.',
+      description: 'Upload a photo or video from a local file to the Skylight frame (it appears in the slideshow). Two-step: signs an S3 upload with temporary credentials, then registers it as a frame message. Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview echoes the resolved absolute image_path, detected mime, size and caption, and nothing is read or uploaded until it is confirmed.',
       inputSchema: z.object({
         image_path: z.string().describe('Absolute path to a local image/video file (jpg, jpeg, png, heic, gif, webp, mp4, mov; max 200 MiB). Anything else — or a symlink, or a file whose contents do not match its extension — is refused.'),
         caption: z.string().optional().describe('Caption shown with the photo.'),
         frame_ids: idArrayParam.optional().describe('Frame ids to post to; defaults to the resolved frame.'),
         frameId: z.string().optional(),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    async (args: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string; confirm?: boolean }) => {
+    async (args: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });
-      const gate = previewFileUploadUnlessConfirmed(args.confirm, file, 'Upload a local file to the Skylight frame (S3)', 'POST', '/messages/uploads');
+      const gate = await confirmFileUpload(ctx, file, {
+        tool: 'skylight_upload_photo',
+        action: 'photo.upload',
+        description: 'Upload a local file to the Skylight frame (S3)',
+        target: file.resolved,
+        method: 'POST',
+        path: '/messages/uploads',
+        extra: pruneUndefined({ caption: args.caption, frame_ids: args.frame_ids, frameId: args.frameId }),
+        confirmToken: args.confirmToken,
+      });
       if (gate) return gate;
-      return uploadPhoto({ ...args, file });
+      return uploadPhoto({ ...args, file }, ctx);
     },
   );
 
@@ -94,20 +103,29 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_import_events_from_photo',
     {
-      description: "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Best-effort/UNVERIFIED: uploads the photo to S3 then posts an event_importer intent that references the latest upload (the server-side photo↔intent link is inferred from captured traffic, not confirmed). Without confirm:true it returns a dry-run preview echoing the resolved absolute image_path + detected mime and makes NO S3/network call; with confirm:true it uploads. Poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
+      description: "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Best-effort/UNVERIFIED: uploads the photo to S3 then posts an event_importer intent that references the latest upload (the server-side photo↔intent link is inferred from captured traffic, not confirmed). Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview echoes the resolved absolute image_path, detected mime and size, and nothing is read or uploaded until it is confirmed. Poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
       inputSchema: z.object({
         image_path: z.string().describe('Absolute path to a local image of the events to import (same types and 200 MiB cap as skylight_upload_photo).'),
         category_ids: idArrayParam.optional().describe('Family-member category ids to assign the imported events to.'),
         frameId: z.string().optional(),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    async (args: { image_path: string; category_ids?: Array<string | number>; frameId?: string; confirm?: boolean }) => {
+    async (args: { image_path: string; category_ids?: Array<string | number>; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });
-      const gate = previewFileUploadUnlessConfirmed(args.confirm, file, 'Upload a local photo to the Skylight frame (S3) and start an event_importer intent', 'POST', '/frames/{frame}/auto_creation_intents');
+      const gate = await confirmFileUpload(ctx, file, {
+        tool: 'skylight_import_events_from_photo',
+        action: 'photo.import_events',
+        description: 'Upload a local photo to the Skylight frame (S3) and start an event_importer intent',
+        target: file.resolved,
+        method: 'POST',
+        path: `${framePath(args.frameId)}/auto_creation_intents`,
+        extra: pruneUndefined({ category_ids: args.category_ids }),
+        confirmToken: args.confirmToken,
+      });
       if (gate) return gate;
-      return importEvents({ ...args, file });
+      return importEvents({ ...args, file }, ctx);
     },
   );
 }

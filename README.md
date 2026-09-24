@@ -62,15 +62,15 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_link_apple_calendar` | W | Link an Apple/iCloud calendar using an app-specific password |
 | frames | `skylight_categorize_source_calendar` | W | Attribute a source calendar's events to one or more family members |
 | frames | `skylight_create_source_calendar` | W | Create a source calendar from raw provider attributes (advanced) |
-| frames | `skylight_invite_user` | W | Invite a user to the frame by email |
-| frames | `skylight_approve_user` | W | Approve a pending frame user |
+| frames | `skylight_invite_user` | W | Invite a user to the frame by email (confirm-gated) |
+| frames | `skylight_approve_user` | W | Approve a pending frame user (confirm-gated) |
 | frames | `skylight_remove_user` | W | Remove a user from the frame |
 | frames | `skylight_delete_category` | W | Delete a category / family member (optional `reassign_to_category_id`, inferred) |
 | frames | `skylight_update_family_member` | W | Update a family member's profile — birthday, dietary preferences (the name is the category label; set via `skylight_update_category`) |
 | frames | `skylight_update_category` | W | Update a category — rename/recolor, or convert a label into a family-member profile (`linked_to_profile`) |
 | frames | `skylight_create_category` | W | Create a category / family member (optional `linked_to_profile`, `avatar_id`) |
 | frames | `skylight_list_avatars` | R | List the preset avatar library (emoji/icon images) |
-| frames | `skylight_set_member_avatar` | W | Set a family member's avatar to a custom photo (dry-run unless `confirm:true`) |
+| frames | `skylight_set_member_avatar` | W | Set a family member's avatar to a custom photo (confirm-gated) |
 | frames | `skylight_set_device_album` | W | Set which photo album a device displays (inferred) |
 | frames | `skylight_rename_device` | W | Rename a Skylight device |
 | events | `skylight_list_events` | R | List calendar events within a date range |
@@ -149,8 +149,8 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | ai | `skylight_list_auto_creation_items` | R | List every draft item an AI intent created (meals, activities, list items) |
 | ai | `skylight_approve_auto_creation` | W | Approve AI-drafted events into real calendar events |
 | ai | `skylight_undo_auto_creation` | W | Undo/discard an AI auto-creation intent and its drafts |
-| photos | `skylight_upload_photo` | W | Upload a photo/video from a local file to the frame (dry-run unless `confirm:true`) |
-| photos | `skylight_import_events_from_photo` | W | Import calendar events from a photo of a flyer/invite using Skylight's AI (best-effort) |
+| photos | `skylight_upload_photo` | W | Upload a photo/video from a local file to the frame (confirm-gated) |
+| photos | `skylight_import_events_from_photo` | W | Import calendar events from a photo of a flyer/invite using Skylight's AI (best-effort; confirm-gated) |
 | health | `skylight_healthcheck` | R | Report whether the connector is working: which credential resolved, whether Skylight accepted it, and what to fix |
 
 ## Configuration
@@ -192,6 +192,22 @@ the env token already spent cannot recover without the login pair.
 | `SKYLIGHT_BASE_URL` | `https://app.ourskylight.com/api` | Override the API base URL |
 
 Treat `.env` like a password file — it is gitignored, do not commit it.
+
+### Confirmations
+
+Some writes ask you to confirm before anything happens: uploading a local
+photo or avatar, inviting or approving a user, opening the frame to the public,
+and meal/chore edits or deletes whose `apply_to` reaches past the one occurrence
+named. A client that can show a confirmation prompt (Claude Code) shows one.
+Elsewhere the first call makes no change and returns a preview of exactly what
+would be sent plus a `confirmToken`; only a repeat call with that token, and
+the same arguments, performs it — once.
+
+| variable | default | |
+|---|---|---|
+| `MCP_CONFIRM_MODE` | `ask-user` | What a write does on a client that cannot show a confirmation prompt (claude.ai, Claude Desktop). `ask-user`: two steps — the first call does nothing and returns a preview plus a token, and the model must get your approval in chat before calling again with it. `auto`: the same two steps, but the model may use the token after reviewing the preview itself. `refuse`: writes are refused on such clients. A client that can show prompts (Claude Code) always gets the real prompt. An unrecognised value is treated as `refuse`. |
+| `MCP_CONFIRM_TTL_SECONDS` | `600` | How long a token stays valid. |
+| `MCP_CONFIRM_SECRET` | random per process | Signing key; set it only if tokens must survive a server restart. |
 
 ### Token cache
 

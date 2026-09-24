@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { confirmTokenParam, confirmWrite } from './_confirm.js';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
 
 export function registerSettingsTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_update_frame',
     {
-      description: 'Update Skylight frame display/sleep settings. Setting open_to_public:true makes the frame publicly reachable, so that one change returns a dry-run preview and makes NO request unless confirm:true is passed; every other setting applies directly.',
+      description: 'Update Skylight frame display/sleep settings. Setting open_to_public:true makes the frame publicly reachable, so that one change asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). Every other setting applies directly.',
       inputSchema: z.object({
         brightness: z.number().optional(),
         slideshow_speed: z.number().optional(),
@@ -20,17 +20,26 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
         side_by_side: z.boolean().optional(),
         open_to_public: z.boolean().optional(),
         frameId: z.string().optional(),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    frameScoped(getClient, async (c, f, { frameId: _frameId, confirm, ...rest }) => {
+    frameScoped(getClient, async (c, f, { frameId: _frameId, confirmToken, ...rest }, ctx) => {
       const body = pruneUndefined(rest);
       const path = apiPath`/frames/${f}`;
       // Opening the frame to the public is an access grant, not a display
       // setting (fleet-audit#246) — gate that one change, and only that one.
       if (rest.open_to_public === true) {
-        const gate = previewUnlessConfirmed(confirm, `Make frame ${f} open to the public — anyone can then reach it`, 'PUT', path, body);
+        const gate = await confirmWrite(ctx, {
+          tool: 'skylight_update_frame',
+          action: 'frame.open_to_public',
+          description: `Make frame ${f} open to the public — anyone can then reach it`,
+          target: f,
+          method: 'PUT',
+          path,
+          body,
+          confirmToken,
+        });
         if (gate) return gate;
       }
       return textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', path, { body })));

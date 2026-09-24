@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/server';
+import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc, type RelatedResource, type ResourceRef } from './_shared.js';
-import { affectsMultipleOccurrences, previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { affectsMultipleOccurrences, confirmTokenParam, confirmWrite, framePath } from './_confirm.js';
 
 // LIVE-VERIFIED: GET /frames/{f}/meals/sittings requires BOTH date_min and
 // date_max (each is a separate 422 — "Date min is required." / "Date max is
@@ -235,7 +235,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all';
     summary?: string; description?: string; note?: string; date?: string; rrule?: string;
     meal_category_id?: string | number; meal_recipe_id?: string | number;
-    frameId?: string; confirm?: boolean;
+    frameId?: string; confirmToken?: string;
   }
 
   const updateMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to, summary, description, note, date, rrule, meal_category_id, meal_recipe_id }: UpdateMealArgs) => {
@@ -250,7 +250,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_update_meal',
     {
-      description: "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape.",
+      description: "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE).",
       inputSchema: z.object({
         id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
         // Validated, unlike the same-named param on `skylight_complete_chore_instance`,
@@ -272,33 +272,36 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         meal_category_id: idParam.optional().describe('Move to another slot (breakfast/lunch/dinner).'),
         meal_recipe_id: idParam.optional().describe('Link a different recipe.'),
         frameId: z.string().optional(),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
       // Destructive despite being an "update": per the live findings above,
       // apply_to 'one' and 'future' do not edit in place — they rewrite the
       // original series' rrule and spawn additional sittings.
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    async (args: UpdateMealArgs) => {
+    async (args: UpdateMealArgs, ctx: ServerContext) => {
       // Same rule as the delete: 'one' edits the occurrence named, but
       // 'future' and 'all' rewrite the series and spawn sittings the caller
       // did not name. The preview shows the body AND the scope before any of
       // that happens.
       const gate = affectsMultipleOccurrences(args.apply_to)
-        ? previewUnlessConfirmed(
-            args.confirm,
-            `Update planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' rewrites the series and affects MORE than this one occurrence`,
-            'PATCH',
-            '/frames/{frame}/meals/sittings/{id}/instances/{instance_date}',
-            pruneUndefined({
+        ? await confirmWrite(ctx, {
+            tool: 'skylight_update_meal',
+            action: 'meal.update',
+            description: `Update planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' rewrites the series and affects MORE than this one occurrence`,
+            target: String(args.id),
+            method: 'PATCH',
+            path: `${framePath(args.frameId)}${apiPath`/meals/sittings/${args.id}/instances/${args.instance_date}`}?apply_to=${args.apply_to}`,
+            body: pruneUndefined({
               summary: args.summary, description: args.description, note: args.note,
               date: args.date, rrule: args.rrule,
               meal_category_id: args.meal_category_id, meal_recipe_id: args.meal_recipe_id,
             }),
-          )
-        : null;
+            confirmToken: args.confirmToken,
+          })
+        : undefined;
       if (gate) return gate;
-      return updateMeal(args);
+      return updateMeal(args, ctx);
     },
   );
 
@@ -316,7 +319,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_delete_meal',
     {
-      description: "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to. There is no undo — without confirm:true this returns a dry-run preview of exactly what would be deleted and makes NO network call; with confirm:true it deletes.",
+      description: "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to. There is no undo. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview of exactly what would be deleted and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). apply_to 'one' deletes directly.",
       inputSchema: z.object({
         id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
         // Validated, unlike the same-named param on `skylight_complete_chore_instance`,
@@ -331,27 +334,30 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
           .describe("YYYY-MM-DD of the occurrence to act on — must be one of that sitting's `instances`."),
         apply_to: APPLY_TO,
         frameId: z.string().optional(),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    async (args: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string; confirm?: boolean }) => {
+    async (args: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       // Gated only when the scope reaches PAST the occurrence named: `future`
       // truncates the series and takes the whole tail, `all` reaches
       // occurrences previously split off it. `one` deletes exactly what the
       // caller asked for, so it costs no second round-trip. See
       // `affectsMultipleOccurrences` for the repo-wide rule.
       const gate = affectsMultipleOccurrences(args.apply_to)
-        ? previewUnlessConfirmed(
-            args.confirm,
-            `Delete planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' removes MORE than this one occurrence`,
-            'DELETE',
-            '/frames/{frame}/meals/sittings/{id}/instances/{instance_date}',
-            { id: args.id, instance_date: args.instance_date, apply_to: args.apply_to },
-          )
-        : null;
+        ? await confirmWrite(ctx, {
+            tool: 'skylight_delete_meal',
+            action: 'meal.delete',
+            description: `Delete planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' removes MORE than this one occurrence`,
+            target: String(args.id),
+            method: 'DELETE',
+            path: `${framePath(args.frameId)}${apiPath`/meals/sittings/${args.id}/instances/${args.instance_date}`}?apply_to=${args.apply_to}`,
+            body: { id: args.id, instance_date: args.instance_date, apply_to: args.apply_to },
+            confirmToken: args.confirmToken,
+          })
+        : undefined;
       if (gate) return gate;
-      return deleteMeal(args);
+      return deleteMeal(args, ctx);
     },
   );
 
