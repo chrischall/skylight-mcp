@@ -48,6 +48,19 @@ env:
       origin is derived from it, so pointing this elsewhere moves the login flow
       too — and the new host MUST be added to egress.allow below, or the fence
       blocks every call.
+  - name: SKYLIGHT_APPLE_APP_PASSWORD
+    secret: true
+    required: false
+    help: >-
+      Optional: an app-specific password from appleid.apple.com, used only by
+      skylight_link_apple_calendar. Env-only by design — the tool takes no
+      password argument, so the credential never passes through the model or
+      the transcript.
+  - name: SKYLIGHT_APPLE_ID
+    required: false
+    help: >-
+      Optional: the Apple ID email skylight_link_apple_calendar links; the
+      tool's email argument overrides it.
 state:
   dataDir: true
   reason: >-

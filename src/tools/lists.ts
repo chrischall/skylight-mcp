@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { confirmTokenParam, confirmWrite, nameSome } from './_confirm.js';
 
 export function registerListTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -161,17 +162,36 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_clear_list',
     {
-      description: 'Remove all items from a list.',
+      description: 'Remove all items from a list — permanent. Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview lists every item that would go, by label, and the token binds that exact set. An already-empty list needs no confirmation.',
       inputSchema: z.object({
         listId: z.string(),
         frameId: z.string().optional(),
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
-      const doc = await c.request<{ data?: Array<{ id: string }> }>('GET', apiPath`/frames/${f}/lists/${listId}/list_items`);
-      const ids = (doc?.data ?? []).map((i) => i.id);
-      if (ids.length) await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids } });
+    // Gated (fleet-audit#964): the caller named a list, not the items in it.
+    // The items are read on both phases, so the preview names what is about to
+    // go and the token binds that exact set — an item added between the two
+    // calls is DRAFT_CHANGED, not silently deleted.
+    frameScoped(getClient, async (c, f, { listId, confirmToken }: { listId: string; frameId?: string; confirmToken?: string }, ctx) => {
+      const doc = await c.request<{ data?: Array<{ id: string; attributes?: { label?: unknown } }> }>('GET', apiPath`/frames/${f}/lists/${listId}/list_items`);
+      const items = (doc?.data ?? []).map((i) => ({ id: i.id, label: String(i.attributes?.label ?? '') }));
+      const ids = items.map((i) => i.id);
+      if (ids.length === 0) return textContent({ cleared: listId, removed: 0 });
+      const path = apiPath`/frames/${f}/lists/${listId}/list_items/bulk_destroy`;
+      const gate = await confirmWrite(ctx, {
+        tool: 'skylight_clear_list',
+        action: 'list.clear',
+        description: `Permanently remove all ${ids.length} items from list ${listId} on frame ${f}: ${nameSome(items.map((i) => `"${i.label}"`))}`,
+        target: listId,
+        method: 'DELETE',
+        path,
+        body: { listId, ids, items },
+        confirmToken,
+      });
+      if (gate) return gate;
+      await c.request('DELETE', path, { body: { ids } });
       return textContent({ cleared: listId, removed: ids.length });
     }),
   );

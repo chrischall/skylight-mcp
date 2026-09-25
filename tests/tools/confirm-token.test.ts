@@ -8,6 +8,9 @@ import { registerSettingsTools } from '../../src/tools/settings.js';
 import { registerMealTools } from '../../src/tools/meals.js';
 import { registerChoreTools } from '../../src/tools/chores.js';
 import { registerMemberTools } from '../../src/tools/members.js';
+import { registerCalendarTools } from '../../src/tools/calendars.js';
+import { registerMessageTools } from '../../src/tools/messages.js';
+import { registerListTools } from '../../src/tools/lists.js';
 import { s3Upload } from '../../src/s3-upload.js';
 import { vetUploadFile } from '../../src/upload-guard.js';
 import { makeClient } from './_setup.js';
@@ -38,7 +41,9 @@ const CREDS_DOC = {
   },
 };
 
-const ENV_KEYS = ['MCP_CONFIRM_MODE', 'MCP_CONFIRM_TTL_SECONDS', 'MCP_CONFIRM_SECRET'] as const;
+const ENV_KEYS = ['MCP_CONFIRM_MODE', 'MCP_CONFIRM_TTL_SECONDS', 'MCP_CONFIRM_SECRET', 'SKYLIGHT_APPLE_APP_PASSWORD', 'SKYLIGHT_APPLE_ID'] as const;
+// Synthetic, in Apple's xxxx-xxxx-xxxx-xxxx shape. Not a real credential.
+const APPLE_SECRET = 'abcd-efgh-ijkl-mnop';
 let savedEnv: Record<string, string | undefined>;
 let h: TestHarness | undefined;
 let request: ReturnType<typeof makeClient>['request'];
@@ -49,6 +54,12 @@ async function open(options?: Parameters<typeof createTestHarness>[1]): Promise<
   request.mockImplementation(async (_method: string, path: string) => {
     if (path === '/messages/cloud_upload_credentials') return CREDS_DOC;
     if (path === '/messages/uploads') return { data: { message_ids: [1] } };
+    // The reads a preview names its target from (a member, a category, a
+    // caption, a list item) — a GET here is not a write.
+    if (_method === 'GET' && path === '/frames/3435252/users') return { data: [{ id: '9', type: 'frame_user', attributes: { email: 'gran@example.test' } }] };
+    if (_method === 'GET' && path === '/frames/3435252/categories') return { data: [{ id: '3', type: 'category', attributes: { label: 'Emma' } }] };
+    if (_method === 'GET' && path === '/frames/3435252/messages') return { data: [{ id: '1', type: 'message', attributes: { caption: 'Beach day' } }] };
+    if (_method === 'GET' && path === '/frames/3435252/lists/7/list_items') return { data: [{ id: '101', type: 'list_item', attributes: { label: 'Milk' } }] };
     return { data: { id: '1', type: 'thing', attributes: {} } };
   });
   const getClient = async () => made.client;
@@ -58,6 +69,9 @@ async function open(options?: Parameters<typeof createTestHarness>[1]): Promise<
     registerMealTools(server, getClient);
     registerChoreTools(server, getClient);
     registerMemberTools(server, getClient);
+    registerCalendarTools(server, getClient);
+    registerMessageTools(server, getClient);
+    registerListTools(server, getClient);
   }, options);
   return h;
 }
@@ -70,6 +84,7 @@ function writes(): number {
 beforeEach(() => {
   savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
   for (const k of ENV_KEYS) delete process.env[k];
+  process.env.SKYLIGHT_APPLE_APP_PASSWORD = APPLE_SECRET;
   fileBlobMock.mockReset().mockImplementation(async (_p: string, o?: { type?: string }) => new Blob([Buffer.from('img')], o));
   readFileMock.mockReset().mockResolvedValue(Buffer.from('img') as never);
   s3UploadMock.mockReset().mockResolvedValue('"etag"');
@@ -141,6 +156,34 @@ const GATED: Array<{ tool: string; action: string; args: Record<string, unknown>
     args: { id: '9', image_path: '/tmp/face.png' },
     preview: { method: 'PUT', path: '/frames/{frame}/categories/9', willSend: { id: '9', image_path: '/abs/tmp/face.png', mime: 'image/png', bytes: 8 } },
   },
+  // fleet-audit#963: revoking access / destroying a member's record.
+  {
+    tool: 'skylight_remove_user', action: 'user.remove',
+    args: { id: '9' },
+    preview: { method: 'DELETE', path: '/frames/3435252/users/9', willSend: { id: '9', user: 'gran@example.test' } },
+  },
+  {
+    tool: 'skylight_delete_category', action: 'category.delete',
+    args: { id: '3' },
+    preview: { method: 'DELETE', path: '/frames/3435252/categories/3', willSend: { id: '3', label: 'Emma' } },
+  },
+  // fleet-audit#964: bulk hard deletes bind the exact set they destroy.
+  {
+    tool: 'skylight_delete_messages', action: 'message.delete_multiple',
+    args: { message_ids: ['1'] },
+    preview: { method: 'DELETE', path: '/frames/3435252/messages/destroy_multiple', willSend: { message_ids: ['1'], messages: [{ id: '1', caption: 'Beach day' }] } },
+  },
+  {
+    tool: 'skylight_clear_list', action: 'list.clear',
+    args: { listId: '7' },
+    preview: { method: 'DELETE', path: '/frames/3435252/lists/7/list_items/bulk_destroy', willSend: { listId: '7', ids: ['101'], items: [{ id: '101', label: 'Milk' }] } },
+  },
+  // fleet-audit#962: hands Skylight persistent access to an iCloud account; the credential comes from env.
+  {
+    tool: 'skylight_link_apple_calendar', action: 'calendar.link_apple',
+    args: { email: 'apple-id@example.test' },
+    preview: { method: 'POST', path: '/frames/3435252/calendars/apple', willSend: { email: 'apple-id@example.test' } },
+  },
 ];
 
 describe('confirm-token flow — every gated tool', () => {
@@ -155,7 +198,8 @@ describe('confirm-token flow — every gated tool', () => {
     expect(body.preview).toMatchObject(preview);
     expect(typeof body.preview.description).toBe('string');
     expect(body.confirmToken).toEqual(expect.any(String));
-    expect(request).not.toHaveBeenCalled();
+    // A preview may READ to name its target; it must not have written.
+    expect(writes()).toBe(0);
     expect(s3UploadMock).not.toHaveBeenCalled();
     expect(readFileMock).not.toHaveBeenCalled();
     expect(fileBlobMock).not.toHaveBeenCalled();
@@ -163,6 +207,17 @@ describe('confirm-token flow — every gated tool', () => {
     const second = await harness.callTool(tool, { ...args, confirmToken: body.confirmToken });
     expect(second.isError).toBeFalsy();
     expect(writes()).toBe(1 + (tool === 'skylight_upload_photo' || tool === 'skylight_import_events_from_photo' ? 1 : 0));
+  });
+
+  it('the Apple app-specific password never appears in either phase of link_apple_calendar', async () => {
+    const harness = await open();
+    const args = { email: 'apple-id@example.test' };
+    const first = await harness.callTool('skylight_link_apple_calendar', args);
+    expect(JSON.stringify(first)).not.toContain(APPLE_SECRET);
+    const { confirmToken } = parseToolResult<Phase1>(first);
+    const second = await harness.callTool('skylight_link_apple_calendar', { ...args, confirmToken });
+    expect(JSON.stringify(second)).not.toContain(APPLE_SECRET);
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/calendars/apple', { body: { ...args, app_specific_password: APPLE_SECRET } });
   });
 
   it('no gated tool still accepts a `confirm` parameter', async () => {

@@ -156,38 +156,169 @@ describe('member tools', () => {
     expect(out.preview.description).toMatch(/user 9/);
   });
 
-  // ── skylight_remove_user ─────────────────────────────────────────────────
+  // ── skylight_remove_user (confirm-gated, fleet-audit#963) ────────────────
 
-  it('remove_user deletes by id and returns removed id', async () => {
+  /** GET /frames/{f}/users → the member list the preview names people from. */
+  const MEMBERS = {
+    data: [
+      { id: '9', type: 'frame_user', attributes: { name: 'Grandma', email: 'gran@example.test', status: 'active' } },
+      { id: '10', type: 'frame_user', attributes: { email: 'sitter@example.test', status: 'pending' } },
+    ],
+  };
+  function membersThenDelete(request: ReturnType<typeof harness>['request']) {
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/users$/.test(path)) return MEMBERS;
+      return undefined;
+    });
+  }
+
+  it('remove_user phase 1 names the member (not just the id) and the frame, and issues NO DELETE', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue(undefined);
-    const out = await tools.skylight_remove_user({ id: '9' });
+    membersThenDelete(request);
+    const out = phaseOne(await tools.skylight_remove_user({ id: '9' }));
+    expect(out.status).toBe('confirmation-required');
+    expect(out.action).toBe('user.remove');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/users');
+    expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
+    expect(out.preview).toMatchObject({
+      method: 'DELETE',
+      path: '/frames/3435252/users/9',
+      willSend: { id: '9', user: 'Grandma (gran@example.test)' },
+    });
+    expect(out.preview.description).toMatch(/Grandma/);
+    expect(out.preview.description).toMatch(/gran@example\.test/);
+    expect(out.preview.description).toMatch(/3435252/);
+    expect(out.preview.description).toMatch(/access/i);
+  });
+
+  it('remove_user names a member by email when there is no name, and says when the id is not a member at all', async () => {
+    const { tools, request } = harness();
+    membersThenDelete(request);
+    const known = phaseOne(await tools.skylight_remove_user({ id: 10 }));
+    expect(known.preview.willSend).toEqual({ id: 10, user: 'sitter@example.test' });
+
+    const unknown = phaseOne(await tools.skylight_remove_user({ id: '4821' }));
+    expect(unknown.preview.willSend).toEqual({ id: '4821', user: null });
+    expect(unknown.preview.description).toMatch(/not .*member/i);
+    expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
+  });
+
+  it('remove_user names a member by first/last name when there is no email, and says when neither is on record', async () => {
+    const { tools, request } = harness();
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/users$/.test(path)) {
+        return {
+          data: [
+            { id: '11', type: 'frame_user', attributes: { first_name: 'Ada', last_name: ' Lovelace ', email: '  ' } },
+            { id: '12', type: 'frame_user', attributes: { name: '', status: 'pending' } },
+          ],
+        };
+      }
+      return undefined;
+    });
+    const named = phaseOne(await tools.skylight_remove_user({ id: '11' }));
+    expect(named.preview.willSend).toEqual({ id: '11', user: 'Ada Lovelace' });
+    const blank = phaseOne(await tools.skylight_remove_user({ id: '12' }));
+    expect(blank.preview.willSend).toEqual({ id: '12', user: '(no name or email on record)' });
+    expect(blank.preview.description).toMatch(/no name or email on record/);
+  });
+
+  it('remove_user deletes by id only on the confirmed call and returns removed id', async () => {
+    const { tools, request } = harness();
+    membersThenDelete(request);
+    const out = await confirmed(tools.skylight_remove_user, { id: '9' });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/users/9');
+    expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toHaveLength(1);
     expect(JSON.parse(out.content[0].text)).toEqual({ removed: '9' });
   });
 
   it('remove_user with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue(undefined);
-    await tools.skylight_remove_user({ id: 9, frameId: '99' });
+    membersThenDelete(request);
+    await confirmed(tools.skylight_remove_user, { id: 9, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/users');
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/users/9');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
-  // ── skylight_delete_category ─────────────────────────────────────────────
+  // ── skylight_delete_category (confirm-gated, fleet-audit#963) ────────────
 
-  it('delete_category deletes by id with no body when reassign omitted', async () => {
+  const CATEGORIES = {
+    data: [
+      { id: '3', type: 'category', attributes: { label: 'Emma' } },
+      { id: '4', type: 'category', attributes: { label: 'Dad' } },
+    ],
+  };
+  function categoriesThenDelete(request: ReturnType<typeof harness>['request']) {
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/categories$/.test(path)) return CATEGORIES;
+      return undefined;
+    });
+  }
+
+  it('delete_category phase 1 names the member by label, warns about orphaned items, and issues NO DELETE', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue(undefined);
-    const out = await tools.skylight_delete_category({ id: '3' });
+    categoriesThenDelete(request);
+    const out = phaseOne(await tools.skylight_delete_category({ id: '3' }));
+    expect(out.status).toBe('confirmation-required');
+    expect(out.action).toBe('category.delete');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/categories');
+    expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
+    expect(out.preview).toMatchObject({
+      method: 'DELETE',
+      path: '/frames/3435252/categories/3',
+      willSend: { id: '3', label: 'Emma' },
+    });
+    expect(out.preview.willSend).not.toHaveProperty('reassign_to_category_id');
+    expect(out.preview.description).toMatch(/"Emma"/);
+    expect(out.preview.description).toMatch(/orphan/i);
+    expect(out.preview.description).toMatch(/reassign_to_category_id/);
+  });
+
+  it('delete_category phase 1 names the destination member when reassign_to_category_id is given', async () => {
+    const { tools, request } = harness();
+    categoriesThenDelete(request);
+    const out = phaseOne(await tools.skylight_delete_category({ id: '3', reassign_to_category_id: '4' }));
+    expect(out.preview.willSend).toEqual({ id: '3', label: 'Emma', reassign_to_category_id: '4', reassign_to_label: 'Dad' });
+    expect(out.preview.description).toMatch(/"Emma"/);
+    expect(out.preview.description).toMatch(/"Dad"/);
+    expect(out.preview.description).not.toMatch(/orphan/i);
+  });
+
+  it('delete_category says so when the id is not one of the frame\'s categories', async () => {
+    const { tools, request } = harness();
+    categoriesThenDelete(request);
+    const out = phaseOne(await tools.skylight_delete_category({ id: '7' }));
+    expect(out.preview.willSend).toEqual({ id: '7', label: null });
+    expect(out.preview.description).toMatch(/not .*categor/i);
+    expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
+  });
+
+  it('delete_category shows a category with no label as an empty label, and flags an unknown reassignment target', async () => {
+    const { tools, request } = harness();
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/categories$/.test(path)) return { data: [{ id: '5', type: 'category', attributes: {} }] };
+      return undefined;
+    });
+    const out = phaseOne(await tools.skylight_delete_category({ id: '5', reassign_to_category_id: '8' }));
+    expect(out.preview.willSend).toEqual({ id: '5', label: '', reassign_to_category_id: '8', reassign_to_label: null });
+    expect(out.preview.description).toMatch(/"" \(category 5\)/);
+    expect(out.preview.description).toMatch(/category 8 \(NOT one of the frame's categories/);
+  });
+
+  it('delete_category deletes by id with no body when reassign omitted — only on the confirmed call', async () => {
+    const { tools, request } = harness();
+    categoriesThenDelete(request);
+    const out = await confirmed(tools.skylight_delete_category, { id: '3' });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/categories/3', {});
+    expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toHaveLength(1);
     expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '3' });
   });
 
   it('delete_category passes reassign_to_category_id as the request body when provided', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue(undefined);
-    const out = await tools.skylight_delete_category({ id: '3', reassign_to_category_id: '4' });
+    categoriesThenDelete(request);
+    const out = await confirmed(tools.skylight_delete_category, { id: '3', reassign_to_category_id: '4' });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/categories/3', {
       body: { reassign_to_category_id: '4' },
     });
@@ -196,8 +327,9 @@ describe('member tools', () => {
 
   it('delete_category with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue(undefined);
-    await tools.skylight_delete_category({ id: 3, frameId: '99' });
+    categoriesThenDelete(request);
+    await confirmed(tools.skylight_delete_category, { id: 3, frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/categories');
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/categories/3', {});
     expect(resolveFrameId).not.toHaveBeenCalled();
   });

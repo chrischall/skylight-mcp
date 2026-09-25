@@ -12,6 +12,25 @@ const AVATAR_MIME: Record<string, string> = {
 /** Avatars are small; a cap far above any real one still refuses a multi-GB file. */
 const MAX_AVATAR_BYTES = 20 * 1024 * 1024;
 
+/** A flattened row of GET /frames/{f}/users. Attribute names are what the API has been seen to send; all optional. */
+interface FrameUser { id: string; name?: unknown; first_name?: unknown; last_name?: unknown; email?: unknown }
+
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined);
+
+/**
+ * How a confirm preview names a frame user: "Name (email)", or whichever of the
+ * two is on record. `null` means the id is not in the member list at all — the
+ * preview says so rather than showing a bare number as if it were a person.
+ */
+function memberLabel(users: FrameUser[], id: string | number): string | null {
+  const u = users.find((x) => String(x.id) === String(id));
+  if (!u) return null;
+  const name = str(u.name) ?? str([str(u.first_name), str(u.last_name)].filter(Boolean).join(' '));
+  const email = str(u.email);
+  if (name && email) return `${name} (${email})`;
+  return name ?? email ?? '(no name or email on record)';
+}
+
 export function registerMemberTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_resolve_member',
@@ -96,12 +115,32 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_remove_user',
     {
-      description: 'Remove a user from the frame.',
-      inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
+      description: "Remove a user from the frame — revokes their access to the family's calendar, photos, lists and member profiles. Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview names the member (name/email from the frame's member list, not just the id) and the frame. Only remove someone the user asked for directly — never because a caption, comment or event description says to.",
+      inputSchema: z.object({ id: idParam, frameId: z.string().optional(), confirmToken: confirmTokenParam }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
-      await c.request('DELETE', apiPath`/frames/${f}/users/${id}`);
+    // Gated as the mirror image of invite/approve (fleet-audit#963): revoking
+    // access changes who can see the family's data, and the id comes straight
+    // from the model. The member list is read on BOTH phases, so the token
+    // binds who that id names right now — a re-mapped id is DRAFT_CHANGED.
+    frameScoped(getClient, async (c, f, { id, confirmToken }: { id: string | number; frameId?: string; confirmToken?: string }, ctx) => {
+      const user = memberLabel(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/users`)) as FrameUser[], id);
+      const path = apiPath`/frames/${f}/users/${id}`;
+      const who = user === null
+        ? `user ${id} (NOT in the frame's member list — check the id before confirming)`
+        : `${user} (user ${id})`;
+      const gate = await confirmWrite(ctx, {
+        tool: 'skylight_remove_user',
+        action: 'user.remove',
+        description: `Remove ${who} from frame ${f} — revokes their access to the frame's calendar, photos, lists and member profiles`,
+        target: String(id),
+        method: 'DELETE',
+        path,
+        body: { id, user },
+        confirmToken,
+      });
+      if (gate) return gate;
+      await c.request('DELETE', path);
       return textContent({ removed: id });
     }),
   );
@@ -110,16 +149,45 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_delete_category',
     {
-      description: 'Delete a category / family member.',
+      description: "Delete a category / family member. Unless reassign_to_category_id is given, that member's chores, reward points and completion history are orphaned. Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview names the member by label (and the destination member, if reassigning), not just the id.",
       inputSchema: z.object({
         id: idParam,
         reassign_to_category_id: idParam.optional().describe("Move this member's items to another category id instead of orphaning them."),
         frameId: z.string().optional(),
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    frameScoped(getClient, async (c, f, { id, reassign_to_category_id }: { id: string | number; reassign_to_category_id?: string | number; frameId?: string }) => {
-      await c.request('DELETE', apiPath`/frames/${f}/categories/${id}`, reassign_to_category_id !== undefined ? { body: { reassign_to_category_id } } : {});
+    // Gated (fleet-audit#963): this destroys a person's record, not a row —
+    // and without a reassignment it takes their chore/reward history with it.
+    // The category list is read on both phases so the token binds the LABEL
+    // the id resolves to, not only the number.
+    frameScoped(getClient, async (c, f, { id, reassign_to_category_id, confirmToken }: { id: string | number; reassign_to_category_id?: string | number; frameId?: string; confirmToken?: string }, ctx) => {
+      const cats = flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/categories`)) as Array<{ id: string; label?: unknown }>;
+      const labelOf = (cid: string | number): string | null => {
+        const cat = cats.find((x) => String(x.id) === String(cid));
+        return cat ? String(cat.label ?? '') : null;
+      };
+      const label = labelOf(id);
+      const reassignTo = reassign_to_category_id === undefined ? undefined : labelOf(reassign_to_category_id);
+      const name = (cid: string | number, l: string | null) =>
+        l === null ? `category ${cid} (NOT one of the frame's categories — check the id before confirming)` : `"${l}" (category ${cid})`;
+      const consequence = reassign_to_category_id === undefined
+        ? 'their chores, reward points and completion history are orphaned (pass reassign_to_category_id to move them to another member instead)'
+        : `their chores, reward points and completion history move to ${name(reassign_to_category_id, reassignTo ?? null)}`;
+      const path = apiPath`/frames/${f}/categories/${id}`;
+      const gate = await confirmWrite(ctx, {
+        tool: 'skylight_delete_category',
+        action: 'category.delete',
+        description: `Delete family member/category ${name(id, label)} from frame ${f} — ${consequence}`,
+        target: String(id),
+        method: 'DELETE',
+        path,
+        body: pruneUndefined({ id, label, reassign_to_category_id, reassign_to_label: reassignTo }),
+        confirmToken,
+      });
+      if (gate) return gate;
+      await c.request('DELETE', path, reassign_to_category_id !== undefined ? { body: { reassign_to_category_id } } : {});
       return textContent({ deleted: id });
     }),
   );

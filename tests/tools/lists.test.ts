@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { registerListTools } from '../../src/tools/lists.js';
-import { makeClient } from './_setup.js';
+import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  const server = { registerTool: (n: string, _cfg: any, cb: any) => { tools[n] = cb; } } as any;
+  // Handlers get the context of a client that cannot be prompted, so the
+  // confirm-gated clear_list runs the two-phase token flow.
+  const server = { registerTool: (n: string, _cfg: any, cb: any) => { tools[n] = (a: any) => cb(a, NO_ELICIT_CTX); } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerListTools(server, async () => client);
   return { tools, request, resolveFrameId };
@@ -265,24 +267,48 @@ describe('list tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
-  // ── skylight_clear_list ─────────────────────────────────────────────────
+  // ── skylight_clear_list (confirm-gated, fleet-audit#964) ─────────────────
 
-  it('clear_list GETs items then issues one bulk DELETE with {ids}', async () => {
+  const ITEMS = { data: [{ id: '101', type: 'list_item', attributes: { label: 'Milk' } }, { id: '102', type: 'list_item', attributes: { label: 'Eggs' } }] };
+  function itemsThenDelete(request: ReturnType<typeof harness>['request'], items: unknown = ITEMS) {
+    request.mockImplementation(async (method: string, _path: string) => (method === 'GET' ? items : undefined));
+  }
+  const deletes = (request: ReturnType<typeof harness>['request']) => request.mock.calls.filter((c) => c[0] === 'DELETE');
+
+  it('clear_list phase 1 reads the items, lists them by label in the preview, and issues NO DELETE', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValueOnce({ data: [{ id: '101' }, { id: '102' }] });
-    request.mockResolvedValue(undefined);
-    const out = await tools.skylight_clear_list({ listId: '7' });
-    expect(request).toHaveBeenNthCalledWith(1, 'GET', '/frames/3435252/lists/7/list_items');
-    expect(request).toHaveBeenNthCalledWith(2, 'DELETE', '/frames/3435252/lists/7/list_items/bulk_destroy', {
+    itemsThenDelete(request);
+    const out = phaseOne(await tools.skylight_clear_list({ listId: '7' }));
+    expect(out.status).toBe('confirmation-required');
+    expect(out.action).toBe('list.clear');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/lists/7/list_items');
+    expect(deletes(request)).toEqual([]);
+    expect(out.preview).toMatchObject({
+      method: 'DELETE',
+      path: '/frames/3435252/lists/7/list_items/bulk_destroy',
+      willSend: { listId: '7', ids: ['101', '102'], items: [{ id: '101', label: 'Milk' }, { id: '102', label: 'Eggs' }] },
+    });
+    expect(out.preview.description).toMatch(/2 items/);
+    expect(out.preview.description).toMatch(/Milk/);
+    expect(out.preview.description).toMatch(/Eggs/);
+    expect(out.preview.description).toMatch(/list 7/);
+  });
+
+  it('clear_list GETs items then issues one bulk DELETE with {ids} — only on the confirmed call', async () => {
+    const { tools, request } = harness();
+    itemsThenDelete(request);
+    const out = await confirmed(tools.skylight_clear_list, { listId: '7' });
+    // Phase 1 read, phase 2 re-read (the token binds the set that is about to go), then one DELETE.
+    expect(request.mock.calls.map((c) => c[0])).toEqual(['GET', 'GET', 'DELETE']);
+    expect(request).toHaveBeenLastCalledWith('DELETE', '/frames/3435252/lists/7/list_items/bulk_destroy', {
       body: { ids: ['101', '102'] },
     });
-    expect(request).toHaveBeenCalledTimes(2);
     expect(JSON.parse(out.content[0].text)).toEqual({ cleared: '7', removed: 2 });
   });
 
-  it('clear_list on an empty list issues no DELETE and reports removed:0', async () => {
+  it('clear_list on an empty list needs no confirmation, issues no DELETE and reports removed:0', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValueOnce({ data: [] });
+    itemsThenDelete(request, { data: [] });
     const out = await tools.skylight_clear_list({ listId: '7' });
     expect(request).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/lists/7/list_items');
@@ -291,19 +317,26 @@ describe('list tools', () => {
 
   it('clear_list treats a missing data array as empty (removed:0)', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValueOnce(undefined);
+    request.mockResolvedValue(undefined);
     const out = await tools.skylight_clear_list({ listId: '7' });
     expect(request).toHaveBeenCalledTimes(1);
     expect(JSON.parse(out.content[0].text)).toEqual({ cleared: '7', removed: 0 });
   });
 
+  it('clear_list previews an item with no label as an empty label rather than "undefined"', async () => {
+    const { tools, request } = harness();
+    itemsThenDelete(request, { data: [{ id: '101', type: 'list_item', attributes: {} }, { id: '102', type: 'list_item' }] });
+    const out = phaseOne(await tools.skylight_clear_list({ listId: '7' }));
+    expect(out.preview.willSend.items).toEqual([{ id: '101', label: '' }, { id: '102', label: '' }]);
+    expect(out.preview.description).not.toMatch(/undefined/);
+  });
+
   it('clear_list with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValueOnce({ data: [{ id: '101' }] });
-    request.mockResolvedValue(undefined);
-    await tools.skylight_clear_list({ listId: '7', frameId: '99' });
+    itemsThenDelete(request, { data: [{ id: '101', type: 'list_item', attributes: { label: 'Milk' } }] });
+    await confirmed(tools.skylight_clear_list, { listId: '7', frameId: '99' });
     expect(request).toHaveBeenNthCalledWith(1, 'GET', '/frames/99/lists/7/list_items');
-    expect(request).toHaveBeenNthCalledWith(2, 'DELETE', '/frames/99/lists/7/list_items/bulk_destroy', {
+    expect(request).toHaveBeenLastCalledWith('DELETE', '/frames/99/lists/7/list_items/bulk_destroy', {
       body: { ids: ['101'] },
     });
     expect(resolveFrameId).not.toHaveBeenCalled();

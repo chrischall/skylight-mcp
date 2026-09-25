@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { confirmFileUpload, confirmWrite, framePath } from '../../src/tools/_confirm.js';
+import { PREVIEW_NAMES_MAX, confirmFileUpload, confirmWrite, framePath, nameSome } from '../../src/tools/_confirm.js';
 import { NO_ELICIT_CTX, phaseOne } from './_setup.js';
 
 const ctx = NO_ELICIT_CTX as any;
@@ -16,6 +16,21 @@ describe('framePath', () => {
 
   it('shows (and encodes) an explicit frameId', () => {
     expect(framePath('9 9')).toBe('/frames/9%209');
+  });
+});
+
+describe('nameSome', () => {
+  it('joins a short list verbatim', () => {
+    expect(nameSome(['"Milk"', '"Eggs"'])).toBe('"Milk", "Eggs"');
+    expect(nameSome([])).toBe('');
+  });
+
+  it('spells out PREVIEW_NAMES_MAX names and counts the rest', () => {
+    const names = Array.from({ length: PREVIEW_NAMES_MAX + 3 }, (_, i) => `n${i}`);
+    const out = nameSome(names);
+    expect(out).toContain(`n${PREVIEW_NAMES_MAX - 1}`);
+    expect(out).not.toContain(`n${PREVIEW_NAMES_MAX}`);
+    expect(out).toMatch(/, \+3 more$/);
   });
 });
 
