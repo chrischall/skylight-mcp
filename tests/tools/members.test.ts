@@ -484,6 +484,14 @@ describe('member tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '9', type: 'category', profile_picture_urls: { original: 'https://cdn/x.png' } });
   });
 
+  it('set_member_avatar confines the file read to SKYLIGHT_UPLOAD_DIR when the guard vetted against it', async () => {
+    const { tools, request } = harness();
+    vetMock.mockResolvedValue({ resolved: '/inbox/face.png', ext: 'png', mime: 'image/png', size: 8, allowedRoots: ['/inbox'] });
+    request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
+    await confirmed(tools.skylight_set_member_avatar, { id: '9', image_path: '/inbox/face.png' });
+    expect(fileBlobMock).toHaveBeenCalledWith('/inbox/face.png', { type: 'image/png', allowedRoots: ['/inbox'] });
+  });
+
   it('set_member_avatar derives content-type from the extension (jpg) and respects frameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });

@@ -192,6 +192,7 @@ the env token already spent cannot recover without the login pair.
 | `SKYLIGHT_BASE_URL` | `https://app.ourskylight.com/api` | Override the API base URL |
 | `SKYLIGHT_APPLE_APP_PASSWORD` | *(none)* | App-specific password (from appleid.apple.com) that `skylight_link_apple_calendar` sends to Skylight. Env-only by design: it is never a tool argument, so it never passes through the model, the transcript or the host's tool-call log |
 | `SKYLIGHT_APPLE_ID` | *(none)* | Apple ID email for `skylight_link_apple_calendar`; the tool's `email` argument overrides it |
+| `SKYLIGHT_UPLOAD_DIR` | *(none — any path)* | Directories that `skylight_upload_photo`, `skylight_import_events_from_photo` and `skylight_set_member_avatar` may upload from (several separated by `:`, or `;` on Windows; `~` allowed). When set, any other path is refused before the confirmation preview, and the avatar read re-checks it when the file is opened. Unset means no directory restriction (the type, symlink, size and content checks still apply) |
 
 Treat `.env` like a password file — it is gitignored, do not commit it.
 
