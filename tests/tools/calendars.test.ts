@@ -274,6 +274,29 @@ describe('calendar tools', () => {
       expect((caught as Error).message).toMatch(/422/);
       expect((caught as Error).message).not.toContain(SECRET);
     });
+
+    it('rethrows a non-Error rejection untouched (there is no message to scrub)', async () => {
+      const { tools, request } = harness();
+      const rejection = { status: 503 };
+      request.mockRejectedValue(rejection);
+      await expect(confirmed(tools.skylight_link_apple_calendar, { email: 'apple-id@example.test' })).rejects.toBe(rejection);
+    });
+
+    it('returns the scrubbed text as a string when scrubbing a password made of JSON syntax leaves invalid JSON', async () => {
+      // A password of `","` matches the separator between two string fields, so
+      // redacting it splices the object into text JSON.parse rejects. The text is
+      // still returned (scrubbed) rather than the call throwing.
+      process.env.SKYLIGHT_APPLE_APP_PASSWORD = '","';
+      const { tools, request } = harness();
+      request.mockResolvedValue({ data: { id: '1', type: 'calendar', attributes: { name: 'iCloud' } } });
+      const out = await confirmed(tools.skylight_link_apple_calendar, { email: 'apple-id@example.test' });
+      // The unparseable scrubbed JSON comes back as a single string value.
+      const body: unknown = JSON.parse(out.content[0].text);
+      expect(typeof body).toBe('string');
+      expect(() => JSON.parse(body as string)).toThrow();
+      expect(body).toContain('[REDACTED]');
+      expect(body).not.toContain('","');
+    });
   });
 
   // ── skylight_categorize_source_calendar ──────────────────────────────────

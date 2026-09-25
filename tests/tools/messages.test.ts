@@ -361,6 +361,14 @@ describe('message tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual({ deleted: 3 });
   });
 
+  it('delete_messages treats a message with no caption attribute as uncaptioned', async () => {
+    const { tools, request } = harness();
+    request.mockImplementation(async (method: string) => (method === 'GET' ? { data: [{ id: '4', type: 'message', attributes: {} }] } : undefined));
+    const out = phaseOne(await tools.skylight_delete_messages({ message_ids: ['4'] }));
+    expect(out.preview.willSend.messages).toEqual([{ id: '4', caption: '' }]);
+    expect(out.preview.description).toMatch(/4 \(no caption\)/);
+  });
+
   it('delete_messages url-encodes ids', async () => {
     const { tools, request } = harness();
     messagesThenDelete(request);

@@ -203,6 +203,26 @@ describe('member tools', () => {
     expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
   });
 
+  it('remove_user names a member by first/last name when there is no email, and says when neither is on record', async () => {
+    const { tools, request } = harness();
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/users$/.test(path)) {
+        return {
+          data: [
+            { id: '11', type: 'frame_user', attributes: { first_name: 'Ada', last_name: ' Lovelace ', email: '  ' } },
+            { id: '12', type: 'frame_user', attributes: { name: '', status: 'pending' } },
+          ],
+        };
+      }
+      return undefined;
+    });
+    const named = phaseOne(await tools.skylight_remove_user({ id: '11' }));
+    expect(named.preview.willSend).toEqual({ id: '11', user: 'Ada Lovelace' });
+    const blank = phaseOne(await tools.skylight_remove_user({ id: '12' }));
+    expect(blank.preview.willSend).toEqual({ id: '12', user: '(no name or email on record)' });
+    expect(blank.preview.description).toMatch(/no name or email on record/);
+  });
+
   it('remove_user deletes by id only on the confirmed call and returns removed id', async () => {
     const { tools, request } = harness();
     membersThenDelete(request);
@@ -272,6 +292,18 @@ describe('member tools', () => {
     expect(out.preview.willSend).toEqual({ id: '7', label: null });
     expect(out.preview.description).toMatch(/not .*categor/i);
     expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
+  });
+
+  it('delete_category shows a category with no label as an empty label, and flags an unknown reassignment target', async () => {
+    const { tools, request } = harness();
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/categories$/.test(path)) return { data: [{ id: '5', type: 'category', attributes: {} }] };
+      return undefined;
+    });
+    const out = phaseOne(await tools.skylight_delete_category({ id: '5', reassign_to_category_id: '8' }));
+    expect(out.preview.willSend).toEqual({ id: '5', label: '', reassign_to_category_id: '8', reassign_to_label: null });
+    expect(out.preview.description).toMatch(/"" \(category 5\)/);
+    expect(out.preview.description).toMatch(/category 8 \(NOT one of the frame's categories/);
   });
 
   it('delete_category deletes by id with no body when reassign omitted — only on the confirmed call', async () => {

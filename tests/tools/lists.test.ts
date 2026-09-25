@@ -323,6 +323,14 @@ describe('list tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual({ cleared: '7', removed: 0 });
   });
 
+  it('clear_list previews an item with no label as an empty label rather than "undefined"', async () => {
+    const { tools, request } = harness();
+    itemsThenDelete(request, { data: [{ id: '101', type: 'list_item', attributes: {} }, { id: '102', type: 'list_item' }] });
+    const out = phaseOne(await tools.skylight_clear_list({ listId: '7' }));
+    expect(out.preview.willSend.items).toEqual([{ id: '101', label: '' }, { id: '102', label: '' }]);
+    expect(out.preview.description).not.toMatch(/undefined/);
+  });
+
   it('clear_list with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     itemsThenDelete(request, { data: [{ id: '101', type: 'list_item', attributes: { label: 'Milk' } }] });
