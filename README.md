@@ -30,6 +30,24 @@ The client then refreshes the token proactively (~60 s before expiry) and reacti
 
 **No env vars → clean start:** if credentials are not set, the server still starts without error. Auth is deferred to the first tool call, so MCP hosts can complete install-time tool listing before credentials are configured.
 
+### Using the auth helpers from your own code
+
+The package also exports Skylight's session login and refresh, so a separate program can authenticate without copying `src/`:
+
+```ts
+import { login, refresh } from 'skylight-mcp/auth';
+
+const tokens = await login({
+  authBaseUrl: 'https://app.ourskylight.com',
+  email: process.env.SKYLIGHT_EMAIL!,
+  password: process.env.SKYLIGHT_PASSWORD!,
+});
+// Skylight rotates refresh tokens: store the one each call returns.
+const next = await refresh({ authBaseUrl: 'https://app.ourskylight.com', refreshToken: tokens.refreshToken });
+```
+
+This is the only library entry point; everything else in the package is the MCP server. It is ESM-only and ships type declarations.
+
 ## Frame model
 
 All data in Skylight is scoped to a *frame* (the family hub device). On first use the client auto-discovers the single frame on the account. If the account has more than one frame, set `SKYLIGHT_FRAME_ID` to the frame ID you want. Every tool that reads frame-scoped data accepts an optional `frameId` arg to override the default.
