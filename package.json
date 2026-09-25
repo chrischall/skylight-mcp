@@ -23,6 +23,13 @@
   "bin": {
     "skylight-mcp": "dist/index.js"
   },
+  "exports": {
+    "./auth": {
+      "types": "./dist/auth-session-login.d.ts",
+      "import": "./dist/auth-session-login.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     ".claude-plugin",
