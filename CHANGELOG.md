@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/chrischall/skylight-mcp/compare/v1.2.0...v1.3.0) (2026-09-25)
+
+
+### Features
+
+* **auth:** export login and refresh as skylight-mcp/auth ([#210](https://github.com/chrischall/skylight-mcp/issues/210)) ([bbff2f1](https://github.com/chrischall/skylight-mcp/commit/bbff2f1ed7f61699ac2fb606db2998f8b8c1b03d))
+* **uploads:** confine upload paths to SKYLIGHT_UPLOAD_DIR when set ([#207](https://github.com/chrischall/skylight-mcp/issues/207)) ([bd4d81a](https://github.com/chrischall/skylight-mcp/commit/bd4d81a928d835651f7dde499d1bab78bf691014))
+
+
+### Bug Fixes
+
+* **deps:** bump dotenv in the production-majors group ([#204](https://github.com/chrischall/skylight-mcp/issues/204)) ([5bcc595](https://github.com/chrischall/skylight-mcp/commit/5bcc595b869c847401200e4d9b06c443f0864960))
+* **server.json:** declare SKYLIGHT_UPLOAD_DIR for registry installs ([#211](https://github.com/chrischall/skylight-mcp/issues/211)) ([4655fcc](https://github.com/chrischall/skylight-mcp/commit/4655fcc3c566a17a64831692d1950c6e316616a9)), closes [#208](https://github.com/chrischall/skylight-mcp/issues/208)
+* **tools:** confirm-gate access revocation, bulk deletes and Apple calendar linking ([#206](https://github.com/chrischall/skylight-mcp/issues/206)) ([7e10a5b](https://github.com/chrischall/skylight-mcp/commit/7e10a5bb8c12005dbd4e012cb96e0c83d2761cf6))
+
 ## [1.2.0](https://github.com/chrischall/skylight-mcp/compare/v1.1.3...v1.2.0) (2026-09-24)
 
 
