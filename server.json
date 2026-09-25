@@ -78,6 +78,12 @@
           "description": "Optional: the Apple ID email skylight_link_apple_calendar links; the tool's email argument overrides it.",
           "isRequired": false,
           "format": "string"
+        },
+        {
+          "name": "SKYLIGHT_UPLOAD_DIR",
+          "description": "Optional: directories that photo-upload, event-import-from-photo and avatar tools may read files from (several separated by ':', or ';' on Windows; '~' allowed). When set, any other path is refused. Unset means no directory restriction.",
+          "isRequired": false,
+          "format": "string"
         }
       ]
     }
