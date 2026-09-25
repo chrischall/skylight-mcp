@@ -1,5 +1,6 @@
 import { lstat, open, constants } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { delimiter, extname, resolve } from 'node:path';
+import { assertPathWithinRoots, readEnvVar } from '@chrischall/mcp-utils';
 
 /**
  * Leading-byte signatures per extension. A file must START like the type its
@@ -25,6 +26,21 @@ export interface VettedUpload {
   ext: string;
   mime: string;
   size: number;
+  /**
+   * The SKYLIGHT_UPLOAD_DIR roots the path was confined to, when set. Pass them
+   * as `allowedRoots` to the read so it re-checks at open time.
+   */
+  allowedRoots?: string[];
+}
+
+/**
+ * Optional SKYLIGHT_UPLOAD_DIR: one or more directories (split on the platform
+ * path delimiter, `~` allowed) that uploads must come from. Unset or blank
+ * means no confinement.
+ */
+function uploadRoots(): string[] | undefined {
+  const roots = readEnvVar('SKYLIGHT_UPLOAD_DIR')?.split(delimiter).filter(Boolean);
+  return roots && roots.length > 0 ? roots : undefined;
 }
 
 function formatLimit(bytes: number): string {
@@ -43,13 +59,23 @@ function formatLimit(bytes: number): string {
  * must be on the tool's allowlist (an extensionless path is refused — that is
  * what key and credential files look like), the path must be a regular file and
  * not a symlink, it must fit under `maxBytes` (the photo path buffers the whole
- * file), and its leading bytes must match the claimed type.
+ * file), and its leading bytes must match the claimed type. When
+ * SKYLIGHT_UPLOAD_DIR is set, the path must also sit inside one of its
+ * directories — checked first, so the preview already refuses it.
  */
 export async function vetUploadFile(
   imagePath: string,
   opts: { mimeByExt: Record<string, string>; maxBytes: number },
 ): Promise<VettedUpload> {
   const resolved = resolve(imagePath);
+  const allowedRoots = uploadRoots();
+  if (allowedRoots) {
+    try {
+      assertPathWithinRoots(resolved, allowedRoots);
+    } catch {
+      throw new Error(`Refusing to upload ${resolved}: it is outside SKYLIGHT_UPLOAD_DIR (the only directories uploads may come from).`);
+    }
+  }
   const ext = extname(resolved).slice(1).toLowerCase();
   const mime = opts.mimeByExt[ext];
   if (!mime) {
@@ -79,5 +105,5 @@ export async function vetUploadFile(
   if (!matches || !matches(head)) {
     throw new Error(`Refusing to upload ${resolved}: the file does not look like a .${ext} image or video.`);
   }
-  return { resolved, ext, mime, size: st.size };
+  return { resolved, ext, mime, size: st.size, ...(allowedRoots ? { allowedRoots } : {}) };
 }

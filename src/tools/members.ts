@@ -225,8 +225,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
   // and fills in `profile_picture_urls`. Preset emoji avatars use `avatar_id` instead (no upload).
   const setMemberAvatar = frameScoped(getClient, async (c, f, { id, file }: { id: string | number; file: VettedUpload; frameId?: string }) => {
     const formData = new FormData();
-    // fileBlob streams the file off disk (file-backed Blob) instead of buffering it.
-    formData.append('profile_picture', await fileBlob(file.resolved, { type: file.mime }), `avatar.${file.ext}`);
+    // fileBlob streams the file off disk (file-backed Blob) instead of buffering it,
+    // re-checking SKYLIGHT_UPLOAD_DIR confinement at open time when it is set.
+    const blob = await fileBlob(file.resolved, { type: file.mime, ...(file.allowedRoots ? { allowedRoots: file.allowedRoots } : {}) });
+    formData.append('profile_picture', blob, `avatar.${file.ext}`);
     const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/categories/${id}`, { formData });
     return textContent(flattenJsonApi(doc));
   });

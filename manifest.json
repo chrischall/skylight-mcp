@@ -19,7 +19,8 @@
         "SKYLIGHT_EMAIL": "${user_config.skylight_email}",
         "SKYLIGHT_PASSWORD": "${user_config.skylight_password}",
         "SKYLIGHT_APPLE_APP_PASSWORD": "${user_config.apple_app_specific_password}",
-        "SKYLIGHT_APPLE_ID": "${user_config.apple_id}"
+        "SKYLIGHT_APPLE_ID": "${user_config.apple_id}",
+        "SKYLIGHT_UPLOAD_DIR": "${user_config.skylight_upload_dir}"
       }
     }
   },
@@ -55,6 +56,12 @@
       "type": "string",
       "title": "Apple ID email",
       "description": "Optional. The Apple ID whose calendars skylight_link_apple_calendar links; the tool's email argument overrides it.",
+      "required": false
+    },
+    "skylight_upload_dir": {
+      "type": "directory",
+      "title": "Upload directory",
+      "description": "Optional. The only directory the photo-upload, photo-import and member-avatar tools may upload files from. Leave empty to allow any path (the file-type and content checks still apply).",
       "required": false
     }
   },

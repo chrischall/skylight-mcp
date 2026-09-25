@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, symlinkSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join, relative, delimiter } from 'node:path';
 import { vetUploadFile } from '../src/upload-guard.js';
 
 /**
@@ -19,11 +19,17 @@ const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0x24, 0, 0, 0]), B
 const box = (type: string, brand: string) => Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from(type), Buffer.from(brand), Buffer.alloc(4)]);
 
 let dir: string;
+let savedUploadDir: string | undefined;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'skylight-upload-'));
+  // Tests must not inherit the runner's confinement setting.
+  savedUploadDir = process.env.SKYLIGHT_UPLOAD_DIR;
+  delete process.env.SKYLIGHT_UPLOAD_DIR;
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
+  if (savedUploadDir === undefined) delete process.env.SKYLIGHT_UPLOAD_DIR;
+  else process.env.SKYLIGHT_UPLOAD_DIR = savedUploadDir;
 });
 
 function file(name: string, bytes: Buffer): string {
@@ -106,5 +112,65 @@ describe('vetUploadFile', () => {
 
   it('reports a missing file plainly', async () => {
     await expect(vetUploadFile(join(dir, 'nope.png'), { mimeByExt: MIME, maxBytes: 1024 })).rejects.toThrow(/ENOENT/);
+  });
+
+  // fleet-audit#945: every other check passes for ANY image-looking file on
+  // disk, so a prompt-injected image_path could still pick one the user never
+  // meant to share. SKYLIGHT_UPLOAD_DIR confines uploads to chosen directories.
+  describe('SKYLIGHT_UPLOAD_DIR', () => {
+    function inbox(name = 'inbox'): string {
+      const d = join(dir, name);
+      mkdirSync(d);
+      return d;
+    }
+
+    it('when unset, accepts an image anywhere and carries no roots (unchanged behaviour)', async () => {
+      const out = await vetUploadFile(file('anywhere.png', PNG), { mimeByExt: MIME, maxBytes: 1024 });
+      expect(out.allowedRoots).toBeUndefined();
+    });
+
+    it('refuses an image outside the configured directory before reading it', async () => {
+      process.env.SKYLIGHT_UPLOAD_DIR = inbox();
+      const outside = file('outside.png', PNG);
+      await expect(vetUploadFile(outside, { mimeByExt: MIME, maxBytes: 1024 }))
+        .rejects.toThrow(/Refusing to upload .*outside\.png: it is outside SKYLIGHT_UPLOAD_DIR/);
+    });
+
+    it('refuses an outside path up front, even one that does not exist', async () => {
+      process.env.SKYLIGHT_UPLOAD_DIR = inbox();
+      await expect(vetUploadFile(join(dir, 'ghost.png'), { mimeByExt: MIME, maxBytes: 1024 }))
+        .rejects.toThrow(/outside SKYLIGHT_UPLOAD_DIR/);
+    });
+
+    it('accepts an image inside the directory and hands the roots on for the read', async () => {
+      const d = inbox();
+      process.env.SKYLIGHT_UPLOAD_DIR = d;
+      const p = join(d, 'ok.png');
+      writeFileSync(p, PNG);
+      const out = await vetUploadFile(p, { mimeByExt: MIME, maxBytes: 1024 });
+      expect(out.resolved).toBe(p);
+      expect(out.allowedRoots).toEqual([d]);
+    });
+
+    it('accepts several directories separated by the platform path delimiter', async () => {
+      const a = inbox('a');
+      const b = inbox('b');
+      process.env.SKYLIGHT_UPLOAD_DIR = `${a}${delimiter}${delimiter}${b}`;
+      const p = join(b, 'ok.png');
+      writeFileSync(p, PNG);
+      expect((await vetUploadFile(p, { mimeByExt: MIME, maxBytes: 1024 })).allowedRoots).toEqual([a, b]);
+    });
+
+    it('treats a blank value as unset', async () => {
+      process.env.SKYLIGHT_UPLOAD_DIR = '   ';
+      const out = await vetUploadFile(file('anywhere.png', PNG), { mimeByExt: MIME, maxBytes: 1024 });
+      expect(out.allowedRoots).toBeUndefined();
+    });
+
+    it('treats a value of only delimiters as unset', async () => {
+      process.env.SKYLIGHT_UPLOAD_DIR = `${delimiter}${delimiter}`;
+      const out = await vetUploadFile(file('anywhere.png', PNG), { mimeByExt: MIME, maxBytes: 1024 });
+      expect(out.allowedRoots).toBeUndefined();
+    });
   });
 });
