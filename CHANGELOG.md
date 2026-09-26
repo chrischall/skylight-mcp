@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/chrischall/skylight-mcp/compare/v1.3.0...v1.3.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **deps:** bump dotenv in the production-dependencies group ([#212](https://github.com/chrischall/skylight-mcp/issues/212)) ([0bffc52](https://github.com/chrischall/skylight-mcp/commit/0bffc5249267a53e1965d571b212c98d25d2ba86))
+
 ## [1.3.0](https://github.com/chrischall/skylight-mcp/compare/v1.2.0...v1.3.0) (2026-09-25)
 
 
