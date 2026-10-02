@@ -81,7 +81,7 @@
         },
         {
           "name": "SKYLIGHT_UPLOAD_DIR",
-          "description": "Optional: directories that photo-upload, event-import-from-photo and avatar tools may read files from (several separated by ':', or ';' on Windows; '~' allowed). When set, any other path is refused. Unset means no directory restriction.",
+          "description": "Optional: directories that the photo-upload, event-import-from-photo and avatar tools may read files from (several separated by ':', or ';' on Windows; '~' allowed). Any other path is refused. Unset: ~/Pictures and ~/Downloads, or only $MCP_DATA_DIR/uploads in a hosted deployment.",
           "isRequired": false,
           "format": "string"
         }

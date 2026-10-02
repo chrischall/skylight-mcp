@@ -184,17 +184,16 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         ? await confirmWrite(ctx, {
             tool: 'skylight_update_chore',
             action: 'chore.update',
-            description: `Update chore ${args.id} — scope '${args.apply_to}' rewrites MORE than this one occurrence`,
+            summary: `Update chore ${args.id} — scope '${args.apply_to}' rewrites MORE than this one occurrence`,
+            account: undefined,
             target: args.id,
-            method: 'PUT',
-            path: `${framePath(args.frameId)}${apiPath`/chores/${args.id}`}`,
-            body: pruneUndefined({
+            request: { method: 'PUT', path: `${framePath(args.frameId)}${apiPath`/chores/${args.id}`}`, body: pruneUndefined({
               summary: args.summary, category_id: args.category_id, start: args.start,
               start_time: args.start_time, description: args.description,
               reward_points: args.reward_points, emoji_icon: args.emoji_icon,
               recurrence: args.recurrence, recurring_until: args.recurring_until,
               apply_to: args.apply_to,
-            }),
+            }) },
             confirmToken: args.confirmToken,
           })
         : undefined;
@@ -278,11 +277,10 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         ? await confirmWrite(ctx, {
             tool: 'skylight_delete_chore',
             action: 'chore.delete',
-            description: `Delete chore ${args.id} — scope 'all' removes the ENTIRE series, not just one occurrence`,
+            summary: `Delete chore ${args.id} — scope 'all' removes the ENTIRE series, not just one occurrence`,
+            account: undefined,
             target: args.id,
-            method: 'DELETE',
-            path: `${framePath(args.frameId)}${apiPath`/chores/${args.id}`}?apply_to=${args.apply_to}`,
-            body: { id: args.id, apply_to: args.apply_to },
+            request: { method: 'DELETE', path: `${framePath(args.frameId)}${apiPath`/chores/${args.id}`}?apply_to=${args.apply_to}`, body: { id: args.id, apply_to: args.apply_to } },
             confirmToken: args.confirmToken,
           })
         : undefined;

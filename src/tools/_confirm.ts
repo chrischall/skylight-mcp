@@ -1,9 +1,14 @@
 import type { ServerContext } from '@modelcontextprotocol/server';
-import { confirmationFromEnv, confirmTokenParam, requireConfirmationWithFallback } from '@chrischall/mcp-utils';
+import { confirmTokenParam, confirmWrite } from '@chrischall/mcp-utils';
 import type { VettedUpload } from '../upload-guard.js';
 import { apiPath } from './_shared.js';
 
-export { confirmTokenParam };
+/**
+ * The gate itself is the fleet's shared `confirmWrite` (fleet-audit#1178): the
+ * preview is `{ action, method, path, willSend }`, and the token AND the
+ * elicitation acceptance bind `{ method, path, body }` plus the target.
+ */
+export { confirmTokenParam, confirmWrite };
 
 /**
  * `apply_to` scopes that destroy MORE than the occurrence the caller named.
@@ -57,70 +62,41 @@ export function nameSome(names: string[]): string {
   return rest > 0 ? `${shown}, +${rest} more` : shown;
 }
 
-/** What a confirm-gated write is about to do. */
-export interface GatedWrite {
-  /** The registered tool name the token is bound to. */
-  tool: string;
-  /** `<service>.<verb>` — the stable action id shown to the user. */
-  action: string;
-  /** One human sentence naming what happens and why it is gated. */
-  description: string;
-  /** The primary id acted on (bound into the token), or '' if none. */
-  target: string;
-  method: string;
-  path: string;
-  /** EXACTLY what the write sends — hashed into the token. */
-  body?: unknown;
-  /** The phase-2 token from the tool input, or undefined on phase 1. */
-  confirmToken?: string;
-}
-
-/**
- * Confirm-gate for a mutating tool (the fleet convention, MCP_CONFIRM_MODE).
- *
- * A client that can show a prompt gets a real elicitation. One that cannot
- * (claude.ai, Claude Desktop) gets the two-phase token flow: the first call
- * writes nothing and returns the preview plus a confirmToken; only a repeat call
- * with that token, and an unchanged `{ method, path, body }`, proceeds. Resolves
- * `undefined` to proceed, or the result to return unchanged.
- */
-export function confirmWrite(ctx: ServerContext, w: GatedWrite) {
-  const preview: Record<string, unknown> = {
-    description: w.description,
-    method: w.method,
-    path: w.path,
-    ...(w.body !== undefined ? { willSend: w.body } : {}),
-  };
-  return requireConfirmationWithFallback(ctx, confirmationFromEnv({
-    action: w.action,
-    message: 'Review and confirm this change:',
-    details: preview,
-    tool: w.tool,
-    confirmToken: w.confirmToken,
-    subject: () => ({
-      target: w.target,
-      payload: { method: w.method, path: w.path, body: w.body },
-      preview,
-    }),
-  }));
-}
-
 /**
  * {@link confirmWrite} for a tool that reads a LOCAL file and ships its bytes
  * off-machine (photo/avatar uploads). Takes the file only AFTER `vetUploadFile`
  * has accepted it, so the preview echoes the resolved absolute path, the
  * sniffed-and-allowed mime and the size — a prompt-injected `image_path` is
  * visible before any byte leaves the machine — and all three are bound into the
- * token.
+ * token (and into the elicitation acceptance).
  */
 export function confirmFileUpload(
   ctx: ServerContext,
   file: VettedUpload,
-  w: Omit<GatedWrite, 'body'> & { extra?: Record<string, unknown> },
+  w: {
+    tool: string;
+    action: string;
+    /** One human sentence naming what happens; the preview's `action`. */
+    summary: string;
+    target: string;
+    method: string;
+    path: string;
+    extra?: Record<string, unknown>;
+    confirmToken: string | undefined;
+  },
 ) {
-  const { extra, ...rest } = w;
   return confirmWrite(ctx, {
-    ...rest,
-    body: { ...extra, image_path: file.resolved, mime: file.mime, bytes: file.size },
+    tool: w.tool,
+    action: w.action,
+    summary: w.summary,
+    // One signed-in Skylight account per server process.
+    account: undefined,
+    target: w.target,
+    request: {
+      method: w.method,
+      path: w.path,
+      body: { ...w.extra, image_path: file.resolved, mime: file.mime, bytes: file.size },
+    },
+    confirmToken: w.confirmToken,
   });
 }

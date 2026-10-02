@@ -128,14 +128,13 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
     const gate = await confirmWrite(ctx, {
       tool: 'skylight_link_apple_calendar',
       action: 'calendar.link_apple',
-      description: `Link Apple ID ${email} to frame ${f} — hands Skylight persistent access to that iCloud account's calendars, using the app-specific password from ${APPLE_APP_PASSWORD_VAR}`,
+      summary: `Link Apple ID ${email} to frame ${f} — hands Skylight persistent access to that iCloud account's calendars, using the app-specific password from ${APPLE_APP_PASSWORD_VAR}`,
+      account: undefined,
       target: email,
-      method: 'POST',
-      path,
       // The preview must never carry the password; the fingerprint still binds
       // WHICH credential into the token, so a rotated env var between the two
       // phases is DRAFT_CHANGED rather than silently sent.
-      body: { email, app_specific_password: `[from ${APPLE_APP_PASSWORD_VAR}, sha256 ${fingerprint(secret)}]` },
+      request: { method: 'POST', path, body: { email, app_specific_password: `[from ${APPLE_APP_PASSWORD_VAR}, sha256 ${fingerprint(secret)}]` } },
       confirmToken,
     });
     if (gate) return gate;

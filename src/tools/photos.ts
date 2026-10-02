@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { confirmFileUpload, confirmTokenParam, framePath } from './_confirm.js';
 import { s3Upload, type S3Credentials } from '../s3-upload.js';
-import { vetUploadFile, type VettedUpload } from '../upload-guard.js';
+import { readVettedUpload, vetUploadFile, type VettedUpload } from '../upload-guard.js';
 
 const MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic',
@@ -28,9 +27,11 @@ async function uploadFile(
   c: { request: <T = unknown>(m: string, p: string, o?: { body?: unknown }) => Promise<T> },
   file: VettedUpload,
 ): Promise<{ bucket: string; key: string; etag: string; ext: string }> {
-  // Only ever a path `vetUploadFile` accepted — allowlisted type, regular file,
-  // not a symlink, under the cap, contents matching the extension.
-  const body = await readFile(file.resolved);
+  // Only ever a path `vetUploadFile` accepted — inside the upload directories,
+  // allowlisted type, regular file, not a symlink, under the cap, contents
+  // matching the extension — and read back through the guard, from one
+  // no-follow descriptor, refusing a file swapped or resized since the preview.
+  const body = Buffer.from(await readVettedUpload(file, MAX_PHOTO_BYTES));
   const { ext, mime: contentType } = file;
   const credsDoc = await c.request<{ data?: ({ attributes?: CloudCreds } & Partial<CloudCreds>) } & Partial<CloudCreds>>(
     'GET', '/messages/cloud_upload_credentials',
@@ -65,7 +66,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Upload a photo or video from a local file to the Skylight frame (it appears in the slideshow). Two-step: signs an S3 upload with temporary credentials, then registers it as a frame message. Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview echoes the resolved absolute image_path, detected mime, size and caption, and nothing is read or uploaded until it is confirmed.',
       inputSchema: z.object({
-        image_path: z.string().describe('Absolute path to a local image/video file (jpg, jpeg, png, heic, gif, webp, mp4, mov; max 200 MiB). Anything else — or a symlink, or a file whose contents do not match its extension — is refused.'),
+        image_path: z.string().describe('Absolute path to a local image/video file inside the upload directories (SKYLIGHT_UPLOAD_DIR; by default ~/Pictures and ~/Downloads) (jpg, jpeg, png, heic, gif, webp, mp4, mov; max 200 MiB). Anything else — a file outside those directories, a hidden file, a symlink, or a file whose contents do not match its extension — is refused.'),
         caption: z.string().optional().describe('Caption shown with the photo.'),
         frame_ids: idArrayParam.optional().describe('Frame ids to post to; defaults to the resolved frame.'),
         frameId: z.string().optional(),
@@ -78,7 +79,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmFileUpload(ctx, file, {
         tool: 'skylight_upload_photo',
         action: 'photo.upload',
-        description: 'Upload a local file to the Skylight frame (S3)',
+        summary: 'Upload a local file to the Skylight frame (S3)',
         target: file.resolved,
         method: 'POST',
         path: '/messages/uploads',
@@ -105,7 +106,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
     {
       description: "Import calendar events from a photo of a flyer/invite/schedule using Skylight's AI (event_importer). Best-effort/UNVERIFIED: uploads the photo to S3 then posts an event_importer intent that references the latest upload (the server-side photo↔intent link is inferred from captured traffic, not confirmed). Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview echoes the resolved absolute image_path, detected mime and size, and nothing is read or uploaded until it is confirmed. Poll skylight_get_auto_creation_intent / skylight_list_auto_creation_drafts, then skylight_approve_auto_creation.",
       inputSchema: z.object({
-        image_path: z.string().describe('Absolute path to a local image of the events to import (same types and 200 MiB cap as skylight_upload_photo).'),
+        image_path: z.string().describe('Absolute path to a local image of the events to import (same directories, types and 200 MiB cap as skylight_upload_photo).'),
         category_ids: idArrayParam.optional().describe('Family-member category ids to assign the imported events to.'),
         frameId: z.string().optional(),
         confirmToken: confirmTokenParam,
@@ -117,7 +118,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmFileUpload(ctx, file, {
         tool: 'skylight_import_events_from_photo',
         action: 'photo.import_events',
-        description: 'Upload a local photo to the Skylight frame (S3) and start an event_importer intent',
+        summary: 'Upload a local photo to the Skylight frame (S3) and start an event_importer intent',
         target: file.resolved,
         method: 'POST',
         path: `${framePath(args.frameId)}/auto_creation_intents`,

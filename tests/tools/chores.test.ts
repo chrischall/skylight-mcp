@@ -681,7 +681,7 @@ describe('confirm gate — scoped to blast radius', () => {
     expect(request).not.toHaveBeenCalled();
     expect(res.status).toBe('confirmation-required');
     expect(res.preview).toMatchObject({ method: 'DELETE', path: '/frames/{frame}/chores/5?apply_to=all' });
-    expect(res.preview.description).toMatch(/ENTIRE series/);
+    expect(res.preview.action).toMatch(/ENTIRE series/);
   });
 
   it('update_chore gates this_and_future and all, but not this', async () => {

@@ -288,15 +288,14 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         ? await confirmWrite(ctx, {
             tool: 'skylight_update_meal',
             action: 'meal.update',
-            description: `Update planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' rewrites the series and affects MORE than this one occurrence`,
+            summary: `Update planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' rewrites the series and affects MORE than this one occurrence`,
+            account: undefined,
             target: String(args.id),
-            method: 'PATCH',
-            path: `${framePath(args.frameId)}${apiPath`/meals/sittings/${args.id}/instances/${args.instance_date}`}?apply_to=${args.apply_to}`,
-            body: pruneUndefined({
+            request: { method: 'PATCH', path: `${framePath(args.frameId)}${apiPath`/meals/sittings/${args.id}/instances/${args.instance_date}`}?apply_to=${args.apply_to}`, body: pruneUndefined({
               summary: args.summary, description: args.description, note: args.note,
               date: args.date, rrule: args.rrule,
               meal_category_id: args.meal_category_id, meal_recipe_id: args.meal_recipe_id,
-            }),
+            }) },
             confirmToken: args.confirmToken,
           })
         : undefined;
@@ -348,11 +347,10 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         ? await confirmWrite(ctx, {
             tool: 'skylight_delete_meal',
             action: 'meal.delete',
-            description: `Delete planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' removes MORE than this one occurrence`,
+            summary: `Delete planned meal ${args.id} at ${args.instance_date} — scope '${args.apply_to}' removes MORE than this one occurrence`,
+            account: undefined,
             target: String(args.id),
-            method: 'DELETE',
-            path: `${framePath(args.frameId)}${apiPath`/meals/sittings/${args.id}/instances/${args.instance_date}`}?apply_to=${args.apply_to}`,
-            body: { id: args.id, instance_date: args.instance_date, apply_to: args.apply_to },
+            request: { method: 'DELETE', path: `${framePath(args.frameId)}${apiPath`/meals/sittings/${args.id}/instances/${args.instance_date}`}?apply_to=${args.apply_to}`, body: { id: args.id, instance_date: args.instance_date, apply_to: args.apply_to } },
             confirmToken: args.confirmToken,
           })
         : undefined;

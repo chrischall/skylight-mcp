@@ -61,7 +61,7 @@
     "skylight_upload_dir": {
       "type": "directory",
       "title": "Upload directory",
-      "description": "Optional. The only directory the photo-upload, photo-import and member-avatar tools may upload files from. Leave empty to allow any path (the file-type and content checks still apply).",
+      "description": "Optional. The only directory the photo-upload, photo-import and member-avatar tools may upload files from. Leave empty to allow ~/Pictures and ~/Downloads; files anywhere else are refused (the file-type and content checks always apply).",
       "required": false
     }
   },

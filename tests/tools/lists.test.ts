@@ -288,10 +288,10 @@ describe('list tools', () => {
       path: '/frames/3435252/lists/7/list_items/bulk_destroy',
       willSend: { listId: '7', ids: ['101', '102'], items: [{ id: '101', label: 'Milk' }, { id: '102', label: 'Eggs' }] },
     });
-    expect(out.preview.description).toMatch(/2 items/);
-    expect(out.preview.description).toMatch(/Milk/);
-    expect(out.preview.description).toMatch(/Eggs/);
-    expect(out.preview.description).toMatch(/list 7/);
+    expect(out.preview.action).toMatch(/2 items/);
+    expect(out.preview.action).toMatch(/Milk/);
+    expect(out.preview.action).toMatch(/Eggs/);
+    expect(out.preview.action).toMatch(/list 7/);
   });
 
   it('clear_list GETs items then issues one bulk DELETE with {ids} — only on the confirmed call', async () => {
@@ -328,7 +328,7 @@ describe('list tools', () => {
     itemsThenDelete(request, { data: [{ id: '101', type: 'list_item', attributes: {} }, { id: '102', type: 'list_item' }] });
     const out = phaseOne(await tools.skylight_clear_list({ listId: '7' }));
     expect(out.preview.willSend.items).toEqual([{ id: '101', label: '' }, { id: '102', label: '' }]);
-    expect(out.preview.description).not.toMatch(/undefined/);
+    expect(out.preview.action).not.toMatch(/undefined/);
   });
 
   it('clear_list with explicit frameId uses it and skips resolveFrameId', async () => {

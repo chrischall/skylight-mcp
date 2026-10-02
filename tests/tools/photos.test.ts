@@ -1,18 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerPhotoTools } from '../../src/tools/photos.js';
 import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
-import { readFile } from 'node:fs/promises';
 import { s3Upload } from '../../src/s3-upload.js';
-import { vetUploadFile } from '../../src/upload-guard.js';
+import { readVettedUpload, vetUploadFile } from '../../src/upload-guard.js';
 import { extname } from 'node:path';
 
-vi.mock('node:fs/promises', () => ({ readFile: vi.fn() }));
 vi.mock('../../src/s3-upload.js', () => ({ s3Upload: vi.fn() }));
 // The guard's own rules are exercised against real files in upload-guard.test.ts;
 // here it is stubbed so these tests stay about what the TOOLS do with its verdict.
-vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn() }));
+vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn(), readVettedUpload: vi.fn() }));
 
-const readFileMock = vi.mocked(readFile);
+const readMock = vi.mocked(readVettedUpload);
 const s3UploadMock = vi.mocked(s3Upload);
 const vetMock = vi.mocked(vetUploadFile);
 const STUB_MIME: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png', mp4: 'video/mp4' };
@@ -43,7 +41,7 @@ function harness() {
 }
 
 beforeEach(() => {
-  readFileMock.mockReset().mockResolvedValue(Buffer.from('imgbytes'));
+  readMock.mockReset().mockResolvedValue(Buffer.from('imgbytes'));
   s3UploadMock.mockReset().mockResolvedValue('"etag-xyz"');
   vetMock.mockReset().mockImplementation(async (p: string) => {
     const ext = extname(p).slice(1).toLowerCase();
@@ -60,7 +58,7 @@ describe('photo tools', () => {
     const { tools, request } = harness();
     const out = phaseOne(await tools.skylight_upload_photo({ image_path: '/tmp/secret.jpg', caption: 'Hi' }));
     // No file read, no S3 upload, no API request happened.
-    expect(readFileMock).not.toHaveBeenCalled();
+    expect(readMock).not.toHaveBeenCalled();
     expect(s3UploadMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
     expect(out.status).toBe('confirmation-required');
@@ -71,7 +69,7 @@ describe('photo tools', () => {
   it('import_events_from_photo: phase 1 returns a preview + confirmToken and makes NO S3/network call', async () => {
     const { tools, request } = harness();
     const out = phaseOne(await tools.skylight_import_events_from_photo({ image_path: '/tmp/flyer.png' }));
-    expect(readFileMock).not.toHaveBeenCalled();
+    expect(readMock).not.toHaveBeenCalled();
     expect(s3UploadMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
     expect(out.status).toBe('confirmation-required');
@@ -88,7 +86,8 @@ describe('photo tools', () => {
 
     const out = await confirmed(tools.skylight_upload_photo, { image_path: '/tmp/pic.jpg', caption: 'Hi' });
 
-    expect(readFileMock).toHaveBeenCalledWith('/abs/tmp/pic.jpg');
+    // The confirmed read goes back through the guard (one no-follow descriptor, same roots).
+    expect(readMock).toHaveBeenCalledWith(expect.objectContaining({ resolved: '/abs/tmp/pic.jpg' }), 200 * 1024 * 1024);
     expect(request).toHaveBeenNthCalledWith(1, 'GET', '/messages/cloud_upload_credentials');
 
     // s3Upload got the credentials, region, bucket, a uuid key, the bytes + mime.
@@ -157,7 +156,7 @@ describe('photo tools', () => {
       const { tools, request } = harness();
       vetMock.mockRejectedValueOnce(new Error('Refusing to upload /home/u/.ssh/id_ed25519'));
       await expect(confirmed(tools[tool]!, { image_path: '~/.ssh/id_ed25519' })).rejects.toThrow(/Refusing to upload/);
-      expect(readFileMock).not.toHaveBeenCalled();
+      expect(readMock).not.toHaveBeenCalled();
       expect(s3UploadMock).not.toHaveBeenCalled();
       expect(request).not.toHaveBeenCalled();
     },

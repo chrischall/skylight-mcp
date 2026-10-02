@@ -1,29 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerMemberTools } from '../../src/tools/members.js';
 import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
-import { fileBlob } from '@chrischall/mcp-utils';
 import { extname } from 'node:path';
-import { vetUploadFile } from '../../src/upload-guard.js';
+import { readVettedUpload, vetUploadFile } from '../../src/upload-guard.js';
 
-// Partial-mock @chrischall/mcp-utils so only fileBlob is stubbed (avatar upload
-// streams the file via a file-backed Blob); the mock returns a Blob carrying the
-// requested type. Everything else (textResult, flattenJsonApi, …) stays real.
-vi.mock('@chrischall/mcp-utils', async (orig) => ({
-  ...(await orig<typeof import('@chrischall/mcp-utils')>()),
-  fileBlob: vi.fn(),
-}));
-const fileBlobMock = vi.mocked(fileBlob);
 // The guard's rules are exercised against real files in upload-guard.test.ts;
 // stubbed here so these tests stay about what the avatar tool does with its verdict.
-vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn() }));
+vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn(), readVettedUpload: vi.fn() }));
+const readMock = vi.mocked(readVettedUpload);
 const vetMock = vi.mocked(vetUploadFile);
 const STUB_MIME: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png' };
 beforeEach(() => {
-  fileBlobMock
-    .mockReset()
-    .mockImplementation(async (_path: string, opts?: { type?: string }) =>
-      new Blob([Buffer.from('imgbytes')], opts),
-    );
+  readMock.mockReset().mockResolvedValue(Buffer.from('imgbytes'));
   vetMock.mockReset().mockImplementation(async (p: string) => {
     const ext = extname(p).slice(1).toLowerCase();
     return { resolved: `/abs${p}`, ext, mime: STUB_MIME[ext]!, size: 8 };
@@ -143,8 +131,8 @@ describe('member tools', () => {
       path: '/frames/3435252/users',
       willSend: { email: 'helper@attacker.example' },
     });
-    expect(out.preview.description).toMatch(/helper@attacker\.example/);
-    expect(out.preview.description).toMatch(/3435252/);
+    expect(out.preview.action).toMatch(/helper@attacker\.example/);
+    expect(out.preview.action).toMatch(/3435252/);
   });
 
   it('approve_user phase 1 returns a preview naming the user, and makes NO request', async () => {
@@ -153,7 +141,7 @@ describe('member tools', () => {
     expect(request).not.toHaveBeenCalled();
     expect(out.status).toBe('confirmation-required');
     expect(out.preview).toMatchObject({ method: 'POST', path: '/frames/3435252/users/9/approve' });
-    expect(out.preview.description).toMatch(/user 9/);
+    expect(out.preview.action).toMatch(/user 9/);
   });
 
   // ── skylight_remove_user (confirm-gated, fleet-audit#963) ────────────────
@@ -185,10 +173,10 @@ describe('member tools', () => {
       path: '/frames/3435252/users/9',
       willSend: { id: '9', user: 'Grandma (gran@example.test)' },
     });
-    expect(out.preview.description).toMatch(/Grandma/);
-    expect(out.preview.description).toMatch(/gran@example\.test/);
-    expect(out.preview.description).toMatch(/3435252/);
-    expect(out.preview.description).toMatch(/access/i);
+    expect(out.preview.action).toMatch(/Grandma/);
+    expect(out.preview.action).toMatch(/gran@example\.test/);
+    expect(out.preview.action).toMatch(/3435252/);
+    expect(out.preview.action).toMatch(/access/i);
   });
 
   it('remove_user names a member by email when there is no name, and says when the id is not a member at all', async () => {
@@ -199,7 +187,7 @@ describe('member tools', () => {
 
     const unknown = phaseOne(await tools.skylight_remove_user({ id: '4821' }));
     expect(unknown.preview.willSend).toEqual({ id: '4821', user: null });
-    expect(unknown.preview.description).toMatch(/not .*member/i);
+    expect(unknown.preview.action).toMatch(/not .*member/i);
     expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
   });
 
@@ -220,7 +208,7 @@ describe('member tools', () => {
     expect(named.preview.willSend).toEqual({ id: '11', user: 'Ada Lovelace' });
     const blank = phaseOne(await tools.skylight_remove_user({ id: '12' }));
     expect(blank.preview.willSend).toEqual({ id: '12', user: '(no name or email on record)' });
-    expect(blank.preview.description).toMatch(/no name or email on record/);
+    expect(blank.preview.action).toMatch(/no name or email on record/);
   });
 
   it('remove_user deletes by id only on the confirmed call and returns removed id', async () => {
@@ -270,9 +258,9 @@ describe('member tools', () => {
       willSend: { id: '3', label: 'Emma' },
     });
     expect(out.preview.willSend).not.toHaveProperty('reassign_to_category_id');
-    expect(out.preview.description).toMatch(/"Emma"/);
-    expect(out.preview.description).toMatch(/orphan/i);
-    expect(out.preview.description).toMatch(/reassign_to_category_id/);
+    expect(out.preview.action).toMatch(/"Emma"/);
+    expect(out.preview.action).toMatch(/orphan/i);
+    expect(out.preview.action).toMatch(/reassign_to_category_id/);
   });
 
   it('delete_category phase 1 names the destination member when reassign_to_category_id is given', async () => {
@@ -280,9 +268,9 @@ describe('member tools', () => {
     categoriesThenDelete(request);
     const out = phaseOne(await tools.skylight_delete_category({ id: '3', reassign_to_category_id: '4' }));
     expect(out.preview.willSend).toEqual({ id: '3', label: 'Emma', reassign_to_category_id: '4', reassign_to_label: 'Dad' });
-    expect(out.preview.description).toMatch(/"Emma"/);
-    expect(out.preview.description).toMatch(/"Dad"/);
-    expect(out.preview.description).not.toMatch(/orphan/i);
+    expect(out.preview.action).toMatch(/"Emma"/);
+    expect(out.preview.action).toMatch(/"Dad"/);
+    expect(out.preview.action).not.toMatch(/orphan/i);
   });
 
   it('delete_category says so when the id is not one of the frame\'s categories', async () => {
@@ -290,7 +278,7 @@ describe('member tools', () => {
     categoriesThenDelete(request);
     const out = phaseOne(await tools.skylight_delete_category({ id: '7' }));
     expect(out.preview.willSend).toEqual({ id: '7', label: null });
-    expect(out.preview.description).toMatch(/not .*categor/i);
+    expect(out.preview.action).toMatch(/not .*categor/i);
     expect(request.mock.calls.filter((c) => c[0] === 'DELETE')).toEqual([]);
   });
 
@@ -302,8 +290,8 @@ describe('member tools', () => {
     });
     const out = phaseOne(await tools.skylight_delete_category({ id: '5', reassign_to_category_id: '8' }));
     expect(out.preview.willSend).toEqual({ id: '5', label: '', reassign_to_category_id: '8', reassign_to_label: null });
-    expect(out.preview.description).toMatch(/"" \(category 5\)/);
-    expect(out.preview.description).toMatch(/category 8 \(NOT one of the frame's categories/);
+    expect(out.preview.action).toMatch(/"" \(category 5\)/);
+    expect(out.preview.action).toMatch(/category 8 \(NOT one of the frame's categories/);
   });
 
   it('delete_category deletes by id with no body when reassign omitted — only on the confirmed call', async () => {
@@ -461,7 +449,7 @@ describe('member tools', () => {
   it('set_member_avatar phase 1 returns a preview + confirmToken and makes NO network/file call', async () => {
     const { tools, request } = harness();
     const out = phaseOne(await tools.skylight_set_member_avatar({ id: '9', image_path: '/tmp/secret.png' }));
-    expect(fileBlobMock).not.toHaveBeenCalled();
+    expect(readMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
     expect(out.status).toBe('confirmation-required');
     expect(out.confirmToken).toEqual(expect.any(String));
@@ -473,7 +461,7 @@ describe('member tools', () => {
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: { profile_picture_urls: { original: 'https://cdn/x.png' } } } });
     const out = await confirmed(tools.skylight_set_member_avatar, { id: '9', image_path: '/tmp/face.png' });
 
-    expect(fileBlobMock).toHaveBeenCalledWith('/abs/tmp/face.png', { type: 'image/png' });
+    expect(readMock).toHaveBeenCalledWith(expect.objectContaining({ resolved: '/abs/tmp/face.png' }), 20 * 1024 * 1024);
     const [method, path, opts] = request.mock.calls[0];
     expect(method).toBe('PUT');
     expect(path).toBe('/frames/3435252/categories/9');
@@ -481,15 +469,20 @@ describe('member tools', () => {
     const file = opts.formData.get('profile_picture') as File;
     expect(file).toBeInstanceOf(Blob);
     expect(file.type).toBe('image/png');
+    // The bytes sent are exactly the ones the guard's confirmed read returned.
+    expect(Buffer.from(await file.arrayBuffer()).toString()).toBe('imgbytes');
     expect(JSON.parse(out.content[0].text)).toEqual({ id: '9', type: 'category', profile_picture_urls: { original: 'https://cdn/x.png' } });
   });
 
-  it('set_member_avatar confines the file read to SKYLIGHT_UPLOAD_DIR when the guard vetted against it', async () => {
+  it('set_member_avatar reads the file back through the guard, confined to the roots it was vetted against', async () => {
     const { tools, request } = harness();
     vetMock.mockResolvedValue({ resolved: '/inbox/face.png', ext: 'png', mime: 'image/png', size: 8, allowedRoots: ['/inbox'] });
     request.mockResolvedValue({ data: { id: '9', type: 'category', attributes: {} } });
     await confirmed(tools.skylight_set_member_avatar, { id: '9', image_path: '/inbox/face.png' });
-    expect(fileBlobMock).toHaveBeenCalledWith('/inbox/face.png', { type: 'image/png', allowedRoots: ['/inbox'] });
+    expect(readMock).toHaveBeenCalledWith(
+      { resolved: '/inbox/face.png', ext: 'png', mime: 'image/png', size: 8, allowedRoots: ['/inbox'] },
+      20 * 1024 * 1024,
+    );
   });
 
   it('set_member_avatar derives content-type from the extension (jpg) and respects frameId', async () => {
@@ -516,7 +509,7 @@ describe('member tools', () => {
     vetMock.mockRejectedValueOnce(new Error('Refusing to upload /home/u/.aws/credentials'));
     await expect(confirmed(tools.skylight_set_member_avatar, { id: '9', image_path: '~/.aws/credentials' }))
       .rejects.toThrow(/Refusing to upload/);
-    expect(fileBlobMock).not.toHaveBeenCalled();
+    expect(readMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
   });
 });

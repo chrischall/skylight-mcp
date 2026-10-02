@@ -74,7 +74,7 @@ describe('settings tools', () => {
       path: '/frames/3435252',
       willSend: { open_to_public: true, brightness: 40 },
     });
-    expect(out.preview.description).toMatch(/public/i);
+    expect(out.preview.action).toMatch(/public/i);
   });
 
   it('update_frame does not gate settings that grant no access (open_to_public:false or absent)', async () => {
