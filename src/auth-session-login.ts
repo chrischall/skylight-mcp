@@ -1,5 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { CookieJar, createOAuth2Refresher, truncateErrorMessage } from '@chrischall/mcp-utils';
+import {
+  CookieJar,
+  EdgeBlockedError,
+  createOAuth2Refresher,
+  detectEdgeBlock,
+  truncateErrorMessage,
+} from '@chrischall/mcp-utils';
 
 export type HttpFetch = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -49,6 +55,33 @@ const DEVICE_PARAMS = {
 function createPkcePair(): { verifier: string; challenge: string } {
   const verifier = randomBytes(32).toString('base64url');
   return { verifier, challenge: createHash('sha256').update(verifier).digest('base64url') };
+}
+
+// ---------------------------------------------------------------------------
+// CDN/WAF refusals (chrischall/mcp-host#1015)
+// ---------------------------------------------------------------------------
+
+/**
+ * Throw {@link EdgeBlockedError} when a CDN/WAF refusal page answered instead
+ * of Skylight. Such a page arrives as a 4xx with no CSRF token, no code and no
+ * token JSON, so each auth step would otherwise blame the credential or the
+ * login contract — and a refresh grant read as "revoked" makes TokenManager
+ * clear the token cache, discarding the only copy of a rotated refresh token.
+ * The body is only scanned, never echoed.
+ */
+function throwIfEdgeBlocked(res: Response, body: string, method: string, path: string): void {
+  if (res.status < 400) return;
+  const edge = detectEdgeBlock({ body, headers: res.headers, status: res.status });
+  if (edge) throw new EdgeBlockedError(res.status, edge.vendor, { service: 'Skylight', method, path });
+}
+
+/** A response body for scanning, without consuming the caller's copy. */
+async function peekBody(res: Response): Promise<string> {
+  try {
+    return await (typeof res.clone === 'function' ? res.clone() : res).text();
+  } catch {
+    return '';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +217,7 @@ export async function login(
   jar.absorb(step1.headers);
 
   const html = await step1.text();
+  throwIfEdgeBlocked(step1, html, 'GET', '/auth/session/new');
   const authenticityToken = extractAuthenticityToken(html, step1);
 
   // -------------------------------------------------------------------------
@@ -239,7 +273,10 @@ export async function login(
     jar.absorb(step3.headers);
     lastStatus = step3.status;
     const loc = step3.headers.get('location');
-    if (step3.status < 300 || step3.status >= 400 || !loc) break;
+    if (step3.status < 300 || step3.status >= 400 || !loc) {
+      throwIfEdgeBlocked(step3, step3.status >= 400 ? await peekBody(step3) : '', 'GET', '/oauth/authorize');
+      break;
+    }
     const unsafeRedirect = () => new Error('Skylight login failed: unsafe authorization redirect');
     let destination: URL;
     try {
@@ -328,7 +365,11 @@ export async function refresh(
     params: { client_id: CLIENT_ID },
     // The refresher always supplies an init (method/headers/body), so the
     // cast is safe — no fallback branch needed.
-    fetchImpl: (input, init) => httpFetch(String(input), init as RequestInit),
+    fetchImpl: async (input, init) => {
+      const res = await httpFetch(String(input), init as RequestInit);
+      if (!res.ok) throwIfEdgeBlocked(res, await peekBody(res), 'POST', '/oauth/token');
+      return res;
+    },
   });
   const result = await doRefresh();
   return {
