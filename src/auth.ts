@@ -1,3 +1,4 @@
+import { EdgeBlockedError } from '@chrischall/mcp-utils';
 import { loadAccount } from './config.js';
 
 /** Unreachable via `loadAccount`; kept so the type narrowing is honest. */
@@ -56,6 +57,10 @@ export async function resolveAuth(
     try {
       return await refresh({ authBaseUrl: account.authBaseUrl, refreshToken: account.refreshToken }, httpFetch);
     } catch (err) {
+      // An edge block judged nothing: not the token (so do not call it
+      // stale), and the login sits behind the same edge (so do not spend a
+      // rate-limited attempt on it).
+      if (err instanceof EdgeBlockedError) throw err;
       if (loginPair) return doLogin();
       throw new Error(
         'Skylight rejected the supplied refresh token — SKYLIGHT_REFRESH_TOKEN has expired or been revoked. ' +
