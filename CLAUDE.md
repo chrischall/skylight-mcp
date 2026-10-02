@@ -236,4 +236,3 @@ write-verification, transport archetypes, testing traps) live in
 - Don't add a browser-bridge or login-proxy dependency. The headless authorization-code flow works directly — no bot wall has been observed, and per-request proxying is not needed.
 - Don't paste real credentials or cookies into tests. Mock `login()` and `SkylightClient.request` at the module boundary.
 - Don't break the "no env vars" smoke path. The server must start cleanly with no credentials set — `resolveAuth()` errors are deferred to tool-call time.
-- Don't self-merge PRs. Don't add `ready-to-merge` unless the auto-review verdict was `warn`/`fail` and you've explicitly decided to override it (surface the findings to the user first).
