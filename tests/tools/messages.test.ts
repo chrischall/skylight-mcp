@@ -344,12 +344,12 @@ describe('message tools', () => {
         ],
       },
     });
-    expect(out.preview.description).toMatch(/3 /);
-    expect(out.preview.description).toMatch(/Beach day/);
-    expect(out.preview.description).toMatch(/3 \(not in the frame's message list\)/);
-    expect(out.preview.description).toMatch(/2 \(no caption\)/);
-    expect(out.preview.description).toMatch(/permanent/i);
-    expect(out.preview.description).toMatch(/3435252/);
+    expect(out.preview.action).toMatch(/3 /);
+    expect(out.preview.action).toMatch(/Beach day/);
+    expect(out.preview.action).toMatch(/3 \(not in the frame's message list\)/);
+    expect(out.preview.action).toMatch(/2 \(no caption\)/);
+    expect(out.preview.action).toMatch(/permanent/i);
+    expect(out.preview.action).toMatch(/3435252/);
   });
 
   it('delete_messages DELETEs with a repeated message_ids[] query string only on the confirmed call', async () => {
@@ -366,7 +366,7 @@ describe('message tools', () => {
     request.mockImplementation(async (method: string) => (method === 'GET' ? { data: [{ id: '4', type: 'message', attributes: {} }] } : undefined));
     const out = phaseOne(await tools.skylight_delete_messages({ message_ids: ['4'] }));
     expect(out.preview.willSend.messages).toEqual([{ id: '4', caption: '' }]);
-    expect(out.preview.description).toMatch(/4 \(no caption\)/);
+    expect(out.preview.action).toMatch(/4 \(no caption\)/);
   });
 
   it('delete_messages url-encodes ids', async () => {

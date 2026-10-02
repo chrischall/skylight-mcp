@@ -98,7 +98,9 @@ and, unless `reassign_to_category_id` is given, their chore and reward history),
 comes from `SKYLIGHT_APPLE_APP_PASSWORD`, never from chat), and
 `skylight_update_frame` when it sets `open_to_public: true` — and so do the
 local-file uploads `skylight_upload_photo`, `skylight_import_events_from_photo`
-and `skylight_set_member_avatar`, whose preview echoes the resolved file path.
+and `skylight_set_member_avatar`, whose preview echoes the resolved file path. Uploads only
+ever come from the upload directories (`SKYLIGHT_UPLOAD_DIR`; by default `~/Pictures` and
+`~/Downloads`) — ask the user to move a file there rather than reaching for another path.
 
 A third rule gates the two **bulk deletes**, `skylight_delete_messages` and
 `skylight_clear_list`: the call names a set (or a whole list) without showing

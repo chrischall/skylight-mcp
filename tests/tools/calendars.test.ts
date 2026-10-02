@@ -202,9 +202,9 @@ describe('calendar tools', () => {
       expect(out.preview.willSend.email).toBe('apple-id@example.test');
       expect(typeof out.preview.willSend.app_specific_password).toBe('string');
       expect(out.preview.willSend.app_specific_password).toMatch(/SKYLIGHT_APPLE_APP_PASSWORD/);
-      expect(out.preview.description).toMatch(/apple-id@example\.test/);
-      expect(out.preview.description).toMatch(/3435252/);
-      expect(out.preview.description).toMatch(/iCloud|Apple/);
+      expect(out.preview.action).toMatch(/apple-id@example\.test/);
+      expect(out.preview.action).toMatch(/3435252/);
+      expect(out.preview.action).toMatch(/iCloud|Apple/);
       expect(JSON.stringify(out)).not.toContain(SECRET);
       expect(JSON.stringify(out)).not.toContain('mnop');
     });

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { PREVIEW_NAMES_MAX, confirmFileUpload, confirmWrite, framePath, nameSome } from '../../src/tools/_confirm.js';
+import { PREVIEW_NAMES_MAX, confirmFileUpload, framePath, nameSome } from '../../src/tools/_confirm.js';
 import { NO_ELICIT_CTX, phaseOne } from './_setup.js';
 
 const ctx = NO_ELICIT_CTX as any;
@@ -34,42 +34,19 @@ describe('nameSome', () => {
   });
 });
 
-describe('confirmWrite', () => {
-  const W = { tool: 't', action: 'thing.do', description: 'Do it', target: '1', method: 'POST', path: '/x' };
-
-  it('phase 1 returns the preview, with willSend when a body is given', async () => {
-    const out = phaseOne(await confirmWrite(ctx, { ...W, body: { a: 1 } }));
-    expect(out.status).toBe('confirmation-required');
-    expect(out.action).toBe('thing.do');
-    expect(out.preview).toEqual({ description: 'Do it', method: 'POST', path: '/x', willSend: { a: 1 } });
-  });
-
-  it('omits willSend when there is no body', async () => {
-    const out = phaseOne(await confirmWrite(ctx, W));
-    expect(out.preview).toEqual({ description: 'Do it', method: 'POST', path: '/x' });
-  });
-
-  it('resolves undefined (proceed) for the matching phase-2 token', async () => {
-    const { confirmToken } = phaseOne(await confirmWrite(ctx, { ...W, body: { a: 1 } }));
-    expect(await confirmWrite(ctx, { ...W, body: { a: 1 }, confirmToken })).toBeUndefined();
-  });
-
-  it('binds the path: the same body at another path is DRAFT_CHANGED', async () => {
-    const { confirmToken } = phaseOne(await confirmWrite(ctx, { ...W, body: { a: 1 } }));
-    const out = await confirmWrite(ctx, { ...W, path: '/y', body: { a: 1 }, confirmToken });
-    expect(JSON.parse((out as any).content[0].text).error).toBe('DRAFT_CHANGED');
-  });
-
-  it('refuses outright under MCP_CONFIRM_MODE=refuse', async () => {
-    process.env.MCP_CONFIRM_MODE = 'refuse';
-    const out = await confirmWrite(ctx, W);
-    expect(JSON.parse((out as any).content[0].text).reason).toBe('confirmation-unsupported');
-  });
-});
-
+// The gate itself is the shared mcp-utils `confirmWrite` (its own suite covers
+// binding, replay, refuse mode); these pin skylight's file-upload wrapper.
 describe('confirmFileUpload', () => {
-  const FILE = { resolved: '/tmp/pic.jpg', ext: 'jpg', mime: 'image/jpeg', size: 1234 };
-  const W = { tool: 't', action: 'photo.upload', description: 'Upload', target: '/tmp/pic.jpg', method: 'POST', path: '/u' };
+  const FILE = { resolved: '/tmp/pic.jpg', ext: 'jpg', mime: 'image/jpeg', size: 1234, allowedRoots: ['/tmp'] };
+  const W = { tool: 't', action: 'photo.upload', summary: 'Upload', target: '/tmp/pic.jpg', method: 'POST', path: '/u', confirmToken: undefined };
+
+  it('previews the shared confirmWrite shape: action, method, path, willSend', async () => {
+    const out = phaseOne(await confirmFileUpload(ctx, FILE, W));
+    expect(out.preview).toEqual({
+      action: 'Upload', method: 'POST', path: '/u',
+      willSend: { image_path: '/tmp/pic.jpg', mime: 'image/jpeg', bytes: 1234 },
+    });
+  });
 
   it('echoes the vetted absolute path, mime and size in willSend', async () => {
     const out = phaseOne(await confirmFileUpload(ctx, FILE, W));

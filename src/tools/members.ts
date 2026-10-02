@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import { fileBlob } from '@chrischall/mcp-utils';
 import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
-import { vetUploadFile, type VettedUpload } from '../upload-guard.js';
+import { readVettedUpload, vetUploadFile, type VettedUpload } from '../upload-guard.js';
 import { confirmFileUpload, confirmTokenParam, confirmWrite, framePath } from './_confirm.js';
 
 const AVATAR_MIME: Record<string, string> = {
@@ -76,11 +75,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmWrite(ctx, {
         tool: 'skylight_invite_user',
         action: 'user.invite',
-        description: `Invite ${email} to frame ${f} — grants them access to the frame's calendar, photos, lists and member profiles`,
+        summary: `Invite ${email} to frame ${f} — grants them access to the frame's calendar, photos, lists and member profiles`,
+        account: undefined,
         target: email,
-        method: 'POST',
-        path,
-        body: { email },
+        request: { method: 'POST', path, body: { email } },
         confirmToken,
       });
       if (gate) return gate;
@@ -100,10 +98,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmWrite(ctx, {
         tool: 'skylight_approve_user',
         action: 'user.approve',
-        description: `Approve pending user ${id} on frame ${f} — grants them access to the frame`,
+        summary: `Approve pending user ${id} on frame ${f} — grants them access to the frame`,
+        account: undefined,
         target: id,
-        method: 'POST',
-        path,
+        request: { method: 'POST', path },
         confirmToken,
       });
       if (gate) return gate;
@@ -132,11 +130,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmWrite(ctx, {
         tool: 'skylight_remove_user',
         action: 'user.remove',
-        description: `Remove ${who} from frame ${f} — revokes their access to the frame's calendar, photos, lists and member profiles`,
+        summary: `Remove ${who} from frame ${f} — revokes their access to the frame's calendar, photos, lists and member profiles`,
+        account: undefined,
         target: String(id),
-        method: 'DELETE',
-        path,
-        body: { id, user },
+        request: { method: 'DELETE', path, body: { id, user } },
         confirmToken,
       });
       if (gate) return gate;
@@ -179,11 +176,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmWrite(ctx, {
         tool: 'skylight_delete_category',
         action: 'category.delete',
-        description: `Delete family member/category ${name(id, label)} from frame ${f} — ${consequence}`,
+        summary: `Delete family member/category ${name(id, label)} from frame ${f} — ${consequence}`,
+        account: undefined,
         target: String(id),
-        method: 'DELETE',
-        path,
-        body: pruneUndefined({ id, label, reassign_to_category_id, reassign_to_label: reassignTo }),
+        request: { method: 'DELETE', path, body: pruneUndefined({ id, label, reassign_to_category_id, reassign_to_label: reassignTo }) },
         confirmToken,
       });
       if (gate) return gate;
@@ -225,9 +221,10 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
   // and fills in `profile_picture_urls`. Preset emoji avatars use `avatar_id` instead (no upload).
   const setMemberAvatar = frameScoped(getClient, async (c, f, { id, file }: { id: string | number; file: VettedUpload; frameId?: string }) => {
     const formData = new FormData();
-    // fileBlob streams the file off disk (file-backed Blob) instead of buffering it,
-    // re-checking SKYLIGHT_UPLOAD_DIR confinement at open time when it is set.
-    const blob = await fileBlob(file.resolved, { type: file.mime, ...(file.allowedRoots ? { allowedRoots: file.allowedRoots } : {}) });
+    // Read back through the guard: one no-follow descriptor, re-confined to the
+    // roots it was vetted against, refusing a file swapped or resized since the
+    // preview. Avatars are capped at 20 MiB, so buffering is fine.
+    const blob = new Blob([new Uint8Array(await readVettedUpload(file, MAX_AVATAR_BYTES))], { type: file.mime });
     formData.append('profile_picture', blob, `avatar.${file.ext}`);
     const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/categories/${id}`, { formData });
     return textContent(flattenJsonApi(doc));
@@ -239,7 +236,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       description: "Set a family member's avatar to a custom photo from a local image file (uploaded as multipart/form-data). For a preset emoji avatar, use skylight_list_avatars + the avatar_id on create/update instead. Asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview echoes the resolved absolute image_path, detected mime and size, and nothing is uploaded until it is confirmed.",
       inputSchema: z.object({
         id: idParam.describe('Category/member id.'),
-        image_path: z.string().describe('Absolute path to a local image file (jpg, jpeg, png, heic, gif, webp; max 20 MiB). Anything else — or a symlink, or a file whose contents do not match its extension — is refused.'),
+        image_path: z.string().describe('Absolute path to a local image file inside the upload directories (SKYLIGHT_UPLOAD_DIR; by default ~/Pictures and ~/Downloads) (jpg, jpeg, png, heic, gif, webp; max 20 MiB). Anything else — a file outside those directories, a hidden file, a symlink, or a file whose contents do not match its extension — is refused.'),
         frameId: z.string().optional(),
         confirmToken: confirmTokenParam,
       }),
@@ -250,7 +247,7 @@ export function registerMemberTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmFileUpload(ctx, file, {
         tool: 'skylight_set_member_avatar',
         action: 'member.set_avatar',
-        description: "Upload a local file as a member's avatar",
+        summary: "Upload a local file as a member's avatar",
         target: String(args.id),
         method: 'PUT',
         path: `${framePath(args.frameId)}${apiPath`/categories/${args.id}`}`,

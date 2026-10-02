@@ -227,11 +227,10 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmWrite(ctx, {
         tool: 'skylight_delete_messages',
         action: 'message.delete_multiple',
-        description: `Permanently delete ${message_ids.length} message(s)/photo(s) from frame ${f}: ${named} — there is no trash, and a photo on the frame may exist nowhere else`,
+        summary: `Permanently delete ${message_ids.length} message(s)/photo(s) from frame ${f}: ${named} — there is no trash, and a photo on the frame may exist nowhere else`,
+        account: undefined,
         target: message_ids.map(String).join(','),
-        method: 'DELETE',
-        path,
-        body: { message_ids, messages },
+        request: { method: 'DELETE', path, body: { message_ids, messages } },
         confirmToken,
       });
       if (gate) return gate;

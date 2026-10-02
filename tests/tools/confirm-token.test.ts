@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createTestHarness, parseToolResult, type TestHarness } from '@chrischall/mcp-utils/test';
-import { fileBlob } from '@chrischall/mcp-utils';
 import { extname } from 'node:path';
-import { readFile } from 'node:fs/promises';
 import { registerPhotoTools } from '../../src/tools/photos.js';
 import { registerSettingsTools } from '../../src/tools/settings.js';
 import { registerMealTools } from '../../src/tools/meals.js';
@@ -12,7 +10,7 @@ import { registerCalendarTools } from '../../src/tools/calendars.js';
 import { registerMessageTools } from '../../src/tools/messages.js';
 import { registerListTools } from '../../src/tools/lists.js';
 import { s3Upload } from '../../src/s3-upload.js';
-import { vetUploadFile } from '../../src/upload-guard.js';
+import { readVettedUpload, vetUploadFile } from '../../src/upload-guard.js';
 import { makeClient } from './_setup.js';
 
 // Drives every confirm-gated tool through the REAL MCP RPC path. A harness
@@ -20,16 +18,10 @@ import { makeClient } from './_setup.js';
 // (claude.ai, Claude Desktop), so the default MCP_CONFIRM_MODE (ask-user) runs
 // the two-phase preview-token flow.
 
-vi.mock('@chrischall/mcp-utils', async (orig) => ({
-  ...(await orig<typeof import('@chrischall/mcp-utils')>()),
-  fileBlob: vi.fn(),
-}));
-vi.mock('node:fs/promises', () => ({ readFile: vi.fn() }));
 vi.mock('../../src/s3-upload.js', () => ({ s3Upload: vi.fn() }));
-vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn() }));
+vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn(), readVettedUpload: vi.fn() }));
 
-const fileBlobMock = vi.mocked(fileBlob);
-const readFileMock = vi.mocked(readFile);
+const readMock = vi.mocked(readVettedUpload);
 const s3UploadMock = vi.mocked(s3Upload);
 const vetMock = vi.mocked(vetUploadFile);
 const STUB_MIME: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png' };
@@ -85,8 +77,7 @@ beforeEach(() => {
   savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
   for (const k of ENV_KEYS) delete process.env[k];
   process.env.SKYLIGHT_APPLE_APP_PASSWORD = APPLE_SECRET;
-  fileBlobMock.mockReset().mockImplementation(async (_p: string, o?: { type?: string }) => new Blob([Buffer.from('img')], o));
-  readFileMock.mockReset().mockResolvedValue(Buffer.from('img') as never);
+  readMock.mockReset().mockResolvedValue(Buffer.from('img'));
   s3UploadMock.mockReset().mockResolvedValue('"etag"');
   vetMock.mockReset().mockImplementation(async (p: string) => {
     const ext = extname(p).slice(1).toLowerCase();
@@ -196,13 +187,12 @@ describe('confirm-token flow — every gated tool', () => {
     expect(body.status).toBe('confirmation-required');
     expect(body.action).toBe(action);
     expect(body.preview).toMatchObject(preview);
-    expect(typeof body.preview.description).toBe('string');
+    expect(typeof body.preview.action).toBe('string');
     expect(body.confirmToken).toEqual(expect.any(String));
     // A preview may READ to name its target; it must not have written.
     expect(writes()).toBe(0);
     expect(s3UploadMock).not.toHaveBeenCalled();
-    expect(readFileMock).not.toHaveBeenCalled();
-    expect(fileBlobMock).not.toHaveBeenCalled();
+    expect(readMock).not.toHaveBeenCalled();
 
     const second = await harness.callTool(tool, { ...args, confirmToken: body.confirmToken });
     expect(second.isError).toBeFalsy();
@@ -264,7 +254,7 @@ describe('confirm-token flow — refusals', () => {
     const changed = await harness.callTool('skylight_upload_photo', { image_path: '/tmp/pic.jpg', caption: 'Bye', confirmToken });
     expect(parseToolResult<{ error: string }>(changed).error).toBe('DRAFT_CHANGED');
     expect(writes()).toBe(0);
-    expect(readFileMock).not.toHaveBeenCalled();
+    expect(readMock).not.toHaveBeenCalled();
   });
 
   it('MCP_CONFIRM_MODE=refuse refuses on a client that cannot be prompted, and writes nothing', async () => {

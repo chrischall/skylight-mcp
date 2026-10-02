@@ -33,11 +33,10 @@ export function registerSettingsTools(server: McpServer, getClient: GetClient) {
         const gate = await confirmWrite(ctx, {
           tool: 'skylight_update_frame',
           action: 'frame.open_to_public',
-          description: `Make frame ${f} open to the public — anyone can then reach it`,
+          summary: `Make frame ${f} open to the public — anyone can then reach it`,
+          account: undefined,
           target: f,
-          method: 'PUT',
-          path,
-          body,
+          request: { method: 'PUT', path, body },
           confirmToken,
         });
         if (gate) return gate;

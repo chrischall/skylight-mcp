@@ -183,11 +183,10 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
       const gate = await confirmWrite(ctx, {
         tool: 'skylight_clear_list',
         action: 'list.clear',
-        description: `Permanently remove all ${ids.length} items from list ${listId} on frame ${f}: ${nameSome(items.map((i) => `"${i.label}"`))}`,
+        summary: `Permanently remove all ${ids.length} items from list ${listId} on frame ${f}: ${nameSome(items.map((i) => `"${i.label}"`))}`,
+        account: undefined,
         target: listId,
-        method: 'DELETE',
-        path,
-        body: { listId, ids, items },
+        request: { method: 'DELETE', path, body: { listId, ids, items } },
         confirmToken,
       });
       if (gate) return gate;
