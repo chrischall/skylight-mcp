@@ -9,7 +9,7 @@ const account: SessionAccount = {
 };
 
 function jsonResponse(status: number, body: unknown) {
-  return { status, ok: status >= 200 && status < 300, json: async () => body, text: async () => JSON.stringify(body) } as unknown as Response;
+  return { status, ok: status >= 200 && status < 300, headers: new Headers({ 'content-type': 'application/json' }), json: async () => body, text: async () => JSON.stringify(body) } as unknown as Response;
 }
 
 afterEach(() => {
