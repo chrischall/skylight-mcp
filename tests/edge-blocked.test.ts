@@ -180,3 +180,63 @@ describe('a CloudFront block reads as edge_blocked, not a rejected credential', 
     expect(r.error?.kind).not.toBe('edge_blocked');
   });
 });
+
+describe('a CloudFront block on the login POSTs reads as edge_blocked', () => {
+  const loginPage = (): Response =>
+    ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': 'text/html', 'set-cookie': '_skylight_cloud_session=abc; Path=/' }),
+      text: async () => '<input type="hidden" name="authenticity_token" value="CSRF">',
+    }) as unknown as Response;
+  const redirect = (location: string): Response =>
+    ({
+      ok: false,
+      status: 302,
+      statusText: 'Found',
+      headers: new Headers({ location }),
+      text: async () => '',
+    }) as unknown as Response;
+
+  /** The live four-step login, with `blockedStep` answered by CloudFront. */
+  function loginFetch(blockedStep: 'session' | 'token') {
+    return vi.fn(async (url: string, init?: RequestInit) => {
+      const { pathname } = new URL(url);
+      if (pathname === '/auth/session/new') return loginPage();
+      if (pathname === '/auth/session' && init?.method === 'POST') {
+        return blockedStep === 'session' ? blocked() : redirect('https://app.ourskylight.com/auth/session/success');
+      }
+      if (pathname === '/oauth/authorize') return redirect('https://ourskylight.com/welcome?code=CODE');
+      if (pathname === '/oauth/token') return blockedStep === 'token' ? blocked() : json({ access_token: 'AT' });
+      return json({ data: [] });
+    });
+  }
+
+  for (const [step, path] of [
+    ['session', '/auth/session'],
+    ['token', '/oauth/token'],
+  ] as const) {
+    it(step === 'session' ? 'on step 2 (POST /auth/session)' : 'on step 4 (POST /oauth/token code exchange)', async () => {
+      process.env.SKYLIGHT_EMAIL = 'a@b.com';
+      process.env.SKYLIGHT_PASSWORD = 'pw';
+      const { store, clear } = memoryStore(null);
+      const httpFetch = loginFetch(step);
+
+      const r = await healthcheck(httpFetch, store);
+
+      expect(r.ok).toBe(false);
+      expect(r.error?.kind).toBe('edge_blocked');
+      expect(r.error?.message).toContain(`POST ${path}`);
+      // Not the credential's fault, so not advice to change it or wait out a rate limit.
+      expect(r.hint).not.toMatch(/Verify SKYLIGHT_EMAIL|rate-limit/);
+      // Nothing was minted, and nothing stored was judged or thrown away.
+      expect(clear).not.toHaveBeenCalled();
+      expect(store.load()).toBeNull();
+      // The login stops at the blocked hop: no further attempts are spent behind the same edge.
+      const calls = httpFetch.mock.calls.map((c) => new URL(String(c[0])).pathname);
+      expect(calls.filter((p) => p === path)).toHaveLength(1);
+      expect(calls.at(-1)).toBe(path);
+    });
+  }
+});

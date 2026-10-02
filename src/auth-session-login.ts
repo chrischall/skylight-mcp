@@ -240,6 +240,10 @@ export async function login(
     body: step2Body,
   });
   jar.absorb(step2.headers);
+  // A refusal here never reached Skylight, so it says nothing about the
+  // password — and carrying on to step 3 would only spend another request
+  // behind the same edge.
+  if (step2.status >= 400) throwIfEdgeBlocked(step2, await peekBody(step2), 'POST', '/auth/session');
 
   const step2Location = step2.headers.get('location') ?? '';
   if (step2Location.includes('/auth/session/new')) {
@@ -333,6 +337,9 @@ export async function login(
     },
     body: step4Body,
   });
+  // Without this the block page's HTML fails JSON parsing as an unexplained
+  // SyntaxError, reported as an unknown login failure.
+  if (step4.status >= 400) throwIfEdgeBlocked(step4, await peekBody(step4), 'POST', '/oauth/token');
   const tokenJson = await step4.json();
   return normalizeTokenResponse(step4.status, tokenJson);
 }
