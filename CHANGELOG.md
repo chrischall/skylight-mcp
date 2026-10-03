@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3.1](https://github.com/chrischall/skylight-mcp/compare/v1.3.0...v1.3.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **deps:** adopt @chrischall/mcp-utils 2.12.0 upload guard and confirmWrite ([#219](https://github.com/chrischall/skylight-mcp/issues/219)) ([7589625](https://github.com/chrischall/skylight-mcp/commit/75896254af1c8a324afb94f0027dee277792eb9f))
+* **deps:** bump @chrischall/mcp-utils to 2.13.0 ([#224](https://github.com/chrischall/skylight-mcp/issues/224)) ([578421c](https://github.com/chrischall/skylight-mcp/commit/578421cab0340332800b1e12288cf7b2c2409f8a))
+* **deps:** bump dotenv ([#223](https://github.com/chrischall/skylight-mcp/issues/223)) ([60de3a4](https://github.com/chrischall/skylight-mcp/commit/60de3a435f65786ef940d6511644e72558e28d5c))
+* **deps:** bump dotenv in the production-dependencies group ([#212](https://github.com/chrischall/skylight-mcp/issues/212)) ([0bffc52](https://github.com/chrischall/skylight-mcp/commit/0bffc5249267a53e1965d571b212c98d25d2ba86))
+* keep credentials and report edge_blocked on CDN/WAF blocks (mcp-utils 2.10.0) ([#217](https://github.com/chrischall/skylight-mcp/issues/217)) ([f5dfa36](https://github.com/chrischall/skylight-mcp/commit/f5dfa3615dbee71533a7fe5f0ce0e781bfc257aa))
+* keep write approvals valid across a hosted restart (mcp-utils 2.11.0) ([#218](https://github.com/chrischall/skylight-mcp/issues/218)) ([3ab8047](https://github.com/chrischall/skylight-mcp/commit/3ab80474beb640d4376256f341974095c8e82d84))
+* recognise a CDN/WAF block on the login POSTs (session, code exchange) as edge_blocked ([#216](https://github.com/chrischall/skylight-mcp/issues/216)) ([5994f75](https://github.com/chrischall/skylight-mcp/commit/5994f755860f4c1e8faf3c9ee312cf95a5348eb9)), closes [#215](https://github.com/chrischall/skylight-mcp/issues/215)
+* report CDN/WAF blocks as edge_blocked, not a rejected credential (mcp-utils 2.9.0) ([#214](https://github.com/chrischall/skylight-mcp/issues/214)) ([251aeb1](https://github.com/chrischall/skylight-mcp/commit/251aeb1ef46828add35505f01645b5f7467ba407))
+
+
+### Documentation
+
+* drop the self-arming instruction from CLAUDE.md ([#220](https://github.com/chrischall/skylight-mcp/issues/220)) ([6671df7](https://github.com/chrischall/skylight-mcp/commit/6671df78d94e77ac4066fe1acbcc32c4156a78b2))
+
 ## [1.3.0](https://github.com/chrischall/skylight-mcp/compare/v1.2.0...v1.3.0) (2026-09-25)
 
 
