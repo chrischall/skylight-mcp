@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/chrischall/skylight-mcp/compare/v1.3.1...v1.3.2) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps:** require @chrischall/mcp-utils 2.14.0 and MCP SDK 2.3.0 ([#225](https://github.com/chrischall/skylight-mcp/issues/225)) ([ad79571](https://github.com/chrischall/skylight-mcp/commit/ad79571256a0a45489d5b3cebbc844ffcb1ca88a))
+
 ## [1.3.1](https://github.com/chrischall/skylight-mcp/compare/v1.3.0...v1.3.1) (2026-10-03)
 
 
