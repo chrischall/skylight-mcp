@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.0](https://github.com/chrischall/skylight-mcp/compare/v1.3.2...v1.4.0) (2026-10-07)
+
+
+### Features
+
+* **deps:** support MCP_CONFIRM_ELICITATION=off for clients that never show confirmation prompts ([#227](https://github.com/chrischall/skylight-mcp/issues/227)) ([3320fff](https://github.com/chrischall/skylight-mcp/commit/3320fff645375c593275357c18db7927333d1998))
+
+
+### Bug Fixes
+
+* **deps:** bump source-map-js ([#229](https://github.com/chrischall/skylight-mcp/issues/229)) ([4ebf6aa](https://github.com/chrischall/skylight-mcp/commit/4ebf6aa09c6daf1bb76bdfb72da00366fd2a632d))
+
+
+### Documentation
+
+* document MCP_CONFIRM_ELICITATION ([#230](https://github.com/chrischall/skylight-mcp/issues/230)) ([9a3bbb8](https://github.com/chrischall/skylight-mcp/commit/9a3bbb8664b4772bc6ff21d2fc6fc7ab79ef491b))
+
 ## [1.3.2](https://github.com/chrischall/skylight-mcp/compare/v1.3.1...v1.3.2) (2026-10-05)
 
 
