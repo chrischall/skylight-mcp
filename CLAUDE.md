@@ -146,7 +146,7 @@ sha256 fingerprint of the env password, never the password.
 `@chrischall/mcp-utils` (re-exported by `src/tools/_confirm.ts`; called with
 `summary`, `account: undefined`, `target` and `request: { method, path, body }`),
 or `confirmFileUpload` for the three local-file uploads (fleet-audit#1178). A client that can be
-prompted gets a real elicitation. One that cannot (claude.ai, Claude Desktop)
+prompted gets a real elicitation (unless `MCP_CONFIRM_ELICITATION=off`). One that cannot (claude.ai, Claude Desktop)
 gets the two-phase token flow under `MCP_CONFIRM_MODE` (default `ask-user`): the
 first call writes nothing and returns `status: "confirmation-required"`, the
 preview (`action`, `method`, `path`, `willSend`) and a `confirmToken`;
