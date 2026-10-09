@@ -14,6 +14,7 @@ vi.mock('../src/auth-session-login.js', () => ({
 // Import the mocks AFTER vi.mock so we get the mocked versions.
 import { login as mockLoginImport, refresh as mockRefreshImport } from '../src/auth-session-login.js';
 import { resolveAuth } from '../src/auth.js';
+import { NO_ENV_CONFIG_MARKER } from '../src/config.js';
 
 const mockLogin = mockLoginImport as ReturnType<typeof vi.fn>;
 const mockRefresh = mockRefreshImport as ReturnType<typeof vi.fn>;
@@ -282,16 +283,20 @@ describe('resolveAuth token cache', () => {
   // pair, the rotated token living in the cache is the ONLY thing that keeps
   // the next start working: the env token has already been spent.
 
-  it('says loudly that a token-only deployment will lock out when the cache write fails', async () => {
+  it('says loudly that a token-only deployment will lock out when a later cache write fails', async () => {
+    // The pre-spend probe passed, then the real write of the rotated pair
+    // failed (disk filled, dir remounted read-only): the process keeps working
+    // but the next start cannot, and the operator must hear why.
     process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
     mockRefresh.mockResolvedValue(GOOD_TOKENS);
     const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let saves = 0;
     try {
       const httpFetch = vi.fn().mockResolvedValue(okResponse());
       const { client } = await resolveAuth({
         httpFetch,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        persistence: { load: () => null, save: () => { throw new Error('EROFS'); } } as any,
+        persistence: { load: () => null, save: () => { if (saves++ > 0) throw new Error('EROFS'); } } as any,
       });
       await expect(client.request('GET', '/frames')).resolves.toBeDefined();
       const msg = warn.mock.calls.map((c) => String(c[0])).join('\n');
@@ -305,19 +310,55 @@ describe('resolveAuth token cache', () => {
     }
   });
 
-  it('warns at startup when a token-only deployment disables the cache', async () => {
+  // fleet-audit#1122: warning and then spending the single-use token anyway
+  // left the outcome unchanged — and on mcp-host stderr is never seen.
+  it.each([
+    ['an Error', () => new Error('EROFS')],
+    ['a non-Error value', () => 'EROFS'],
+  ])('refuses to spend the env token when a token-only deployment cannot write the cache (%s)', async (_label, thrown) => {
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
+    mockRefresh.mockResolvedValue(GOOD_TOKENS);
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    const { client } = await resolveAuth({
+      httpFetch,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      persistence: { load: () => null, save: () => { throw thrown(); } } as any,
+    });
+    const err = await client.request('GET', '/frames').catch((e: Error) => e);
+    expect(String(err)).toMatch(/token cache/i);
+    expect(String(err)).toMatch(/EROFS/);
+    expect(String(err)).toMatch(/SKYLIGHT_EMAIL/);
+    // The single-use credential is still intact for the next attempt.
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it('leaves no usable record behind from the writability probe', async () => {
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
+    mockRefresh.mockRejectedValue(new Error('network down'));
+    const saved: unknown[] = [];
+    const { client } = await resolveAuth({
+      httpFetch: vi.fn().mockResolvedValue(okResponse()),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      persistence: { load: () => null, save: (t: unknown) => { saved.push(t); } } as any,
+    });
+    await client.request('GET', '/frames').catch(() => undefined);
+    expect(mockRefresh).toHaveBeenCalledOnce();
+    // Only the probe was written, and the cache validator rejects it (empty token).
+    expect(saved).toHaveLength(1);
+    expect((saved[0] as { accessToken: string }).accessToken).toBe('');
+  });
+
+  it('refuses a token-only deployment that disables the cache, as a permanent config error', async () => {
     process.env.SKYLIGHT_REFRESH_TOKEN = 'SUPPLIED_RT';
     process.env.SKYLIGHT_TOKEN_CACHE = 'false';
-    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      await resolveAuth({ httpFetch: vi.fn() }); // default persistence → disabled by env
-      const msg = warn.mock.calls.map((c) => String(c[0])).join('\n');
-      expect(msg).toMatch(/SKYLIGHT_TOKEN_CACHE=false/);
-      expect(msg).toMatch(/SKYLIGHT_REFRESH_TOKEN/);
-      expect(msg).toMatch(/rotat/i);
-    } finally {
-      warn.mockRestore();
-    }
+    const err = await resolveAuth({ httpFetch: vi.fn() }).catch((e: Error) => e); // default persistence → disabled by env
+    expect(err).toBeInstanceOf(Error);
+    const msg = String(err);
+    expect(msg).toContain(NO_ENV_CONFIG_MARKER); // makeGetClient caches it rather than retrying
+    expect(msg).toMatch(/SKYLIGHT_TOKEN_CACHE=false/);
+    expect(msg).toMatch(/SKYLIGHT_REFRESH_TOKEN/);
+    expect(msg).toMatch(/rotat/i);
+    expect(mockRefresh).not.toHaveBeenCalled();
   });
 
   it('does not warn about a disabled cache when a login pair can recover', async () => {

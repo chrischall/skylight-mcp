@@ -73,7 +73,8 @@ outright.
 A scope that acts immediately affects exactly what you named, so it costs no
 extra round-trip.
 
-When gated, a client that can show a confirmation prompt shows one. Otherwise
+When gated, a client that can show a confirmation prompt shows one (unless the
+server sets `MCP_CONFIRM_ELICITATION=off`). Otherwise
 the response is `{"status": "confirmation-required", "preview": …, "confirmToken": …}`
 and **no request was made**. Show the user the preview, and only after they
 approve it in chat, re-issue the SAME call with that `confirmToken` to perform it
@@ -108,7 +109,8 @@ what is in it, so the preview lists every id with its caption, or every item
 by label, and the token binds that exact set. `skylight_delete_message` and
 `skylight_delete_list_item` destroy the one thing you named and stay ungated.
 
-These go through the same confirmation (a prompt, or the
+These go through the same confirmation (a prompt unless
+`MCP_CONFIRM_ELICITATION=off`, or the
 `confirmation-required` preview naming the member/email/file/items and frame)
 and act only when re-issued with the `confirmToken` after the user approves.
 

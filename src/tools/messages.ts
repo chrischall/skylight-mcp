@@ -116,7 +116,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         message_ids: idArrayParam,
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/albums/remove_from`, { body: { album_ids, message_ids } })))),

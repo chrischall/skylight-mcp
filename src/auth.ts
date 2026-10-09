@@ -1,5 +1,5 @@
 import { EdgeBlockedError } from '@chrischall/mcp-utils';
-import { loadAccount } from './config.js';
+import { loadAccount, NO_ENV_CONFIG_MARKER } from './config.js';
 
 /** Unreachable via `loadAccount`; kept so the type narrowing is honest. */
 const NO_LOGIN_PAIR =
@@ -54,6 +54,11 @@ export async function resolveAuth(
    */
   const mintTokens = async () => {
     if (!account.refreshToken) return doLogin();
+    // Token-only: the env token is single-use (Skylight rotates it on the
+    // refresh grant), and the rotated one survives this process only through
+    // the cache. Prove the cache is writable BEFORE spending it, so an
+    // unwritable data dir costs nothing but this error (fleet-audit#1122).
+    if (!loginPair && persistence) await probeCacheWritable(persistence);
     try {
       return await refresh({ authBaseUrl: account.authBaseUrl, refreshToken: account.refreshToken }, httpFetch);
     } catch (err) {
@@ -87,14 +92,17 @@ export async function resolveAuth(
 
   // Token-only + no cache is a lockout on the next start: Skylight rotates the
   // refresh token on first use, and without the cache the rotated one is gone
-  // when this process exits (fleet-audit#245). Only the operator's own
-  // SKYLIGHT_TOKEN_CACHE=false gets here — an injected `null` is a test seam.
+  // when this process exits. Warning and carrying on spent the token anyway —
+  // and on mcp-host nobody sees stderr — so refuse before anything is spent
+  // (fleet-audit#245, #1122). The marker makes `makeGetClient` cache this as
+  // the config error it is. Only the operator's own SKYLIGHT_TOKEN_CACHE=false
+  // gets here — an injected `null` is a test seam.
   const refreshTokenOnly = !loginPair;
   if (refreshTokenOnly && persistence === null && opts.persistence === undefined) {
-    console.error(
-      '[skylight-mcp] WARNING: SKYLIGHT_TOKEN_CACHE=false with only SKYLIGHT_REFRESH_TOKEN set. Skylight rotates the ' +
-        'refresh token on first use, so this process will spend the env token and the rotated one will be lost when it ' +
-        'exits — the next start will fail. Re-enable the token cache, or set SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD.',
+    throw new Error(
+      `${NO_ENV_CONFIG_MARKER}: SKYLIGHT_TOKEN_CACHE=false with only SKYLIGHT_REFRESH_TOKEN set. Skylight rotates the ` +
+        'refresh token on first use, so this process would spend the env token and lose the rotated one when it ' +
+        'exits, locking out the next start. Re-enable the token cache, or set SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD.',
     );
   }
 
@@ -114,4 +122,24 @@ export async function resolveAuth(
   });
 
   return { client, source: 'env' };
+}
+
+/**
+ * A record the cache validator rejects (empty access token), so writing it
+ * leaves nothing a later start would mistake for a session. Only written when
+ * the cache already held nothing usable — that is when `mintTokens` runs.
+ */
+const PROBE_RECORD: BearerTokens = { accessToken: '', refreshToken: '', expiresAt: 0 };
+
+async function probeCacheWritable(persistence: StatePersistence<BearerTokens>): Promise<void> {
+  try {
+    await persistence.save(PROBE_RECORD);
+  } catch (err) {
+    throw new Error(
+      `Skylight token cache is not writable (${err instanceof Error ? err.message : String(err)}), so ` +
+        'SKYLIGHT_REFRESH_TOKEN was NOT spent: Skylight rotates it on first use, and the rotated token could not be ' +
+        'kept. Fix the token cache location (MCP_DATA_DIR / SKYLIGHT_TOKEN_FILE), or set SKYLIGHT_EMAIL and ' +
+        'SKYLIGHT_PASSWORD so a new token can be minted.',
+    );
+  }
 }

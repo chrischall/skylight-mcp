@@ -128,6 +128,21 @@ describe('s3Upload (SigV4 multipart)', () => {
       .rejects.toThrow(/S3 create failed \(HTTP 403\): <Error>AccessDenied<\/Error>/);
   });
 
+  // fleet-audit#730: the 2xx error paths echoed raw XML that send() redacts.
+  it.each([
+    ['create without an UploadId', { createBody: '<x>Authorization: Bearer ya29.a0Ad52N3-LEAKED-STS-TOKEN</x>' }, /S3 create: no UploadId/],
+    ['complete with a 200 <Error>', { completeBody: '<Error>Authorization: Bearer ya29.a0Ad52N3-LEAKED-STS-TOKEN</Error>' }, /complete returned an error/],
+    ['complete without an ETag', { completeBody: '<x>Authorization: Bearer ya29.a0Ad52N3-LEAKED-STS-TOKEN</x>' }, /complete: no ETag/],
+  ])('redacts credential material echoed by %s', async (_label, mock, shape) => {
+    const { impl } = s3Mock(mock);
+    let msg = '';
+    await s3Upload({ creds, region: 'us-east-1', bucket: 'b', key: 'k.jpg', body: Buffer.from('x'), contentType: 'image/jpeg', fetchImpl: impl, now })
+      .catch((e: unknown) => { msg = (e as Error).message; });
+    expect(msg).toMatch(shape);
+    expect(msg).not.toContain('ya29.a0Ad52N3-LEAKED-STS-TOKEN');
+    expect(msg).toContain('[REDACTED]');
+  });
+
   it('redacts credential material echoed in a non-2xx S3 error body', async () => {
     const leak = 'Authorization: Bearer ya29.a0Ad52N3-LEAKED-STS-TOKEN denied';
     const impl = vi.fn().mockResolvedValue({ status: 403, headers: { get: () => null }, text: async () => leak } as unknown as Response);

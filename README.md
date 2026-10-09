@@ -257,10 +257,13 @@ Set `SKYLIGHT_TOKEN_CACHE=false` to turn it off and log in on every start, or
 
 If a write fails (read-only or full data dir) the server logs to stderr and
 keeps working on the in-memory token — only the next start pays for it. With
-the login pair that cost is one login. With only `SKYLIGHT_REFRESH_TOKEN` it is
-a lockout, because the rotated token was never saved: the server says so loudly
-on stderr, and warns at startup if `SKYLIGHT_TOKEN_CACHE=false` is set without
-a login pair.
+the login pair that cost is one login. With only `SKYLIGHT_REFRESH_TOKEN` it
+would be a lockout, because Skylight rotates that token on first use and the
+rotated one would never be saved. So a token-only deployment refuses to spend
+it: `SKYLIGHT_TOKEN_CACHE=false` without a login pair is a configuration error,
+and the server checks the cache is writable before the first refresh, failing
+the call (token unspent) if it is not. A write that fails after that check is
+reported loudly on stderr.
 
 ## Local dev
 
