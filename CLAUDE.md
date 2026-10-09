@@ -40,6 +40,7 @@ No bot wall has been observed; the headless flow works directly. The server logs
 - `npx vitest run -t '<substring>'` — run one test by name.
 - `npm run build` — `tsc` typecheck + esbuild bundle → `dist/bundle.js`.
 - `npm run dev` — runs `dist/index.js` with `--env-file=.env` (build first).
+- `SYNC_MANIFEST=1 npx vitest run tests/manifest-tools.test.ts` — regenerate `manifest.json`'s `tools` array from the registered server. `tests/manifest-tools.test.ts` fails whenever a tool is added, renamed or re-described without it (fleet-audit#1123).
 
 `vitest.config.ts` enforces **100% lines/branches/functions/statements** on `src/**` (excluding `src/index.ts`). Coverage gaps fail CI — write the failing test first, then the code.
 
