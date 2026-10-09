@@ -11,7 +11,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/messages`)))),
@@ -24,7 +24,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/albums`)))),
@@ -38,7 +38,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         id: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/messages/${id}`)))),
@@ -52,7 +52,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         title: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { title }: { title: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/albums`, { body: { title } })))),
@@ -66,7 +66,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         id: idParam,
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/albums/${id}`);
@@ -84,7 +84,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         exclude_from_slideshow: z.boolean().optional().describe('Hide this album from the frame slideshow.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, title, exclude_from_slideshow }: { id: string | number; title?: string; exclude_from_slideshow?: boolean; frameId?: string }) => {
       const body = pruneUndefined({ title, exclude_from_slideshow });
@@ -101,7 +101,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         message_ids: idArrayParam,
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/albums/add_to`, { body: { album_ids, message_ids } })))),
@@ -116,7 +116,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         message_ids: idArrayParam,
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { album_ids, message_ids }: { album_ids: Array<string | number>; message_ids: Array<string | number>; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/albums/remove_from`, { body: { album_ids, message_ids } })))),
@@ -131,7 +131,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         new_frame_ids: idArrayParam.describe('Destination frame ids (see skylight_list_frames).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { message_ids, new_frame_ids }: { message_ids: Array<string | number>; new_frame_ids: Array<string | number>; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/copy_to_frames`, { body: { message_ids, new_frame_ids } });
@@ -148,7 +148,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         body: z.string().describe('Comment text.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, body }: { id: string; body: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/messages/${id}/comments`, { body: { body } })))),
@@ -163,7 +163,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         caption: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, caption }: { id: string; caption: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/messages/${id}/caption`, { body: { caption } })))),
@@ -177,7 +177,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         id: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/messages/${id}/likes`);
@@ -193,7 +193,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         id: idParam,
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/messages/${id}/likes`);
@@ -210,7 +210,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
         confirmToken: confirmTokenParam,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     // Gated (fleet-audit#964): the caller names a SET, and nothing in the call
     // shows what is in it. The frame's messages are read on both phases so the
@@ -248,7 +248,7 @@ export function registerMessageTools(server: McpServer, getClient: GetClient) {
         id: idParam,
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/messages/${id}`);

@@ -15,7 +15,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
         recipe_source: z.string().optional().describe("Defaults to 'generate' (AI-generated)."),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { meal_category_id, dates, mouths_to_feed, add_to_grocery_list, recipe_source }: { meal_category_id: string | number; dates: string[]; mouths_to_feed?: number; add_to_grocery_list?: boolean; recipe_source?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/auto_creation_intents`, {
@@ -49,7 +49,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
         datetime_range_end: z.string().describe('ISO datetime.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { category_ids, physical_location, activity_kind, budget, datetime_range_start, datetime_range_end }: { category_ids: Array<string | number>; physical_location: string; activity_kind?: string; budget?: string; datetime_range_start: string; datetime_range_end: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/auto_creation_intents`, {
@@ -71,7 +71,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Get an AI auto-creation intent (its status + draft results).',
       inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents/${id}`)))),
@@ -82,7 +82,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List all AI auto-creation intents on the frame (find pending/completed drafting jobs and their ids).',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents`)))),
@@ -93,7 +93,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List the events an AI intent drafted (for review before approving). For meal/activity engines the drafts are items, not events — use skylight_list_auto_creation_items instead.',
       inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents/${id}/created_events`)))),
@@ -104,7 +104,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List the draft items an AI intent created (the general draft reader — meal sittings, activities, list items, etc., which the event-only draft list does not surface).',
       inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/auto_creation_intents/${id}/created_items`)))),
@@ -119,7 +119,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
         ids: idArrayParam.describe('Draft event ids to approve into real events.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, ids }: { id: string | number; ids: Array<string | number>; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/auto_creation_intents/${id}/created_events/bulk_approve`, { body: { ids } });
@@ -132,7 +132,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Undo/discard an AI auto-creation intent and its drafts.',
       inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/auto_creation_intents/${id}/undo`);

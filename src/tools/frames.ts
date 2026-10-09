@@ -8,7 +8,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List Skylight frames (family hubs) on this account.',
       inputSchema: z.object({}),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => {
       const c = await getClient();
@@ -21,7 +21,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Get one Skylight frame and its settings.',
       inputSchema: z.object({ frameId: z.string().optional().describe('Frame id; defaults to the resolved frame.') }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}`)))),
   );
@@ -31,7 +31,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List members (frame_users) of a Skylight frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}/users`)))),
   );
@@ -41,7 +41,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List physical devices attached to a Skylight frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}/devices`)))),
   );
@@ -51,7 +51,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Get Skylight Plus subscription / entitlement status.',
       inputSchema: z.object({}),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => {
       const c = await getClient();
@@ -64,7 +64,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Get reward-point balances per family member (lifetime earned + current balance).',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/reward_points`)))),
   );
@@ -74,7 +74,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Get household configuration for the frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/household_config`)))),
   );
@@ -89,7 +89,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
         current_album_id: idParam.describe('Album id to display on this device.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, current_album_id }: { id: string | number; current_album_id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/devices/${id}`, { body: { current_album_id } });
@@ -106,7 +106,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
         name: z.string().describe('New device name.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, name }: { id: string | number; name: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/devices/${id}`, { body: { name } });

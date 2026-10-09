@@ -57,7 +57,7 @@ function registeredAnnotations(): Record<string, Ann | undefined> {
   return seen;
 }
 
-interface Ann { readOnlyHint?: unknown; destructiveHint?: unknown }
+interface Ann { readOnlyHint?: unknown; destructiveHint?: unknown; openWorldHint?: unknown }
 
 describe('every tool declares whether it is a read', () => {
   it('registers the full surface (guards against a registrar being dropped here)', () => {
@@ -103,16 +103,53 @@ describe('every tool declares whether it is a read', () => {
     // side effect of adding a tool.
     const destructive = Object.entries(registeredAnnotations())
       .filter(([, a]) => a?.readOnlyHint === false && a?.destructiveHint === true);
-    expect(destructive).toHaveLength(26);
+    expect(destructive).toHaveLength(29);
+  });
+
+  it('declares every tool open-world (each one calls the Skylight API)', () => {
+    // openWorldHint defaults to TRUE, so an omitted one reads the same as a
+    // considered one — but the fleet lint (audit-annotations --strict) treats
+    // silence as unclassified. Nothing here is local-only.
+    const notOpen = Object.entries(registeredAnnotations())
+      .filter(([, a]) => a?.openWorldHint !== true)
+      .map(([name]) => name);
+    expect(notOpen).toEqual([]);
   });
 
   it('marks the state-discarding writes destructive (fleet-audit#731)', () => {
-    // Both throw data away — an AI intent and its drafts, a photo's album
-    // membership — so a host that auto-approves non-destructive writes must
-    // not run them unprompted.
+    // An AI intent and its drafts are thrown away with nothing here to bring
+    // them back, so a host that auto-approves non-destructive writes must not
+    // run it unprompted.
     const ann = registeredAnnotations();
-    for (const name of ['skylight_undo_auto_creation', 'skylight_remove_from_album']) {
-      expect(ann[name], name).toEqual({ readOnlyHint: false, destructiveHint: true });
+    expect(ann.skylight_undo_auto_creation).toEqual({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+  });
+
+  it('applies the inverse test: a write with an inverse here is not destructive', () => {
+    // destructive:false means a later call in THIS tool set restores the prior
+    // state. Album membership comes back with skylight_add_to_album, and a like
+    // with skylight_like_message, so neither removal is destructive.
+    const ann = registeredAnnotations();
+    for (const name of ['skylight_remove_from_album', 'skylight_unlike_message']) {
+      expect(ann[name], name).toEqual({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
+    }
+  });
+
+  it('marks writes with no inverse destructive even when they look additive', () => {
+    // A comment reaches the frame's other members and nothing here deletes it;
+    // open_to_public widens who can reach the frame (an access reduction, like
+    // an unlock); linking iCloud hands Skylight an Apple credential no tool
+    // here can take back; create/update_event send invitations to the
+    // addresses in invited_emails, and deleting the event later does not
+    // un-send an invite that already went out.
+    const ann = registeredAnnotations();
+    for (const name of [
+      'skylight_add_message_comment',
+      'skylight_update_frame',
+      'skylight_link_apple_calendar',
+      'skylight_create_event',
+      'skylight_update_event',
+    ]) {
+      expect(ann[name], name).toEqual({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
     }
   });
 });

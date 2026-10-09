@@ -72,7 +72,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
         confirmToken: confirmTokenParam,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     async (args: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });
@@ -111,7 +111,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
         confirmToken: confirmTokenParam,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     async (args: { image_path: string; category_ids?: Array<string | number>; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });
