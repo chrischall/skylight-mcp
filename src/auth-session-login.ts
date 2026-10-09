@@ -340,7 +340,16 @@ export async function login(
   // Without this the block page's HTML fails JSON parsing as an unexplained
   // SyntaxError, reported as an unknown login failure.
   if (step4.status >= 400) throwIfEdgeBlocked(step4, await peekBody(step4), 'POST', '/oauth/token');
-  const tokenJson = await step4.json();
+  // Parse it ourselves: an HTML outage/WAF page that is not an edge block
+  // would otherwise escape as a raw SyntaxError carrying a fragment of the
+  // upstream body and no status (fleet-audit#728).
+  const tokenText = await step4.text();
+  let tokenJson: unknown;
+  try {
+    tokenJson = JSON.parse(tokenText);
+  } catch {
+    throw new Error(`Skylight token request failed (HTTP ${step4.status}): ${truncateErrorMessage(tokenText)}`);
+  }
   return normalizeTokenResponse(step4.status, tokenJson);
 }
 

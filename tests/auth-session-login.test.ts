@@ -762,6 +762,30 @@ describe('login', () => {
       .rejects.toThrow(/HTTP 401/);
   });
 
+  // fleet-audit#728: an HTML outage page from /oauth/token used to surface as
+  // a raw SyntaxError carrying a fragment of the upstream body, with no status.
+  it.each([502, 200])('names the HTTP status (not a SyntaxError) when step-4 returns a non-JSON body (HTTP %i)', async (status) => {
+    let callIndex = 0;
+    const page = '<html><body>Bad Gateway Authorization: Bearer ya29.a0Ad52N3-LEAKED-TOKEN</body></html>';
+    const httpFetch: HttpFetch = vi.fn().mockImplementation(async () => {
+      callIndex++;
+      if (callIndex === 1) return htmlResponse('<input name="authenticity_token" value="T">');
+      if (callIndex === 2) return redirectResponse(`${AUTH_BASE}/auth/session/success`);
+      if (callIndex === 3) return redirectResponse('https://ourskylight.com/welcome?code=C');
+      return {
+        status,
+        ok: status < 300,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => page,
+        json: async () => JSON.parse(page),
+      } as unknown as Response;
+    });
+    const err = await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch).catch((e: unknown) => e as Error);
+    expect(err).not.toBeInstanceOf(SyntaxError);
+    expect(err.message).toMatch(new RegExp(`^Skylight token request failed \\(HTTP ${status}\\)`));
+    expect(err.message).not.toContain('ya29.a0Ad52N3-LEAKED-TOKEN');
+  });
+
   it('uses empty string for refreshToken when absent from token response', async () => {
     let callIndex = 0;
     const httpFetch: HttpFetch = vi.fn().mockImplementation(async () => {
