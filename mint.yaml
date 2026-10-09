@@ -79,11 +79,13 @@ egress:
     #
     # API base + auth origin (login steps 1-4 and every tool call).
     - app.ourskylight.com
-    # OAuth redirect_uri of the login flow. Step 3 follows the /oauth/authorize
-    # redirect chain (up to 3 hops) and normally reads the code off the
-    # Location header before this host is ever fetched, but a hop that
-    # carries no code is followed, so the target must be admitted.
-    - ourskylight.com
+    # Deliberately NOT admitted: ourskylight.com, the OAuth redirect_uri.
+    # Step 3 fetches /oauth/authorize and follows at most 3 further
+    # same-origin redirects, reading the code off the callback's Location
+    # header without ever fetching it. A callback with no code ends the login
+    # unfetched, and any hop off the auth origin is rejected as an unsafe
+    # authorization redirect (src/auth-session-login.ts), so the server never
+    # dials it.
     # Photo upload (s3-upload.ts) dials `<bucket>.s3.<region>.amazonaws.com`,
     # where bucket and region are handed back by the API's
     # cloud_upload_credentials call at runtime — hence the wildcard: both

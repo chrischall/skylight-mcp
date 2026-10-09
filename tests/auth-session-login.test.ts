@@ -626,6 +626,9 @@ describe('login', () => {
     });
     await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
       .rejects.toThrow(/could not extract authorization code/);
+    // Steps 1-2, then /oauth/authorize plus at most 3 followed redirects —
+    // the bound mint.yaml's egress comment describes (fleet-audit#899).
+    expect(httpFetch).toHaveBeenCalledTimes(6);
   });
 
   it('names the HTTP status when step 3 rejects the authorization request', async () => {
