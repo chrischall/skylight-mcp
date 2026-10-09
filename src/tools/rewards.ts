@@ -8,7 +8,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Get one reward.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/rewards/${id}`)))),
@@ -26,7 +26,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
         category_ids: idArrayParam.describe('Family-member category ids this reward applies to (required).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { name, description, point_value, respawn_on_redemption, category_ids }: { name: string; description?: string; point_value: number; respawn_on_redemption?: boolean; category_ids: Array<string | number>; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/rewards`, { body: pruneUndefined({ name, description, point_value, respawn_on_redemption, category_ids }) });
@@ -45,7 +45,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
         category_ids: idArrayParam.optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, name, point_value, category_ids }: { id: string; name?: string; point_value?: number; category_ids?: Array<string | number>; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/rewards/${id}`, { body: pruneUndefined({ name, point_value, category_ids }) });
@@ -58,7 +58,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Delete a reward.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/rewards/${id}`);
@@ -75,7 +75,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
         category_id: idParam.optional().describe('Member redeeming, if required.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/rewards/${id}/redeem`, { body: pruneUndefined({ category_id }) });
@@ -92,7 +92,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
         category_id: idParam.optional().describe('Member who redeemed, if required to identify the redemption to reverse.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/rewards/${id}/unredeem`, { body: pruneUndefined({ category_id }) });
@@ -109,7 +109,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
         points: z.number().describe('Points to add (can be negative to deduct).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { category_ids, points }: { category_ids: Array<string | number>; points: number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/reward_points`, { body: { category_ids, points } });

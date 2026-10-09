@@ -59,7 +59,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         before: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { after, before }: { after: string; before: string; frameId?: string }) => {
       const doc = await c.request<ChoreDoc | undefined>('GET', apiPath`/frames/${f}/chores`, { query: { after, before } });
@@ -81,7 +81,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         reward_points: z.number().optional().describe('Reward points/stars for completing.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { summary, category_id, start, description, reward_points }: { summary: string; category_id: string | number; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores`, { body: pruneUndefined({ summary, category_id, start, description, reward_points }) });
@@ -112,7 +112,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         up_for_grabs: z.boolean().optional().describe('Set true for an unassigned "anyone can do it" chore (requires no category_ids).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { summary, recurrence, category_ids, start, start_time, recurring_until, reward_points, emoji_icon, description, routine, up_for_grabs }: { summary: string; recurrence: string; category_ids?: (string | number)[]; start: string; start_time?: string; recurring_until?: string; reward_points?: number; emoji_icon?: string; description?: string; routine?: boolean; up_for_grabs?: boolean; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores/create_multiple`, {
@@ -131,7 +131,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Mark a chore complete.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('PUT', apiPath`/frames/${f}/chores/${id}/completions`, { body: { status: 'complete' } });
@@ -175,7 +175,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
         confirmToken: confirmTokenParam,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     async (args: UpdateChoreArgs, ctx: ServerContext) => {
       // 'this_and_future' and 'all' rewrite occurrences the caller did not
@@ -218,7 +218,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         category_id: idParam.optional().describe('Only for an up-for-grabs/shared chore: which member completed it. Omit for a normally-assigned chore (sending it 422s).'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time, category_id }: { id: string; instance_date: string; instance_time?: string; category_id?: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('PUT', apiPath`/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'complete', instance_date, instance_time, category_id }) });
@@ -239,7 +239,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         instance_time: z.string().optional().describe('HH:MM — for a time-of-day routine occurrence.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, instance_date, instance_time }: { id: string; instance_date?: string; instance_time?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('PUT', apiPath`/frames/${f}/chores/${id}/completions`, { body: pruneUndefined({ status: 'pending', instance_date, instance_time }) });
@@ -267,7 +267,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
         confirmToken: confirmTokenParam,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     async (args: DeleteChoreArgs, ctx: ServerContext) => {
       // Gated ONLY at 'all', which destroys the whole series. A plain delete
@@ -302,7 +302,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         ended_chore_lookback_days: z.number().optional().describe('How many days back to include ended chores.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { search_query, include_up_for_grabs, limit, ended_chore_lookback_days }: { search_query: string; include_up_for_grabs?: boolean; limit?: number; ended_chore_lookback_days?: number; frameId?: string }) => {
       const query: Record<string, string | number> = { search_query };
@@ -323,7 +323,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         redeemed_at_max: z.string().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { redeemed_at_min, redeemed_at_max }: { redeemed_at_min?: string; redeemed_at_max?: string; frameId?: string }) => {
       const now = new Date();

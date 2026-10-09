@@ -507,8 +507,8 @@ it('update_meal flattens a single-resource data object, not just an array', asyn
 
   it('update_meal is annotated destructive — apply_to one/future split the series', async () => {
     const { annotations } = harness();
-    expect(annotations.skylight_update_meal).toEqual({ readOnlyHint: false, destructiveHint: true });
-    expect(annotations.skylight_delete_meal).toEqual({ readOnlyHint: false, destructiveHint: true });
+    expect(annotations.skylight_update_meal).toEqual({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+    expect(annotations.skylight_delete_meal).toEqual({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
   });
 
   it('delete_meal falls back to a summary object on a 200 with no sittings in it', async () => {

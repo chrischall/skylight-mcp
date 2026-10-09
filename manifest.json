@@ -20,7 +20,8 @@
         "SKYLIGHT_PASSWORD": "${user_config.skylight_password}",
         "SKYLIGHT_APPLE_APP_PASSWORD": "${user_config.apple_app_specific_password}",
         "SKYLIGHT_APPLE_ID": "${user_config.apple_id}",
-        "SKYLIGHT_UPLOAD_DIR": "${user_config.skylight_upload_dir}"
+        "SKYLIGHT_UPLOAD_DIR": "${user_config.skylight_upload_dir}",
+        "SKYLIGHT_TOKEN_CACHE": "${user_config.skylight_token_cache}"
       }
     }
   },
@@ -63,6 +64,13 @@
       "title": "Upload directory",
       "description": "Optional. The only directory the photo-upload, photo-import and member-avatar tools may upload files from. Leave empty to allow ~/Pictures and ~/Downloads; files anywhere else are refused (the file-type and content checks always apply).",
       "required": false
+    },
+    "skylight_token_cache": {
+      "type": "boolean",
+      "title": "Token cache",
+      "description": "Set to false to disable the on-disk token cache and re-authenticate on every process start. Defaults to enabled.",
+      "required": false,
+      "default": true
     }
   },
   "tools": [

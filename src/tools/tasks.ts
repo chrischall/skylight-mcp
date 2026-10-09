@@ -10,7 +10,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/task_box/items`)))),
@@ -27,7 +27,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
         routine: z.boolean().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { summary, emoji_icon, reward_points, routine }: { summary: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/task_box/items`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
@@ -47,7 +47,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
         routine: z.boolean().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, summary, emoji_icon, reward_points, routine }: { id: string; summary?: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/task_box/items/${id}`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
@@ -63,7 +63,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
         id: z.string(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/task_box/items/${id}`);

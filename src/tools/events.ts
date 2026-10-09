@@ -28,7 +28,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
         timezone: z.string().optional().describe('IANA tz; defaults to the frame timezone.'),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { date_min, date_max, timezone }: { date_min: string; date_max: string; timezone?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendar_events`, {
@@ -45,7 +45,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({
         id: z.string(), frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendar_events/${id}`)))),
@@ -56,7 +56,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Create a calendar event on a Skylight frame.',
       inputSchema: z.object({ ...eventAttrs, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { frameId: _frameId, ...attrs }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/calendar_events`, { body: pruneUndefined(attrs) });
@@ -69,7 +69,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Update a calendar event by id.',
       inputSchema: z.object({ id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id, frameId: _frameId, ...attrs }: { id: string; frameId?: string } & Record<string, unknown>) => {
       const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/calendar_events/${id}`, { body: pruneUndefined(attrs) });
@@ -82,7 +82,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Delete a calendar event by id.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/calendar_events/${id}`);
@@ -95,7 +95,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List calendar/chore categories for a Skylight frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/categories`)))),
@@ -106,7 +106,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List linked source calendars (Google, etc.) for a frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/source_calendars`)))),
@@ -117,7 +117,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: 'List recently-invited email addresses (handy for filling create_event invited_emails).',
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendar_events/recent_invited_emails`)))),
@@ -128,7 +128,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
     {
       description: "Get the frame's calendar-event notification settings.",
       inputSchema: z.object({ frameId: z.string().optional() }),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/event_notification_settings`)))),
   );
@@ -143,7 +143,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
         early_minutes_before: z.number().optional(),
         frameId: z.string().optional(),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     frameScoped(getClient, async (c, f, { on_time, early, early_minutes_before }: { on_time?: boolean; early?: boolean; early_minutes_before?: number; frameId?: string }) => {
       const body = pruneUndefined({ on_time, early, early_minutes_before });
