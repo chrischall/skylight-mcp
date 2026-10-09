@@ -132,7 +132,7 @@ export function registerAiTools(server: McpServer, getClient: GetClient) {
     {
       description: 'Undo/discard an AI auto-creation intent and its drafts.',
       inputSchema: z.object({ id: idParam, frameId: z.string().optional() }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/auto_creation_intents/${id}/undo`);

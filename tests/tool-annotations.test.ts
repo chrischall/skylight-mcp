@@ -103,6 +103,16 @@ describe('every tool declares whether it is a read', () => {
     // side effect of adding a tool.
     const destructive = Object.entries(registeredAnnotations())
       .filter(([, a]) => a?.readOnlyHint === false && a?.destructiveHint === true);
-    expect(destructive).toHaveLength(24);
+    expect(destructive).toHaveLength(26);
+  });
+
+  it('marks the state-discarding writes destructive (fleet-audit#731)', () => {
+    // Both throw data away — an AI intent and its drafts, a photo's album
+    // membership — so a host that auto-approves non-destructive writes must
+    // not run them unprompted.
+    const ann = registeredAnnotations();
+    for (const name of ['skylight_undo_auto_creation', 'skylight_remove_from_album']) {
+      expect(ann[name], name).toEqual({ readOnlyHint: false, destructiveHint: true });
+    }
   });
 });
