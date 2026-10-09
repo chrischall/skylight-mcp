@@ -137,7 +137,7 @@ export async function s3Upload(opts: S3UploadOptions): Promise<string> {
   // 1. CreateMultipartUpload — POST /key?uploads
   const createXml = await (await send('create', { uploads: '' }, 'POST', { payload: '', extra: { 'content-type': contentType } })).text();
   const uploadId = tagValue(createXml, 'UploadId');
-  if (!uploadId) throw new Error(`S3 create: no UploadId in response: ${createXml.slice(0, 200)}`);
+  if (!uploadId) throw new Error(`S3 create: no UploadId in response: ${truncateErrorMessage(createXml, 200)}`);
 
   try {
     // 2. UploadPart for each chunk — PUT /key?partNumber=N&uploadId=…
@@ -160,9 +160,9 @@ export async function s3Upload(opts: S3UploadOptions): Promise<string> {
       payload: completeBody, extra: { 'content-type': 'application/xml', 'if-none-match': '*' },
     })).text();
     // S3 can return HTTP 200 with an <Error> body for CompleteMultipartUpload.
-    if (completeXml.includes('<Error>')) throw new Error(`S3 complete returned an error: ${completeXml.slice(0, 300)}`);
+    if (completeXml.includes('<Error>')) throw new Error(`S3 complete returned an error: ${truncateErrorMessage(completeXml, 300)}`);
     const etag = tagValue(completeXml, 'ETag');
-    if (!etag) throw new Error(`S3 complete: no ETag in response: ${completeXml.slice(0, 200)}`);
+    if (!etag) throw new Error(`S3 complete: no ETag in response: ${truncateErrorMessage(completeXml, 200)}`);
     return etag;
   } catch (err) {
     // Best-effort abort so we don't leak an incomplete multipart upload.
