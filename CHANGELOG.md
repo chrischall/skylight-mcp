@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.1](https://github.com/chrischall/skylight-mcp/compare/v1.4.0...v1.4.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* annotate tools truthfully and sync manifests with the served tools ([#235](https://github.com/chrischall/skylight-mcp/issues/235)) ([827d58e](https://github.com/chrischall/skylight-mcp/commit/827d58e942e088dd929e95f65e7363dab3768581))
+* **deps:** update @chrischall/mcp-utils to 3.0.0 ([#234](https://github.com/chrischall/skylight-mcp/issues/234)) ([d9caadd](https://github.com/chrischall/skylight-mcp/commit/d9caadd1612b7b95a0d6b97207a5fb030b3f67bb))
+* **hosting:** stop admitting ourskylight.com in the egress allow list ([#233](https://github.com/chrischall/skylight-mcp/issues/233)) ([5a7f60a](https://github.com/chrischall/skylight-mcp/commit/5a7f60a36f5d986f9301a8237b02a49770f5421f))
+* resolve low-severity audit findings ([#231](https://github.com/chrischall/skylight-mcp/issues/231)) ([cb1c5d4](https://github.com/chrischall/skylight-mcp/commit/cb1c5d47d2e1ba705db9fa61773c2617fa1822f4))
+
 ## [1.4.0](https://github.com/chrischall/skylight-mcp/compare/v1.3.2...v1.4.0) (2026-10-07)
 
 
