@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.2](https://github.com/chrischall/skylight-mcp/compare/v1.4.1...v1.4.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **deps:** bump the production-dependencies group with 2 updates ([#238](https://github.com/chrischall/skylight-mcp/issues/238)) ([d3be711](https://github.com/chrischall/skylight-mcp/commit/d3be71112241d2aec4d0804593fc698b996e756b))
+
+
+### Documentation
+
+* make AGENTS.md a symlink to CLAUDE.md ([#240](https://github.com/chrischall/skylight-mcp/issues/240)) ([9133aac](https://github.com/chrischall/skylight-mcp/commit/9133aac1be3c71d93da1f6cc4863cfd03a5b3466))
+
 ## [1.4.1](https://github.com/chrischall/skylight-mcp/compare/v1.4.0...v1.4.1) (2026-10-09)
 
 
