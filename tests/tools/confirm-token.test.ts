@@ -9,6 +9,7 @@ import { registerMemberTools } from '../../src/tools/members.js';
 import { registerCalendarTools } from '../../src/tools/calendars.js';
 import { registerMessageTools } from '../../src/tools/messages.js';
 import { registerListTools } from '../../src/tools/lists.js';
+import { registerEventTools } from '../../src/tools/events.js';
 import { s3Upload } from '../../src/s3-upload.js';
 import { readVettedUpload, vetUploadFile } from '../../src/upload-guard.js';
 import { makeClient } from './_setup.js';
@@ -52,6 +53,7 @@ async function open(options?: Parameters<typeof createTestHarness>[1]): Promise<
     if (_method === 'GET' && path === '/frames/3435252/categories') return { data: [{ id: '3', type: 'category', attributes: { label: 'Emma' } }] };
     if (_method === 'GET' && path === '/frames/3435252/messages') return { data: [{ id: '1', type: 'message', attributes: { caption: 'Beach day' } }] };
     if (_method === 'GET' && path === '/frames/3435252/lists/7/list_items') return { data: [{ id: '101', type: 'list_item', attributes: { label: 'Milk' } }] };
+    if (_method === 'GET' && path === '/frames/3435252/lists') return { data: [{ id: '7', type: 'list', attributes: { label: 'Groceries' } }] };
     return { data: { id: '1', type: 'thing', attributes: {} } };
   });
   const getClient = async () => made.client;
@@ -64,6 +66,7 @@ async function open(options?: Parameters<typeof createTestHarness>[1]): Promise<
     registerCalendarTools(server, getClient);
     registerMessageTools(server, getClient);
     registerListTools(server, getClient);
+    registerEventTools(server, getClient);
   }, options);
   return h;
 }
@@ -168,6 +171,23 @@ const GATED: Array<{ tool: string; action: string; args: Record<string, unknown>
     tool: 'skylight_clear_list', action: 'list.clear',
     args: { listId: '7' },
     preview: { method: 'DELETE', path: '/frames/3435252/lists/7/list_items/bulk_destroy', willSend: { listId: '7', ids: ['101'], items: [{ id: '101', label: 'Milk' }] } },
+  },
+  // fleet-audit#1338: deleting a non-empty list destroys items the call never named.
+  {
+    tool: 'skylight_delete_list', action: 'list.delete',
+    args: { listId: '7' },
+    preview: { method: 'DELETE', path: '/frames/3435252/lists/7', willSend: { listId: '7', label: 'Groceries', ids: ['101'], items: [{ id: '101', label: 'Milk' }] } },
+  },
+  // fleet-audit#1200: an event with invited_emails e-mails people outside the frame.
+  {
+    tool: 'skylight_create_event', action: 'event.create_with_invites',
+    args: { summary: 'Soccer', invited_emails: ['coach@example.test'] },
+    preview: { method: 'POST', path: '/frames/3435252/calendar_events', willSend: { summary: 'Soccer', invited_emails: ['coach@example.test'] } },
+  },
+  {
+    tool: 'skylight_update_event', action: 'event.update_with_invites',
+    args: { id: '5', invited_emails: ['coach@example.test'] },
+    preview: { method: 'PUT', path: '/frames/3435252/calendar_events/5', willSend: { invited_emails: ['coach@example.test'] } },
   },
   // fleet-audit#962: hands Skylight persistent access to an iCloud account; the credential comes from env.
   {

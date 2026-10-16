@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
+import type { ServerContext } from '@modelcontextprotocol/server';
+import { CONFIRM_INJECTION_RULE } from '@chrischall/mcp-utils';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { confirmTokenParam, confirmWrite, nameSome } from './_confirm.js';
 
 const INCLUDE = 'categories,calendar_account,event_notification_setting';
 
@@ -12,10 +15,39 @@ const eventAttrs = {
   description: z.string().optional(),
   location: z.string().optional(),
   timezone: z.string().optional(),
-  invited_emails: z.array(z.string()).optional(),
+  invited_emails: z.array(z.string()).optional().describe('E-mail addresses Skylight sends an invitation to. Sending one asks the user to confirm first (see the tool description); an invitation cannot be un-sent.'),
   rrule: z.string().optional().describe('iCalendar RRULE for recurrence.'),
   category_ids: idArrayParam.optional().describe('Family-member category ids to assign the event to (see skylight_list_categories / skylight_resolve_member).'),
 };
+
+const INVITE_GATE_NOTE =
+  ' Setting a non-empty invited_emails makes Skylight e-mail an invitation (the event\'s title, time, location and description) to each address, and deleting the event later does not un-send it — so that call asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview naming every recipient and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). Event edits without invited_emails apply directly. ' +
+  CONFIRM_INJECTION_RULE;
+
+/**
+ * Gate a create/update that sends invitations (fleet-audit#1200). Rule: any
+ * write that reaches a person outside the frame is gated (CLAUDE.md, "Confirm
+ * gates"). Only a non-empty `invited_emails` sends anything, so a plain event
+ * edit stays ungated. The preview names every address; the token binds the
+ * exact request body, so a changed recipient list is DRAFT_CHANGED.
+ */
+async function gateInvites(
+  ctx: ServerContext,
+  w: { tool: string; action: string; verb: string; target: string; method: string; path: string; body: Record<string, unknown>; confirmToken: string | undefined },
+) {
+  const emails = w.body.invited_emails;
+  if (!Array.isArray(emails) || emails.length === 0) return undefined;
+  const title = typeof w.body.summary === 'string' ? ` "${w.body.summary}"` : '';
+  return confirmWrite(ctx, {
+    tool: w.tool,
+    action: w.action,
+    summary: `${w.verb}${title} and e-mail an invitation to ${emails.length} address(es): ${nameSome(emails.map(String))} — an invitation cannot be un-sent`,
+    account: undefined,
+    target: w.target,
+    request: { method: w.method, path: w.path, body: w.body },
+    confirmToken: w.confirmToken,
+  });
+}
 
 export function registerEventTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -54,12 +86,19 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_create_event',
     {
-      description: 'Create a calendar event on a Skylight frame.',
-      inputSchema: z.object({ ...eventAttrs, frameId: z.string().optional() }),
+      description: 'Create a calendar event on a Skylight frame.' + INVITE_GATE_NOTE,
+      inputSchema: z.object({ ...eventAttrs, frameId: z.string().optional(), confirmToken: confirmTokenParam }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
-    frameScoped(getClient, async (c, f, { frameId: _frameId, ...attrs }) => {
-      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/calendar_events`, { body: pruneUndefined(attrs) });
+    frameScoped(getClient, async (c, f, { frameId: _frameId, confirmToken, ...attrs }, ctx) => {
+      const path = apiPath`/frames/${f}/calendar_events`;
+      const body = pruneUndefined(attrs) as Record<string, unknown>;
+      const gate = await gateInvites(ctx, {
+        tool: 'skylight_create_event', action: 'event.create_with_invites', verb: `Create an event on frame ${f}`,
+        target: '', method: 'POST', path, body, confirmToken,
+      });
+      if (gate) return gate;
+      const doc = await c.request<JsonApiDoc>('POST', path, { body });
       return textContent(flattenJsonApi(doc));
     }),
   );
@@ -67,12 +106,19 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_update_event',
     {
-      description: 'Update a calendar event by id.',
-      inputSchema: z.object({ id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional() }),
+      description: 'Update a calendar event by id.' + INVITE_GATE_NOTE,
+      inputSchema: z.object({ id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional(), confirmToken: confirmTokenParam }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
-    frameScoped(getClient, async (c, f, { id, frameId: _frameId, ...attrs }: { id: string; frameId?: string } & Record<string, unknown>) => {
-      const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/calendar_events/${id}`, { body: pruneUndefined(attrs) });
+    frameScoped(getClient, async (c, f, { id, frameId: _frameId, confirmToken, ...attrs }: { id: string; frameId?: string; confirmToken?: string } & Record<string, unknown>, ctx) => {
+      const path = apiPath`/frames/${f}/calendar_events/${id}`;
+      const body = pruneUndefined(attrs) as Record<string, unknown>;
+      const gate = await gateInvites(ctx, {
+        tool: 'skylight_update_event', action: 'event.update_with_invites', verb: `Update event ${id} on frame ${f}`,
+        target: id, method: 'PUT', path, body, confirmToken,
+      });
+      if (gate) return gate;
+      const doc = await c.request<JsonApiDoc>('PUT', path, { body });
       return textContent(flattenJsonApi(doc));
     }),
   );

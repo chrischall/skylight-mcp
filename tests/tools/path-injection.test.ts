@@ -35,7 +35,7 @@ describe('apiPath', () => {
   });
 
   it.each(['', '.', '..'])('rejects the dot/empty segment %j outright', (raw) => {
-    expect(() => apiPath`/frames/1/chores/${raw}`).toThrow(/Invalid id/);
+    expect(() => apiPath`/frames/1/chores/${raw}`).toThrow(/apiPath: value \d+ is (empty|the dot segment)/);
   });
 });
 
@@ -64,7 +64,7 @@ describe('crafted ids cannot retarget a request', () => {
 
   it('delete_list_item refuses a bare ".." id without making a request', async () => {
     const { t, request } = tools(registerListTools);
-    await expect(t.skylight_delete_list_item({ listId: '7', itemId: '..' })).rejects.toThrow(/Invalid id/);
+    await expect(t.skylight_delete_list_item({ listId: '7', itemId: '..' })).rejects.toThrow(/apiPath: value \d+ is (empty|the dot segment)/);
     expect(request).not.toHaveBeenCalled();
   });
 });

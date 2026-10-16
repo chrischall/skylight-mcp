@@ -219,18 +219,88 @@ describe('list tools', () => {
 
   // ── skylight_delete_list ────────────────────────────────────────────────
 
-  it('delete_list deletes by listId with default frame', async () => {
+  // delete_list destroys the list AND every item in it, which the call never
+  // enumerates — gated like clear_list (fleet-audit#1338).
+  function listWithItems(request: ReturnType<typeof harness>['request'], items: Array<{ id: string; label: string }>) {
+    request.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && /\/lists$/.test(path)) return { data: [{ id: '7', type: 'list', attributes: { label: 'Groceries' } }, { id: '8', type: 'list', attributes: { label: 'Chores' } }] };
+      if (method === 'GET' && /\/list_items$/.test(path)) return { data: items.map((i) => ({ id: i.id, type: 'list_item', attributes: { label: i.label } })) };
+      return undefined;
+    });
+  }
+  const listDeletes = (request: ReturnType<typeof harness>['request']) => request.mock.calls.filter((c) => c[0] === 'DELETE');
+
+  it('delete_list phase 1 names the list and every item in it, binds the set, and issues NO DELETE', async () => {
+    const { tools, request } = harness();
+    listWithItems(request, [{ id: '101', label: 'Milk' }, { id: '102', label: 'Eggs' }]);
+    const out = phaseOne(await tools.skylight_delete_list({ listId: '7' }));
+    expect(out.status).toBe('confirmation-required');
+    expect(out.action).toBe('list.delete');
+    expect(listDeletes(request)).toEqual([]);
+    expect(out.preview).toMatchObject({
+      method: 'DELETE',
+      path: '/frames/3435252/lists/7',
+      willSend: { listId: '7', label: 'Groceries', ids: ['101', '102'], items: [{ id: '101', label: 'Milk' }, { id: '102', label: 'Eggs' }] },
+    });
+    expect(out.preview.action).toMatch(/Groceries/);
+    expect(out.preview.action).toMatch(/"Milk"/);
+    expect(out.preview.action).toMatch(/2 items/);
+  });
+
+  it('delete_list DELETEs the list only on the confirmed call', async () => {
+    const { tools, request } = harness();
+    listWithItems(request, [{ id: '101', label: 'Milk' }]);
+    const out = await confirmed(tools.skylight_delete_list, { listId: '7' });
+    expect(listDeletes(request)).toEqual([['DELETE', '/frames/3435252/lists/7']]);
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '7' });
+  });
+
+  it('delete_list: an item added between the phases is DRAFT_CHANGED and deletes nothing', async () => {
+    const { tools, request } = harness();
+    listWithItems(request, [{ id: '101', label: 'Milk' }]);
+    const { confirmToken } = phaseOne(await tools.skylight_delete_list({ listId: '7' }));
+    listWithItems(request, [{ id: '101', label: 'Milk' }, { id: '103', label: 'Passport' }]);
+    const second = JSON.parse((await tools.skylight_delete_list({ listId: '7', confirmToken })).content[0].text);
+    expect(second.error).toBe('DRAFT_CHANGED');
+    expect(listDeletes(request)).toEqual([]);
+  });
+
+  it('delete_list names the list by id when its label cannot be read, and labels an unlabeled item ""', async () => {
+    for (const lists of [{ data: { id: '7' } }, { data: [{ id: '7', type: 'list', attributes: {} }] }, undefined]) {
+      const { tools, request } = harness();
+      request.mockImplementation(async (method: string, path: string) => {
+        if (method === 'GET' && /\/lists$/.test(path)) return lists;
+        if (method === 'GET' && /\/list_items$/.test(path)) return { data: [{ id: '101', type: 'list_item' }] };
+        return undefined;
+      });
+      const out = phaseOne(await tools.skylight_delete_list({ listId: '7' }));
+      expect(out.preview.willSend).toMatchObject({ listId: '7', ids: ['101'], items: [{ id: '101', label: '' }] });
+      expect(out.preview.action).toMatch(/delete list 7 on frame/);
+      expect(listDeletes(request)).toEqual([]);
+    }
+  });
+
+  it('delete_list treats an unreadable item list as empty and deletes directly', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue(undefined);
     const out = await tools.skylight_delete_list({ listId: '7' });
-    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/lists/7');
+    expect(listDeletes(request)).toEqual([['DELETE', '/frames/3435252/lists/7']]);
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '7' });
+  });
+
+  it('delete_list of an empty list needs no confirmation', async () => {
+    const { tools, request } = harness();
+    listWithItems(request, []);
+    const out = await tools.skylight_delete_list({ listId: '7' });
+    expect(listDeletes(request)).toEqual([['DELETE', '/frames/3435252/lists/7']]);
     expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '7' });
   });
 
   it('delete_list with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue(undefined);
-    await tools.skylight_delete_list({ listId: '7', frameId: '99' });
+    listWithItems(request, [{ id: '101', label: 'Milk' }]);
+    await confirmed(tools.skylight_delete_list, { listId: '7', frameId: '99' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/lists/7/list_items');
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/lists/7');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });

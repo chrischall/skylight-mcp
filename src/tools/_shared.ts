@@ -48,28 +48,15 @@ export function frameScoped<A extends { frameId?: string }, R>(
 }
 
 /**
- * Tagged template for an API path: every interpolated value is one path
- * SEGMENT, percent-encoded with `encodeURIComponent`. The static parts of the
- * template (including a static `?include=…`) pass through verbatim.
- *
- * Ids reach these paths straight from the model, and WHATWG URL parsing honours
- * `?`, `#` and `../` — so an unencoded `id: '123?apply_to=all'` smuggled a query
- * past the delete_chore confirm gate, and `itemId: '../../../lists/5'` turned a
- * single-item delete into a whole-list delete (fleet-audit#247). Encoding keeps
- * each value inside its segment. `.`/`..`/empty survive encoding unchanged and
- * would still resolve as traversal, so they are refused outright.
+ * `apiPath` — the tagged template for an API path — is the fleet's shared one
+ * from `@chrischall/mcp-utils` (fleet-audit#1339; it was hoisted from this
+ * file): every interpolated value is one percent-encoded path SEGMENT, and
+ * `.`/`..`/empty are refused. Ids reach these paths straight from the model,
+ * and an unencoded `id: '123?apply_to=all'` once smuggled a query past the
+ * delete_chore confirm gate (fleet-audit#247). Re-exported so the tools keep
+ * importing it from here.
  */
-export function apiPath(strings: TemplateStringsArray, ...values: unknown[]): string {
-  let out = strings[0]!;
-  values.forEach((v, i) => {
-    const s = String(v);
-    if (s === '' || s === '.' || s === '..') {
-      throw new Error(`Invalid id ${JSON.stringify(s)}: a path segment cannot be empty, "." or "..".`);
-    }
-    out += encodeURIComponent(s) + strings[i + 1]!;
-  });
-  return out;
-}
+export { apiPath } from '@chrischall/mcp-utils';
 
 /** Shared zod fragments: an id may be a string or a number, matching the API. */
 export const idParam = z.union([z.string(), z.number()]);

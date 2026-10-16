@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { registerEventTools } from '../../src/tools/events.js';
-import { makeClient } from './_setup.js';
+import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 
 function harness() {
   const tools: Record<string, (a: any) => Promise<any>> = {};
-  const server = { registerTool: (n: string, _cfg: any, cb: any) => { tools[n] = cb; } } as any;
+  // A client that cannot be prompted: an invitation-sending create/update runs
+  // the two-phase token flow.
+  const server = { registerTool: (n: string, _cfg: any, cb: any) => { tools[n] = (a: any) => cb(a, NO_ELICIT_CTX); } } as any;
   const { client, request, resolveFrameId } = makeClient();
   registerEventTools(server, async () => client);
   return { tools, request, resolveFrameId };
@@ -73,7 +75,7 @@ describe('event tools', () => {
   it('create_event with all attrs sends them all flat (compact keeps defined values)', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '6', type: 'calendar_event', attributes: {} } });
-    await tools.skylight_create_event({
+    await confirmed(tools.skylight_create_event, {
       summary: 'Soccer',
       starts_at: '2026-06-10T10:00:00Z',
       ends_at: '2026-06-10T11:00:00Z',
@@ -125,6 +127,57 @@ describe('event tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── invitations are confirm-gated (fleet-audit#1200) ────────────────────
+
+  it('create_event with invited_emails previews the recipients and sends nothing until confirmed', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'calendar_event', attributes: {} } });
+    const args = { summary: 'Soccer', starts_at: '2026-06-10T10:00:00Z', invited_emails: ['alice@example.com', 'bob@example.com'] };
+    const out = phaseOne(await tools.skylight_create_event(args));
+    expect(out.status).toBe('confirmation-required');
+    expect(out.action).toBe('event.create_with_invites');
+    expect(request).not.toHaveBeenCalled();
+    expect(out.preview).toMatchObject({
+      method: 'POST',
+      path: '/frames/3435252/calendar_events',
+      willSend: { summary: 'Soccer', starts_at: '2026-06-10T10:00:00Z', invited_emails: ['alice@example.com', 'bob@example.com'] },
+    });
+    expect(out.preview.action).toMatch(/alice@example\.com/);
+    expect(out.preview.action).toMatch(/bob@example\.com/);
+    expect(out.preview.action).toMatch(/Soccer/);
+
+    await tools.skylight_create_event({ ...args, confirmToken: out.confirmToken });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/calendar_events', { body: args });
+  });
+
+  it('create_event: a changed recipient list between the phases is DRAFT_CHANGED and sends nothing', async () => {
+    const { tools, request } = harness();
+    const args = { summary: 'Soccer', invited_emails: ['alice@example.com'] };
+    const { confirmToken } = phaseOne(await tools.skylight_create_event(args));
+    const changed = phaseOne(await tools.skylight_create_event({ ...args, invited_emails: ['mallory@example.com'], confirmToken }));
+    expect((changed as unknown as { error: string }).error).toBe('DRAFT_CHANGED');
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('create_event with an empty invited_emails list is not gated', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'calendar_event', attributes: {} } });
+    await tools.skylight_create_event({ summary: 'Soccer', invited_emails: [] });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/calendar_events', { body: { summary: 'Soccer', invited_emails: [] } });
+  });
+
+  it('update_event with invited_emails is gated on the event id and names the recipients', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
+    const out = phaseOne(await tools.skylight_update_event({ id: '5', invited_emails: ['coach@example.com'] }));
+    expect(out.status).toBe('confirmation-required');
+    expect(out.action).toBe('event.update_with_invites');
+    expect(out.preview).toMatchObject({ method: 'PUT', path: '/frames/3435252/calendar_events/5', willSend: { invited_emails: ['coach@example.com'] } });
+    expect(out.preview.action).toMatch(/coach@example\.com/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   // ── skylight_update_event ───────────────────────────────────────────────
 
   it('update_event puts by id with only provided attrs (flat body)', async () => {
@@ -145,7 +198,7 @@ describe('event tools', () => {
   it('update_event with all attrs sends them all flat', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
-    await tools.skylight_update_event({
+    await confirmed(tools.skylight_update_event, {
       id: '5',
       summary: 'Updated Soccer',
       starts_at: '2026-06-10T10:00:00Z',
@@ -157,7 +210,7 @@ describe('event tools', () => {
       invited_emails: ['bob@example.com'],
       rrule: 'FREQ=DAILY',
     });
-    const body = request.mock.calls[0][2].body;
+    const body = request.mock.calls.find((c: unknown[]) => c[0] === 'PUT')![2].body;
     expect(body.summary).toBe('Updated Soccer');
     expect(body.all_day).toBe(true);
     expect(body.description).toBe('New desc');

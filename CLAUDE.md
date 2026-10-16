@@ -129,11 +129,26 @@ absolute path, mime and size.
 
 A third rule: **a bulk delete whose set the caller did not enumerate is
 gated** — `skylight_delete_messages` and `skylight_clear_list`
-(fleet-audit#964). Both are irreversible (no trash endpoint; a photo on the
+(fleet-audit#964), and `skylight_delete_list` when the list has items
+(fleet-audit#1338): it destroys the same items as `clear_list` plus the list,
+so it must not be the ungated way round `clear_list`'s preview. An empty list
+is deleted directly, like an empty `clear_list`. Both are irreversible (no trash endpoint; a photo on the
 frame may exist nowhere else) and both destroy items the call never showed:
 an array of ids, or "everything in list 7". The single-item deletes beside
 them stay ungated under the blast-radius rule. An already-empty
 `skylight_clear_list` has nothing to confirm and returns `removed: 0` directly.
+
+A fourth rule: **any write that reaches a person outside the frame is gated**
+(fleet-audit#1200) — `skylight_create_event` / `skylight_update_event` when
+`invited_emails` is non-empty. Skylight e-mails the event (title, time,
+location, description) to each address, and deleting the event does not
+un-send it; the inputs are injectable (subscribed-feed event text,
+`skylight_list_recent_invited_emails`). The preview names every recipient and
+the bound body is the exact request, so a changed recipient list is
+`DRAFT_CHANGED`. Event edits without `invited_emails` stay ungated, and both
+descriptions carry mcp-utils `CONFIRM_INJECTION_RULE`. A future tool that sends
+mail, a message or a comment to someone outside the frame belongs under this
+rule.
 
 **Previews name things, not numbers.** A gate whose target is a person or a
 set reads it first — the frame's member list, its categories, its messages,
