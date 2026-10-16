@@ -93,8 +93,8 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_rename_device` | W | Rename a Skylight device |
 | events | `skylight_list_events` | R | List calendar events within a date range |
 | events | `skylight_get_event` | R | Get details for a specific event |
-| events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members) |
-| events | `skylight_update_event` | W | Update an existing calendar event (optional `category_ids` assigns members) |
+| events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members; confirm-gated when `invited_emails` is set, the preview names every recipient) |
+| events | `skylight_update_event` | W | Update an existing calendar event (optional `category_ids` assigns members; confirm-gated when `invited_emails` is set) |
 | events | `skylight_delete_event` | W | Delete a calendar event |
 | events | `skylight_list_categories` | R | List event categories for a frame |
 | events | `skylight_list_source_calendars` | R | List external source calendars linked to a frame |
@@ -104,7 +104,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | lists | `skylight_get_list_items` | R | Get items in a specific shared list |
 | lists | `skylight_create_list` | W | Create a new shared list (label + color + kind) |
 | lists | `skylight_update_list` | W | Update a list's name, color, or type |
-| lists | `skylight_delete_list` | W | Delete a shared list |
+| lists | `skylight_delete_list` | W | Delete a shared list and its items (confirm-gated when the list has items; the preview lists them) |
 | lists | `skylight_add_list_item` | W | Add an item to a shared list |
 | lists | `skylight_update_list_item` | W | Rename a list item, check/uncheck it, or set its section |
 | lists | `skylight_delete_list_item` | W | Delete an item from a shared list |
@@ -140,7 +140,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | meals | `skylight_plan_meal` | W | Plan a meal on a date (optionally repeating, link a recipe, add to grocery list) |
 | meals | `skylight_update_meal` | W | Update a planned meal (name, recipe, slot, notes, date, repeat rule) at a chosen recurrence scope |
 | meals | `skylight_delete_meal` | W | Remove a planned meal — one occurrence, this-and-future, or the whole series (confirm-gated) |
-| messages | `skylight_list_messages` | R | List messages posted to the frame |
+| messages | `skylight_list_messages` | R | List messages posted to the frame (reads the paged feed, up to 20 pages) |
 | messages | `skylight_list_albums` | R | List photo albums on the frame |
 | messages | `skylight_get_message` | R | Get one frame message |
 | messages | `skylight_create_album` | W | Create a photo album |
@@ -218,9 +218,11 @@ Treat `.env` like a password file — it is gitignored, do not commit it.
 
 Some writes ask you to confirm before anything happens: uploading a local
 photo or avatar; inviting, approving or removing a user; deleting a family
-member; linking an Apple calendar; opening the frame to the public; the two
-bulk deletes (`skylight_delete_messages`, `skylight_clear_list`), whose preview
-lists every item that would go; and meal/chore edits or deletes whose
+member; linking an Apple calendar; opening the frame to the public; creating
+or updating an event with `invited_emails` (Skylight e-mails each address, and
+the preview names them); the bulk deletes (`skylight_delete_messages`,
+`skylight_clear_list`, and `skylight_delete_list` of a non-empty list), whose
+preview lists every item that would go; and meal/chore edits or deletes whose
 `apply_to` reaches past the one occurrence named. A client that can show a confirmation prompt (Claude Code) shows one, unless
 `MCP_CONFIRM_ELICITATION=off`. Elsewhere the first call makes no change and returns a preview of exactly what
 would be sent plus a `confirmToken`; only a repeat call with that token, and

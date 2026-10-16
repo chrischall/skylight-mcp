@@ -21,15 +21,67 @@ describe('message tools', () => {
       data: [{ id: '1', type: 'message', attributes: { body: 'Hi' } }],
     });
     const out = await tools.skylight_list_messages({});
-    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/messages');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/messages', { query: { page_token: '__START__' } });
     expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', type: 'message', body: 'Hi' }]);
+  });
+
+  // fleet-audit#1337: the feed is paged — without page_token it is empty —
+  // so list_messages and the delete_messages preview read every page.
+  function pagedFeed(request: ReturnType<typeof harness>['request'], pages: Record<string, { data: unknown[]; meta?: unknown; links?: unknown }>) {
+    request.mockImplementation(async (method: string, path: string, opts?: { query?: { page_token?: string } }) => {
+      if (method === 'GET' && /\/messages$/.test(path)) {
+        const page = pages[opts?.query?.page_token ?? ''];
+        return page ?? { data: [] };
+      }
+      return undefined;
+    });
+  }
+
+  it('list_messages starts at page_token=__START__ and follows the next-page token', async () => {
+    const { tools, request } = harness();
+    pagedFeed(request, {
+      __START__: { data: [{ id: '1', type: 'message', attributes: { caption: 'A' } }], meta: { next_page_token: 'p2' } },
+      p2: { data: [{ id: '2', type: 'message', attributes: { caption: 'B' } }], links: { next: '/api/frames/3435252/messages?page_token=p3' } },
+      p3: { data: [{ id: '3', type: 'message', attributes: { caption: 'C' } }], meta: { sync_token: 's1' } },
+    });
+    const out = await tools.skylight_list_messages({});
+    expect(request.mock.calls.map((c) => c[2])).toEqual([
+      { query: { page_token: '__START__' } },
+      { query: { page_token: 'p2' } },
+      { query: { page_token: 'p3' } },
+    ]);
+    expect(JSON.parse(out.content[0].text).map((m: { id: string }) => m.id)).toEqual(['1', '2', '3']);
+  });
+
+  it('list_messages stops on a repeated token and after the page cap', async () => {
+    const { tools, request } = harness();
+    pagedFeed(request, { __START__: { data: [{ id: '1', type: 'message', attributes: {} }], meta: { next_page_token: '__START__' } } });
+    await tools.skylight_list_messages({});
+    expect(request).toHaveBeenCalledTimes(1);
+
+    const { tools: t2, request: r2 } = harness();
+    let n = 0;
+    r2.mockImplementation(async () => ({ data: [{ id: String(n), type: 'message', attributes: {} }], meta: { next_page_token: `p${++n}` } }));
+    await t2.skylight_list_messages({});
+    expect(r2.mock.calls.length).toBe(20);
+  });
+
+  it('delete_messages preview names a message that is on a later page', async () => {
+    const { tools, request } = harness();
+    pagedFeed(request, {
+      __START__: { data: [{ id: '1', type: 'message', attributes: { caption: 'A' } }], meta: { next_page_token: 'p2' } },
+      p2: { data: [{ id: '9', type: 'message', attributes: { caption: 'Grandma' } }] },
+    });
+    const out = phaseOne(await tools.skylight_delete_messages({ message_ids: ['9'] }));
+    expect(out.preview.willSend.messages).toEqual([{ id: '9', caption: 'Grandma' }]);
+    expect(out.preview.action).not.toMatch(/not in the frame's message list/);
   });
 
   it('list_messages with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: [] });
     await tools.skylight_list_messages({ frameId: '99' });
-    expect(request).toHaveBeenCalledWith('GET', '/frames/99/messages');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/messages', { query: { page_token: '__START__' } });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
@@ -330,7 +382,7 @@ describe('message tools', () => {
     const out = phaseOne(await tools.skylight_delete_messages({ message_ids: ['1', 2, '3'] }));
     expect(out.status).toBe('confirmation-required');
     expect(out.action).toBe('message.delete_multiple');
-    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/messages');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/messages', { query: { page_token: '__START__' } });
     expect(deletes(request)).toEqual([]);
     expect(out.preview).toMatchObject({
       method: 'DELETE',
@@ -380,7 +432,7 @@ describe('message tools', () => {
     const { tools, request, resolveFrameId } = harness();
     messagesThenDelete(request);
     await confirmed(tools.skylight_delete_messages, { message_ids: [7], frameId: '99' });
-    expect(request).toHaveBeenCalledWith('GET', '/frames/99/messages');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/messages', { query: { page_token: '__START__' } });
     expect(request).toHaveBeenCalledWith('DELETE', '/frames/99/messages/destroy_multiple?message_ids[]=7');
     expect(resolveFrameId).not.toHaveBeenCalled();
   });

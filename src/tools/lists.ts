@@ -126,15 +126,40 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_delete_list',
     {
-      description: 'Delete a Skylight list.',
+      description: 'Delete a Skylight list and every item in it — permanent. When the list has items, asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). The preview names the list and every item that would go, and the token binds that exact set. An empty list is deleted directly.',
       inputSchema: z.object({
         listId: z.string(),
         frameId: z.string().optional(),
+        confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
-    frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) => {
-      await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}`);
+    // Gated (fleet-audit#1338) on the same rule as clear_list: the caller named
+    // a list, not the items it destroys — and this removes the list too, so it
+    // must not be the ungated way round clear_list's preview. The list label and
+    // items are read on both phases; an item added in between is DRAFT_CHANGED.
+    frameScoped(getClient, async (c, f, { listId, confirmToken }: { listId: string; frameId?: string; confirmToken?: string }, ctx) => {
+      const path = apiPath`/frames/${f}/lists/${listId}`;
+      const doc = await c.request<{ data?: Array<{ id: string; attributes?: { label?: unknown } }> }>('GET', apiPath`/frames/${f}/lists/${listId}/list_items`);
+      const items = (doc?.data ?? []).map((i) => ({ id: i.id, label: String(i.attributes?.label ?? '') }));
+      const ids = items.map((i) => i.id);
+      if (ids.length > 0) {
+        const lists = await c.request<{ data?: Array<{ id: string; attributes?: { label?: unknown } }> }>('GET', apiPath`/frames/${f}/lists`);
+        const found = (Array.isArray(lists?.data) ? lists.data : []).find((l) => String(l.id) === String(listId));
+        const label = found ? String(found.attributes?.label ?? '') : null;
+        const named = label ? `"${label}" (list ${listId})` : `list ${listId}`;
+        const gate = await confirmWrite(ctx, {
+          tool: 'skylight_delete_list',
+          action: 'list.delete',
+          summary: `Permanently delete ${named} on frame ${f} and all ${ids.length} items in it: ${nameSome(items.map((i) => `"${i.label}"`))}`,
+          account: undefined,
+          target: listId,
+          request: { method: 'DELETE', path, body: { listId, label, ids, items } },
+          confirmToken,
+        });
+        if (gate) return gate;
+      }
+      await c.request('DELETE', path);
       return textContent({ deleted: listId });
     }),
   );
