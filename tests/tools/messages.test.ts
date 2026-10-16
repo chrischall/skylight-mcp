@@ -66,6 +66,30 @@ describe('message tools', () => {
     expect(r2.mock.calls.length).toBe(20);
   });
 
+  it('list_messages keeps a page whose data is a single resource', async () => {
+    const { tools, request } = harness();
+    pagedFeed(request, { __START__: { data: { id: '5', type: 'message', attributes: { caption: 'Solo' } } as unknown as unknown[] } });
+    const out = await tools.skylight_list_messages({});
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '5', type: 'message', caption: 'Solo' }]);
+  });
+
+  it('list_messages stops after the first page when links.next is unusable', async () => {
+    for (const next of ['http://[not-a-url', '/api/frames/3435252/messages?sync_token=s9', '']) {
+      const { tools, request } = harness();
+      pagedFeed(request, { __START__: { data: [{ id: '1', type: 'message', attributes: {} }], meta: { next_page_token: 7 }, links: { next } } });
+      await tools.skylight_list_messages({});
+      expect(request, next).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('list_messages treats an empty response as an empty feed', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_list_messages({});
+    expect(JSON.parse(out.content[0].text)).toEqual([]);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it('delete_messages preview names a message that is on a later page', async () => {
     const { tools, request } = harness();
     pagedFeed(request, {

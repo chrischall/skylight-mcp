@@ -265,6 +265,29 @@ describe('list tools', () => {
     expect(listDeletes(request)).toEqual([]);
   });
 
+  it('delete_list names the list by id when its label cannot be read, and labels an unlabeled item ""', async () => {
+    for (const lists of [{ data: { id: '7' } }, { data: [{ id: '7', type: 'list', attributes: {} }] }, undefined]) {
+      const { tools, request } = harness();
+      request.mockImplementation(async (method: string, path: string) => {
+        if (method === 'GET' && /\/lists$/.test(path)) return lists;
+        if (method === 'GET' && /\/list_items$/.test(path)) return { data: [{ id: '101', type: 'list_item' }] };
+        return undefined;
+      });
+      const out = phaseOne(await tools.skylight_delete_list({ listId: '7' }));
+      expect(out.preview.willSend).toMatchObject({ listId: '7', ids: ['101'], items: [{ id: '101', label: '' }] });
+      expect(out.preview.action).toMatch(/delete list 7 on frame/);
+      expect(listDeletes(request)).toEqual([]);
+    }
+  });
+
+  it('delete_list treats an unreadable item list as empty and deletes directly', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_delete_list({ listId: '7' });
+    expect(listDeletes(request)).toEqual([['DELETE', '/frames/3435252/lists/7']]);
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '7' });
+  });
+
   it('delete_list of an empty list needs no confirmation', async () => {
     const { tools, request } = harness();
     listWithItems(request, []);
