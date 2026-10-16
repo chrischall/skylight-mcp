@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.3](https://github.com/chrischall/skylight-mcp/compare/v1.4.2...v1.4.3) (2026-10-16)
+
+
+### Bug Fixes
+
+* **events:** confirm before e-mailing event invitations; gate delete_list; read the paged message feed ([#241](https://github.com/chrischall/skylight-mcp/issues/241)) ([5147196](https://github.com/chrischall/skylight-mcp/commit/5147196f2583d735ea05d4e22c01d643739dccd8))
+
 ## [1.4.2](https://github.com/chrischall/skylight-mcp/compare/v1.4.1...v1.4.2) (2026-10-10)
 
 
