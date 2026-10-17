@@ -275,6 +275,27 @@ describe('calendar tools', () => {
       expect((caught as Error).message).not.toContain(SECRET);
     });
 
+    it('scrubs the JSON-escaped spelling of a password from an upstream error, not only the raw one', async () => {
+      // A password holding a quote or backslash appears ESCAPED inside a
+      // stringified request body (`ab"cd` is `ab\"cd` there), which a raw
+      // split would miss.
+      const quoted = 'ab"cd\\ef-ghij';
+      process.env.SKYLIGHT_APPLE_APP_PASSWORD = quoted;
+      const escaped = JSON.stringify(quoted).slice(1, -1);
+      const { tools, request } = harness();
+      request.mockRejectedValue(new Error(`Skylight 422: {"app_specific_password":"${escaped}"} raw=${quoted}`));
+      let caught: unknown;
+      try {
+        await confirmed(tools.skylight_link_apple_calendar, { email: 'apple-id@example.test' });
+      } catch (e) {
+        caught = e;
+      }
+      const message = (caught as Error).message;
+      expect(message).not.toContain(escaped);
+      expect(message).not.toContain(quoted);
+      expect(message).toBe('Skylight 422: {"app_specific_password":"[REDACTED]"} raw=[REDACTED]');
+    });
+
     it('rethrows a non-Error rejection untouched (there is no message to scrub)', async () => {
       const { tools, request } = harness();
       const rejection = { status: 503 };

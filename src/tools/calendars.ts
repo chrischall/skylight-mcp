@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { redactSecrets } from '@chrischall/mcp-utils';
+import { redactSecrets, redactValues } from '@chrischall/mcp-utils';
 import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { APPLE_APP_PASSWORD_VAR, APPLE_ID_VAR, loadAppleCalendarCredential } from '../config.js';
@@ -8,14 +8,11 @@ import { confirmTokenParam, confirmWrite } from './_confirm.js';
 
 /**
  * Replace every occurrence of `secret` in `text` — raw, and as it would appear
- * JSON-escaped inside a stringified body — then run the fleet redactor over
- * whatever else an upstream echo might carry.
+ * JSON-escaped inside a stringified body (`redactValues`, fleet-audit#1398) —
+ * then run the fleet redactor over whatever else an upstream echo might carry.
  */
 function scrubSecret(text: string, secret: string): string {
-  const escaped = JSON.stringify(secret).slice(1, -1);
-  let out = text.split(secret).join('[REDACTED]');
-  if (escaped !== secret) out = out.split(escaped).join('[REDACTED]');
-  return redactSecrets(out);
+  return redactSecrets(redactValues(text, [secret]));
 }
 
 /**
