@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.4](https://github.com/chrischall/skylight-mcp/compare/v1.4.3...v1.4.4) (2026-10-17)
+
+
+### Bug Fixes
+
+* **deps:** bump dotenv ([#245](https://github.com/chrischall/skylight-mcp/issues/245)) ([087ec6d](https://github.com/chrischall/skylight-mcp/commit/087ec6db354477904f066fcd4f93d4273cd08f3c))
+
 ## [1.4.3](https://github.com/chrischall/skylight-mcp/compare/v1.4.2...v1.4.3) (2026-10-16)
 
 
