@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.5](https://github.com/chrischall/skylight-mcp/compare/v1.4.4...v1.4.5) (2026-10-17)
+
+
+### Refactor
+
+* **calendars:** scrub the Apple password with mcp-utils redactValues ([#248](https://github.com/chrischall/skylight-mcp/issues/248)) ([06ec1c5](https://github.com/chrischall/skylight-mcp/commit/06ec1c5403f6dac4f463dd07ecd3266af598d5e5))
+
 ## [1.4.4](https://github.com/chrischall/skylight-mcp/compare/v1.4.3...v1.4.4) (2026-10-17)
 
 
