@@ -4,6 +4,13 @@ slug: skylight
 summary: >-
   Skylight Calendar MCP — read/write family calendar events, chores,
   rewards, and shared lists via Claude. Auth via email+password.
+examples:
+  - prompt: What's on our family calendar this weekend?
+    note: Reads events from the Skylight frame's calendar for the date range.
+  - prompt: Which chores are still assigned for today, and who are they for?
+    note: Lists chores and resolves assignees via family-member categories.
+  - prompt: What's on our Skylight grocery list right now?
+    note: Finds the list and reads its items.
 env:
   - name: SKYLIGHT_REFRESH_TOKEN
     secret: true
