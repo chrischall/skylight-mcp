@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.6](https://github.com/chrischall/skylight-mcp/compare/v1.4.5...v1.4.6) (2026-10-20)
+
+
+### Refactor
+
+* **auth:** validate the cached token with the shared isBearerTokens ([#253](https://github.com/chrischall/skylight-mcp/issues/253)) ([26e52f2](https://github.com/chrischall/skylight-mcp/commit/26e52f28f9eb9fd7036adbe153e754109caa8f5e))
+
+
+### Documentation
+
+* **mint:** add sample prompts for the public catalog ([#251](https://github.com/chrischall/skylight-mcp/issues/251)) ([4ab4502](https://github.com/chrischall/skylight-mcp/commit/4ab4502c69506623fed84e09cc18b0550180fcda))
+
 ## [1.4.5](https://github.com/chrischall/skylight-mcp/compare/v1.4.4...v1.4.5) (2026-10-17)
 
 
