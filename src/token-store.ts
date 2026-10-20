@@ -1,5 +1,6 @@
 import {
   createFileStatePersistence,
+  isBearerTokens,
   resolveStateFile,
   type BearerTokens,
   type StatePersistence,
@@ -40,19 +41,6 @@ export function tokenStorePath(env: NodeJS.ProcessEnv = process.env): string {
   });
 }
 
-/** Only the token pair is ever stored — never the email or password. */
-function isTokens(raw: unknown): raw is BearerTokens {
-  if (raw === null || typeof raw !== 'object') return false;
-  const t = raw as Partial<BearerTokens>;
-  if (typeof t.accessToken !== 'string' || t.accessToken === '') return false;
-  // `typeof === 'number'` is sufficient here and !Number.isFinite() would be
-  // dead: this only ever validates a JSON.parse result, and JSON has no
-  // NaN/Infinity literal (JSON.stringify emits null for both), so a number that
-  // reaches this line is always finite.
-  if (typeof t.expiresAt !== 'number') return false;
-  return t.refreshToken === undefined || typeof t.refreshToken === 'string';
-}
-
 /**
  * The token cache, or `null` when the operator has turned it off with
  * `SKYLIGHT_TOKEN_CACHE=false`. A `null` persistence is passed straight through
@@ -69,7 +57,7 @@ export function createTokenPersistence(
   if (!parseBoolEnv('SKYLIGHT_TOKEN_CACHE', { env, default: true })) return null;
   return createFileStatePersistence<BearerTokens>({
     filePath: tokenStorePath(env),
-    validate: (raw) => (isTokens(raw) ? raw : null),
+    validate: (raw) => (isBearerTokens(raw) ? raw : null),
     // Bound to the credentials that minted the token, so rotating the password
     // — or pointing the server at a different account — discards the cache
     // instead of letting a token from the old one keep working. Only a salted
