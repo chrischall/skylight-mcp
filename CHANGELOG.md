@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.7](https://github.com/chrischall/skylight-mcp/compare/v1.4.6...v1.4.7) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deps:** bump the production-dependencies group with 2 updates ([#255](https://github.com/chrischall/skylight-mcp/issues/255)) ([355b2b0](https://github.com/chrischall/skylight-mcp/commit/355b2b0ee5864c92d3f7c9cdab0a0c0bc7e7e446))
+
 ## [1.4.6](https://github.com/chrischall/skylight-mcp/compare/v1.4.5...v1.4.6) (2026-10-20)
 
 
