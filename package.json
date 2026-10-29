@@ -49,12 +49,12 @@
   },
   "dependencies": {
     "@chrischall/mcp-utils": "^3.4.0",
-    "@modelcontextprotocol/server": "^2.3.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "dotenv": "^18.0.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.3.0",
+    "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^26.0.0",
     "@vitest/coverage-v8": "^5.0.0",
     "esbuild": "^0.28.0",
