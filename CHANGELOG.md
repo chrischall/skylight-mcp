@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.7](https://github.com/chrischall/skylight-mcp/compare/v1.4.6...v1.4.7) (2026-10-29)
+
+
+### Bug Fixes
+
+* **deps:** bump the production-dependencies group with 2 updates ([#255](https://github.com/chrischall/skylight-mcp/issues/255)) ([355b2b0](https://github.com/chrischall/skylight-mcp/commit/355b2b0ee5864c92d3f7c9cdab0a0c0bc7e7e446))
+* **deps:** require @chrischall/mcp-utils 3.4.0 ([#257](https://github.com/chrischall/skylight-mcp/issues/257)) ([cc87d6d](https://github.com/chrischall/skylight-mcp/commit/cc87d6d1488936bb6c62ea6535aa9047c74f29c6))
+* **deps:** require the MCP SDK ^2.4.0 that mcp-utils 3.4.0 peer-requires ([#258](https://github.com/chrischall/skylight-mcp/issues/258)) ([0373a98](https://github.com/chrischall/skylight-mcp/commit/0373a984c8f08d08ede03b05d3ca9cae93619f5f))
+
 ## [1.4.6](https://github.com/chrischall/skylight-mcp/compare/v1.4.5...v1.4.6) (2026-10-20)
 
 
