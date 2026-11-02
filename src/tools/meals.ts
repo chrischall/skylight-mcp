@@ -238,6 +238,12 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   // sitting that turns out to be one-time is retried once without it (on a
   // single occurrence every scope means the same thing, and the 422 means the
   // first attempt wrote nothing).
+  //
+  // The converse is enforced server-side too (LIVE-VERIFIED 2026-11-02): a
+  // RECURRING sitting 422s {"errors":{"base":["must provide apply_to with a
+  // recurring sitting"]}} when apply_to is omitted, and nothing changes. So an
+  // omitted scope never reaches more than one occurrence, and leaving it
+  // ungated (like 'one') does not bypass the 'future'/'all' confirm gate.
   const APPLY_TO = z
     .enum(['one', 'future', 'all'])
     .optional()
