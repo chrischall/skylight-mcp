@@ -452,6 +452,75 @@ describe('meal tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── one-time (non-recurring) sittings — issue #261 ───────────────────────
+  // LIVE-VERIFIED 2026-11-02: PATCH/DELETE on a sitting with `rrule: null` 422s
+  // {"errors":{"base":["must not provide apply_to with a non-recurring sitting"]}}
+  // whenever apply_to is present, and succeeds without it.
+  const NON_RECURRING_422 = new Error(
+    'Skylight error 422 for PATCH /frames/3435252/meals/sittings/42/instances/2026-09-08: {"errors":{"base":["must not provide apply_to with a non-recurring sitting"]}}',
+  );
+
+  it.each(['skylight_update_meal', 'skylight_delete_meal'])('%s accepts an omitted apply_to', (tool) => {
+    const { schemas } = harness();
+    expect(schemas[tool].shape.apply_to.safeParse(undefined).success).toBe(true);
+  });
+
+  it('update_meal without apply_to sends no apply_to query and is ungated', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', note: 'x' });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith('PATCH', '/frames/3435252/meals/sittings/42/instances/2026-09-08', {
+      query: { include: 'meal_category,meal_recipe,profiles' },
+      body: { note: 'x' },
+    });
+  });
+
+  it('delete_meal without apply_to sends no apply_to query and is ungated', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [], meta: { deleted_sitting_ids: [42] } });
+    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08' });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith('DELETE', '/frames/3435252/meals/sittings/42/instances/2026-09-08', {
+      query: { include: 'meal_category,meal_recipe,profiles' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08' });
+  });
+
+  it('update_meal retries without apply_to when the sitting turns out to be non-recurring', async () => {
+    const { tools, request } = harness();
+    request.mockRejectedValueOnce(NON_RECURRING_422).mockResolvedValueOnce({ data: [] });
+    await tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one', note: 'x' });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[0][2].query).toEqual({ apply_to: 'one', include: 'meal_category,meal_recipe,profiles' });
+    expect(request.mock.calls[1][2]).toEqual({ query: { include: 'meal_category,meal_recipe,profiles' }, body: { note: 'x' } });
+  });
+
+  it('delete_meal retries without apply_to when the sitting turns out to be non-recurring', async () => {
+    const { tools, request } = harness();
+    request.mockRejectedValueOnce(NON_RECURRING_422).mockResolvedValueOnce({ data: [] });
+    const out = await tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][2]).toEqual({ query: { include: 'meal_category,meal_recipe,profiles' } });
+    // The scope was not applied, so the result must not claim it was.
+    expect(JSON.parse(out.content[0].text)).toEqual({ deleted: '42', instance_date: '2026-09-08' });
+  });
+
+  it('other errors are NOT retried without apply_to', async () => {
+    const { tools, request } = harness();
+    request.mockRejectedValue(new Error('Skylight error 404 for DELETE …: {"status":404,"error":"Not Found"}'));
+    await expect(tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' })).rejects.toThrow(/404/);
+    await expect(tools.skylight_update_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' })).rejects.toThrow(/404/);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('a non-Error rejection is NOT retried', async () => {
+    const { tools, request } = harness();
+    request.mockRejectedValue('boom');
+    await expect(tools.skylight_delete_meal({ id: '42', instance_date: '2026-09-08', apply_to: 'one' })).rejects.toBe('boom');
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   // ── skylight_delete_meal ────────────────────────────────────────────────
 
   it('delete_meal phase 1 returns a preview + confirmToken and makes NO network call', async () => {

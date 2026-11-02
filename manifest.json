@@ -372,11 +372,11 @@
     },
     {
       "name": "skylight_update_meal",
-      "description": "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE)."
+      "description": "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a one-time meal omit apply_to. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE)."
     },
     {
       "name": "skylight_delete_meal",
-      "description": "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to. There is no undo. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview of exactly what would be deleted and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). apply_to 'one' deletes directly."
+      "description": "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to (omit apply_to for a one-time meal). There is no undo. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview of exactly what would be deleted and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). apply_to 'one' (or omitted) deletes directly."
     },
     {
       "name": "skylight_add_recipe_to_grocery_list",
