@@ -23,6 +23,9 @@ import { affectsMultipleOccurrences, confirmTokenParam, confirmWrite, framePath 
 // relationship 500s, so only relationships verified to return 200 belong here.
 const SITTING_INCLUDE = 'meal_category,meal_recipe,profiles';
 
+/** The 422 a one-time sitting answers to any `apply_to` (LIVE-VERIFIED, issue #261). */
+const NON_RECURRING_APPLY_TO = /must not provide apply_to with a non-recurring sitting/;
+
 interface SittingDoc { data?: RelatedResource | RelatedResource[] | null; included?: RelatedResource[] }
 
 /**
@@ -227,12 +230,37 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
   //            /instances endpoint — re-run skylight_list_meals over the date
   //            range to find it, or it looks like the tail silently vanished.
   //   all    — applies to (or deletes) the entire series.
+  //
+  // LIVE-VERIFIED (2026-11-02, issue #261): a ONE-TIME sitting (`rrule: null`)
+  // refuses any apply_to — 422 {"errors":{"base":["must not provide apply_to
+  // with a non-recurring sitting"]}} — and accepts the same PATCH/DELETE with
+  // the parameter omitted. So apply_to is optional, and a scope sent for a
+  // sitting that turns out to be one-time is retried once without it (on a
+  // single occurrence every scope means the same thing, and the 422 means the
+  // first attempt wrote nothing).
   const APPLY_TO = z
     .enum(['one', 'future', 'all'])
-    .describe("Recurrence scope: 'one' = just this occurrence (splits it out of the series), 'future' = this and all later occurrences (splits the tail into a new sitting), 'all' = the whole series.");
+    .optional()
+    .describe("Recurrence scope for a RECURRING meal (one with an `rrule` in skylight_list_meals): 'one' = just this occurrence (splits it out of the series), 'future' = this and all later occurrences (splits the tail into a new sitting), 'all' = the whole series. Omit for a one-time meal (`rrule: null`) — Skylight rejects apply_to there; if one is sent anyway the call is retried without it.");
+
+  type ApplyTo = 'one' | 'future' | 'all';
+
+  /**
+   * Run `send` with the caller's scope; if Skylight rejects it because the
+   * sitting is not recurring, run it once more with no scope. Returns the scope
+   * that was actually applied, so a result never claims one it did not use.
+   */
+  async function withApplyToFallback<T>(apply_to: ApplyTo | undefined, send: (scope: ApplyTo | undefined) => Promise<T>): Promise<{ doc: T; applied: ApplyTo | undefined }> {
+    try {
+      return { doc: await send(apply_to), applied: apply_to };
+    } catch (err) {
+      if (apply_to === undefined || !(err instanceof Error) || !NON_RECURRING_APPLY_TO.test(err.message)) throw err;
+      return { doc: await send(undefined), applied: undefined };
+    }
+  }
 
   interface UpdateMealArgs {
-    id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all';
+    id: string | number; instance_date: string; apply_to?: ApplyTo;
     summary?: string; description?: string; note?: string; date?: string; rrule?: string;
     meal_category_id?: string | number; meal_recipe_id?: string | number;
     frameId?: string; confirmToken?: string;
@@ -240,17 +268,18 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
 
   const updateMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to, summary, description, note, date, rrule, meal_category_id, meal_recipe_id }: UpdateMealArgs) => {
     const body = pruneUndefined({ summary, description, note, date, rrule, meal_category_id, meal_recipe_id });
-    const doc = await c.request<SittingDoc>('PATCH', apiPath`/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
-      query: { apply_to, include: SITTING_INCLUDE },
-      body,
-    });
+    const { doc } = await withApplyToFallback(apply_to, (scope) =>
+      c.request<SittingDoc>('PATCH', apiPath`/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
+        query: pruneUndefined({ apply_to: scope, include: SITTING_INCLUDE }),
+        body,
+      }));
     return textContent(flattenSittings(doc));
   });
 
   server.registerTool(
     'skylight_update_meal',
     {
-      description: "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE).",
+      description: "Update a planned meal (meal sitting) — change its name, recipe, category/slot, notes, date or repeat rule. Targets one occurrence by its date and applies the change at the chosen recurrence scope. For a one-time meal omit apply_to. For a recurring meal, note that apply_to:'one' and 'future' SPLIT the series into additional sittings rather than editing in place; re-run skylight_list_meals afterward to see the resulting shape. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE).",
       inputSchema: z.object({
         id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
         // Validated, unlike the same-named param on `skylight_complete_chore_instance`,
@@ -304,21 +333,22 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
     },
   );
 
-  const deleteMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to }: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string }) => {
-    const doc = await c.request<SittingDoc>('DELETE', apiPath`/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
-      query: { apply_to, include: SITTING_INCLUDE },
-    });
+  const deleteMeal = frameScoped(getClient, async (c, f, { id, instance_date, apply_to }: { id: string | number; instance_date: string; apply_to?: ApplyTo; frameId?: string }) => {
+    const { doc, applied } = await withApplyToFallback(apply_to, (scope) =>
+      c.request<SittingDoc>('DELETE', apiPath`/frames/${f}/meals/sittings/${id}/instances/${instance_date}`, {
+        query: pruneUndefined({ apply_to: scope, include: SITTING_INCLUDE }),
+      }));
     // A true 204 yields `undefined`, but a 200 {} or 200 {"data":[]} is truthy
     // and would render as [] — which reads to a model as "nothing was deleted",
     // inviting a retry of an irreversible call. Decide on the flattened rows.
     const rows = flattenSittings(doc);
-    return rows.length ? textContent(rows) : textContent({ deleted: String(id), instance_date, apply_to });
+    return rows.length ? textContent(rows) : textContent(pruneUndefined({ deleted: String(id), instance_date, apply_to: applied }));
   });
 
   server.registerTool(
     'skylight_delete_meal',
     {
-      description: "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to. There is no undo. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview of exactly what would be deleted and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). apply_to 'one' deletes directly.",
+      description: "Remove a planned meal (meal sitting) from the meal plan. Deletes one occurrence, this-and-future occurrences, or the whole series depending on apply_to (omit apply_to for a one-time meal). There is no undo. apply_to 'future' or 'all' asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview of exactly what would be deleted and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). apply_to 'one' (or omitted) deletes directly.",
       inputSchema: z.object({
         id: idParam.describe('Meal sitting id (from skylight_list_meals).'),
         // Validated, unlike the same-named param on `skylight_complete_chore_instance`,
@@ -337,7 +367,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
-    async (args: { id: string | number; instance_date: string; apply_to: 'one' | 'future' | 'all'; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
+    async (args: { id: string | number; instance_date: string; apply_to?: ApplyTo; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       // Gated only when the scope reaches PAST the occurrence named: `future`
       // truncates the series and takes the whole tail, `all` reaches
       // occurrences previously split off it. `one` deletes exactly what the
