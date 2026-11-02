@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.8](https://github.com/chrischall/skylight-mcp/compare/v1.4.7...v1.4.8) (2026-11-02)
+
+
+### Bug Fixes
+
+* **deps:** bump dotenv ([#259](https://github.com/chrischall/skylight-mcp/issues/259)) ([fa7d047](https://github.com/chrischall/skylight-mcp/commit/fa7d04725e5b346694d36dc5a0505e7f297feefe))
+* **events:** show which family member each event belongs to, and make get_event work ([#264](https://github.com/chrischall/skylight-mcp/issues/264)) ([27620c1](https://github.com/chrischall/skylight-mcp/commit/27620c1eb8b55266f4b9cfab9a1663e80d79490e)), closes [#262](https://github.com/chrischall/skylight-mcp/issues/262)
+* **meals:** edit and delete one-time meals without apply_to ([#263](https://github.com/chrischall/skylight-mcp/issues/263)) ([7347c9c](https://github.com/chrischall/skylight-mcp/commit/7347c9c856b016b741de2c9c91e3252b59266f15)), closes [#261](https://github.com/chrischall/skylight-mcp/issues/261)
+
+
+### Documentation
+
+* **meals:** record that recurring meals require apply_to ([#265](https://github.com/chrischall/skylight-mcp/issues/265)) ([cba213b](https://github.com/chrischall/skylight-mcp/commit/cba213b6a4ab8dc46b261af3db4d50d388fccbd1))
+
 ## [1.4.7](https://github.com/chrischall/skylight-mcp/compare/v1.4.6...v1.4.7) (2026-10-29)
 
 
