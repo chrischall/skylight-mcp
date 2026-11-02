@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { registerEventTools } from '../../src/tools/events.js';
 import { makeClient, NO_ELICIT_CTX, confirmed, phaseOne } from './_setup.js';
 
@@ -43,21 +43,106 @@ describe('event tools', () => {
     expect(callArgs[2].query.timezone).toBeUndefined();
   });
 
-  // ── skylight_get_event ──────────────────────────────────────────────────
-
-  it('get_event fetches by id with default frame', async () => {
+  it('list_events inlines each event\'s family-member categories from the sideload (#262)', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '7', type: 'calendar_event', attributes: { summary: 'Dentist' } } });
+    request.mockResolvedValue({
+      data: [
+        { id: '1', type: 'calendar_event', attributes: { summary: 'Soccer' },
+          relationships: {
+            categories: { data: [{ id: '20', type: 'category' }, { id: '21', type: 'category' }] },
+            calendar_account: { data: { id: '5', type: 'calendar_account' } },
+            event_notification_setting: { data: null },
+          } },
+        { id: '2', type: 'calendar_event', attributes: { summary: 'Holiday' },
+          relationships: { categories: { data: [] } } },
+        { id: '3', type: 'calendar_event', attributes: { summary: 'Unknown' },
+          relationships: { categories: { data: [{ id: '99', type: 'category' }] } } },
+      ],
+      included: [
+        { id: '20', type: 'category', attributes: { id: 20, label: 'Alex', color: '#2D8086', linked_to_profile: true, selected_for_chore_chart: true } },
+        { id: '21', type: 'category', attributes: { id: 21, label: 'Sam', color: '#A2845E', linked_to_profile: true, selected_for_chore_chart: true } },
+        { id: '5', type: 'calendar_account', attributes: { email: 'x@example.com', active_calendars: [] } },
+      ],
+    });
+    const out = JSON.parse((await tools.skylight_list_events({ date_min: '2026-05-01', date_max: '2026-06-01' })).content[0].text);
+    expect(out).toEqual([
+      { id: '1', type: 'calendar_event', summary: 'Soccer', categories: [{ id: '20', label: 'Alex', color: '#2D8086' }, { id: '21', label: 'Sam', color: '#A2845E' }] },
+      // An empty relationship means "no member" and says so.
+      { id: '2', type: 'calendar_event', summary: 'Holiday', categories: [] },
+      // A ref that was not sideloaded still carries its id.
+      { id: '3', type: 'calendar_event', summary: 'Unknown', categories: [{ id: '99' }] },
+    ]);
+  });
+
+  it('list_events tolerates a missing data array', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(undefined);
+    const out = await tools.skylight_list_events({ date_min: '2026-05-01', date_max: '2026-06-01' });
+    expect(JSON.parse(out.content[0].text)).toEqual([]);
+  });
+
+  // ── skylight_get_event ──────────────────────────────────────────────────
+  // LIVE-VERIFIED 2026-11-02 (#262): Skylight has NO single-event read —
+  // GET /frames/{f}/calendar_events/{id} 404s for every id (the same body as a
+  // nonsense route), so get_event finds the event in a date-range read.
+
+  afterEach(() => { vi.useRealTimers(); });
+
+  const ev = (id: string, summary: string) => ({
+    id, type: 'calendar_event', attributes: { summary },
+    relationships: { categories: { data: [{ id: '20', type: 'category' }] } },
+  });
+  const INCLUDED = [{ id: '20', type: 'category', attributes: { label: 'Alex', color: '#2D8086' } }];
+
+  it('get_event finds a plain id in a default window around today, with categories', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-02T12:00:00Z'));
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [ev('6', 'Other'), ev('7', 'Dentist')], included: INCLUDED });
     const out = await tools.skylight_get_event({ id: '7' });
-    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/calendar_events/7');
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'calendar_event', summary: 'Dentist' });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/calendar_events', {
+      query: { date_min: '2025-11-02', date_max: '2027-11-02', include: 'categories,calendar_account,event_notification_setting' },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'calendar_event', summary: 'Dentist', categories: [{ id: '20', label: 'Alex', color: '#2D8086' }] });
+  });
+
+  it('get_event narrows to the occurrence day for a recurring-instance id ({master}-{epoch})', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [ev('9747859180-1793318400', 'Dad Week')], included: INCLUDED });
+    const out = await tools.skylight_get_event({ id: '9747859180-1793318400' });
+    // 1793318400 = 2026-10-30T00:00:00Z; ±1 day absorbs the frame's time zone.
+    expect(request.mock.calls[0][2].query).toMatchObject({ date_min: '2026-10-29', date_max: '2026-10-31' });
+    expect(JSON.parse(out.content[0].text).summary).toBe('Dad Week');
+  });
+
+  it('get_event honours an explicit date window', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [ev('9747859180-1793318400', 'Dad Week')] });
+    await tools.skylight_get_event({ id: '9747859180-1793318400', date_min: '2026-01-01', date_max: '2026-02-01' });
+    expect(request.mock.calls[0][2].query).toMatchObject({ date_min: '2026-01-01', date_max: '2026-02-01' });
+  });
+
+  it('get_event fills only the missing bound of a half-given window', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-02T12:00:00Z'));
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [ev('7', 'Dentist')] });
+    await tools.skylight_get_event({ id: '7', date_min: '2026-03-01' });
+    expect(request.mock.calls[0][2].query).toMatchObject({ date_min: '2026-03-01', date_max: '2027-11-02' });
+  });
+
+  it('get_event throws a helpful error naming the window when the id is not in it', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [ev('6', 'Other')] });
+    await expect(tools.skylight_get_event({ id: '7', date_min: '2026-01-01', date_max: '2026-02-01' }))
+      .rejects.toThrow(/Event 7 not found between 2026-01-01 and 2026-02-01.*date_min\/date_max/);
   });
 
   it('get_event with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
-    request.mockResolvedValue({ data: { id: '7', type: 'calendar_event', attributes: {} } });
+    request.mockResolvedValue({ data: [ev('7', 'Dentist')] });
     await tools.skylight_get_event({ id: '7', frameId: '99' });
-    expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendar_events/7');
+    expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendar_events', expect.any(Object));
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
