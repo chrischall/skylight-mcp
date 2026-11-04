@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/chrischall/skylight-mcp/compare/v1.4.8...v1.5.0) (2026-11-04)
+
+
+### Features
+
+* context-group hints ([#266](https://github.com/chrischall/skylight-mcp/issues/266)) ([4478730](https://github.com/chrischall/skylight-mcp/commit/447873096922b93aadcd789e9f6d12208861f83a))
+
+
+### Bug Fixes
+
+* **brief:** align the brief view with the fleet contract ([#268](https://github.com/chrischall/skylight-mcp/issues/268)) ([510ec10](https://github.com/chrischall/skylight-mcp/commit/510ec10a3e4a398ba24fe86ab00d77a22c6b876b))
+
 ## [1.4.8](https://github.com/chrischall/skylight-mcp/compare/v1.4.7...v1.4.8) (2026-11-02)
 
 
