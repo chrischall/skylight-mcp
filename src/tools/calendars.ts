@@ -5,6 +5,7 @@ import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { APPLE_APP_PASSWORD_VAR, APPLE_ID_VAR, loadAppleCalendarCredential } from '../config.js';
 import { confirmTokenParam, confirmWrite } from './_confirm.js';
+import { CHANGE, LOOKUP } from './hints.js';
 
 /**
  * Replace every occurrence of `secret` in `text` — raw, and as it would appear
@@ -32,6 +33,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       description: "List the frame's calendar accounts (Google/Apple/etc.) and their active calendars.",
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendars`)))),
   );
@@ -42,6 +44,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       description: 'Get one calendar account.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendars/${id}`)))),
@@ -57,6 +60,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f, { after, before }: { after: string; before: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/nudges`, { query: { after, before } })))),
@@ -71,6 +75,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { sync_url }: { sync_url: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/webcal_accounts`, { body: { sync_url } })))),
@@ -86,6 +91,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, active_calendars }: { id: string; active_calendars: Array<string | number>; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/calendars/${id}`, { body: { active_calendars } })))),
@@ -97,6 +103,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
       description: 'Remove a connected source calendar (incl. webcal subscriptions).',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/source_calendars/${id}`);
@@ -113,6 +120,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/source_calendars/set_default_for_new_events`, { body: { id } });
@@ -163,6 +171,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     // fleet-audit#962 / #732: the credential comes from env, the write is gated
     // and the response/error are scrubbed. Config is checked BEFORE the client
@@ -191,6 +200,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, category_ids }: { id: string | number; category_ids: Array<string | number>; frameId?: string }) => {
       const categorizations = category_ids.map((cid) => ({ category_id: cid }));
@@ -208,6 +218,7 @@ export function registerCalendarTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { attributes }: { attributes: Record<string, unknown>; frameId?: string }) => {
       // NOTE: generic passthrough; attribute shape is provider-specific.

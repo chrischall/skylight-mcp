@@ -4,6 +4,7 @@ import type { ServerContext } from '@modelcontextprotocol/server';
 import { CONFIRM_INJECTION_RULE } from '@chrischall/mcp-utils';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource, type ResourceRef } from './_shared.js';
 import { confirmTokenParam, confirmWrite, nameSome } from './_confirm.js';
+import { CHANGE, LOOKUP, briefLine, briefResponse, familyMeta, viewParam } from './hints.js';
 
 const INCLUDE = 'categories,calendar_account,event_notification_setting';
 
@@ -32,6 +33,14 @@ function flattenEvents(doc: EventDoc | undefined): Record<string, unknown>[] {
     if (Array.isArray(rel)) flat.categories = rel.map((ref: ResourceRef) => categories.get(ref.id) ?? { id: ref.id });
     return flat;
   });
+}
+
+/** A flattened event as one brief line: title — start — all day?, members (or unassigned). */
+function eventLine(e: Record<string, unknown>): string {
+  const members = (e.categories as Array<{ id: string; label?: unknown }> | undefined ?? [])
+    .map((m) => (typeof m.label === 'string' && m.label ? m.label : `member ${m.id}`));
+  const who = members.length ? members.join(', ') : 'unassigned';
+  return briefLine(e.summary, e.starts_at, e.all_day === true ? `all day, ${who}` : who);
 }
 
 /** YYYY-MM-DD (UTC) of `ms`. */
@@ -105,14 +114,24 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
         date_max: z.string().describe('YYYY-MM-DD inclusive upper bound.'),
         timezone: z.string().optional().describe('IANA tz; defaults to the frame timezone.'),
         frameId: z.string().optional(),
+        view: viewParam.describe('"full" (default) returns the flattened events; "brief" returns one line per event — title — <start, ISO, or "no date"> — <members, or "unassigned"> — inside the untrusted-data envelope, "-- none" when the range is empty.'),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: familyMeta('whats-on', {
+        canonical: true,
+        when: { start: 'date_min', end: 'date_max' },
+        aliases: ['calendar', 'schedule', 'events', 'family calendar', 'plans', 'appointments', 'skylight'],
+      }),
     },
-    frameScoped(getClient, async (c, f, { date_min, date_max, timezone }: { date_min: string; date_max: string; timezone?: string; frameId?: string }) => {
+    frameScoped(getClient, async (c, f, { date_min, date_max, timezone, view }: { date_min: string; date_max: string; timezone?: string; frameId?: string; view?: 'full' | 'brief' }) => {
       const doc = await c.request<EventDoc | undefined>('GET', apiPath`/frames/${f}/calendar_events`, {
         query: { date_min, date_max, timezone, include: INCLUDE },
       });
-      return textContent(flattenEvents(doc));
+      const events = flattenEvents(doc);
+      if (view === 'brief') {
+        return briefResponse(events.map(eventLine), 'Event titles come from the family\'s calendars, including subscribed third-party feeds.');
+      }
+      return textContent(events);
     }),
   );
 
@@ -132,6 +151,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f, { id, date_min, date_max }: { id: string; date_min?: string; date_max?: string; frameId?: string }) => {
       const dflt = defaultWindow(id);
@@ -151,6 +171,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       description: 'Create a calendar event on a Skylight frame.' + INVITE_GATE_NOTE,
       inputSchema: z.object({ ...eventAttrs, frameId: z.string().optional(), confirmToken: confirmTokenParam }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { frameId: _frameId, confirmToken, ...attrs }, ctx) => {
       const path = apiPath`/frames/${f}/calendar_events`;
@@ -171,6 +192,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       description: 'Update a calendar event by id.' + INVITE_GATE_NOTE,
       inputSchema: z.object({ id: z.string(), ...Object.fromEntries(Object.entries(eventAttrs).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])), frameId: z.string().optional(), confirmToken: confirmTokenParam }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, frameId: _frameId, confirmToken, ...attrs }: { id: string; frameId?: string; confirmToken?: string } & Record<string, unknown>, ctx) => {
       const path = apiPath`/frames/${f}/calendar_events/${id}`;
@@ -191,6 +213,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       description: 'Delete a calendar event by id.',
       inputSchema: z.object({ id: z.string(), frameId: z.string().optional() }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/calendar_events/${id}`);
@@ -204,6 +227,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       description: 'List calendar/chore categories for a Skylight frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/categories`)))),
@@ -215,6 +239,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       description: 'List linked source calendars (Google, etc.) for a frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/source_calendars`)))),
@@ -226,6 +251,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       description: 'List recently-invited email addresses (handy for filling create_event invited_emails).',
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/calendar_events/recent_invited_emails`)))),
@@ -237,6 +263,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
       description: "Get the frame's calendar-event notification settings.",
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/event_notification_settings`)))),
   );
@@ -252,6 +279,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { on_time, early, early_minutes_before }: { on_time?: boolean; early?: boolean; early_minutes_before?: number; frameId?: string }) => {
       const body = pruneUndefined({ on_time, early, early_minutes_before });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, type GetClient, type JsonApiDoc } from './_shared.js';
+import { CHANGE, familyMeta } from './hints.js';
 
 export function registerTaskTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -11,6 +12,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: familyMeta('lookup', { aliases: ['task box', 'to do'] }),
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/task_box/items`)))),
@@ -28,6 +30,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { summary, emoji_icon, reward_points, routine }: { summary: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/task_box/items`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
@@ -48,6 +51,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, summary, emoji_icon, reward_points, routine }: { id: string; summary?: string; emoji_icon?: string; reward_points?: number; routine?: boolean; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/task_box/items/${id}`, { body: pruneUndefined({ summary, emoji_icon, reward_points, routine }) });
@@ -64,6 +68,7 @@ export function registerTaskTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/task_box/items/${id}`);
