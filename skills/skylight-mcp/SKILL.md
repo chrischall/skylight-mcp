@@ -134,7 +134,7 @@ Every tool except `skylight_healthcheck` carries a `_meta.mint` hint in the **fa
 
 - **What's on** — `skylight_list_events` is the group's canonical read; the host fills its range into `date_min`/`date_max`.
 - **What's due** — `skylight_list_chores` is the canonical read; the range goes into `after`/`before`.
-- Both take `view: "brief"`: one line per item, `title — <ISO date or "no date"> — <status>` (for an event the status is "all day" and/or the members it belongs to, else "unassigned"; for a chore its `pending`/`complete` status), at most 120 characters, inside the untrusted-data envelope (`data: string[]`), with `-- none` when the range is empty and a `-- error: …` note instead of a silent empty answer.
+- Both take `view: "brief"`: one line per item, `title — <ISO date or "no date"> — <status>` (for an event the status is "all day" and/or the members it belongs to, else "unassigned"; for a chore its `pending`/`complete` status), at most 120 characters (cut as a whole, title first; a title starting with `-- ` or `\` gets one leading `\` so it never reads as a note), inside the untrusted-data envelope (`data: string[]`), with `-- none` when the range is empty and a `-- error: …` note instead of a silent empty answer.
 - Neither read takes a subject: Skylight cannot filter events or chores by family member, so a group ask covers the whole household's frame.
 - There is no "what's new" read — the message feed is the frame's photo stream, not news. Everything else is a `lookup` (reads) or a `change`/`send`/`other` (writes; inviting a person, commenting and posting a photo are `send`).
 - A compound ask looks like "what's on the family calendar this weekend, and any chores due?" — one call each to the two canonical reads, answered together.

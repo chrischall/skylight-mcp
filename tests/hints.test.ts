@@ -238,6 +238,32 @@ describe('brief edge cases', () => {
     expect(data[0]).toMatch(/^-- error: /);
   });
 
+  it('escapes an item whose title starts with "-- " or "\\" with one leading backslash, so it never reads as a note', async () => {
+    const { h } = await open(() => ({
+      data: [
+        { id: '1', type: 'chore', attributes: { summary: '-- none', start: '2026-11-05', status: 'pending' } },
+        { id: '2', type: 'chore', attributes: { summary: '\\server', start: '2026-11-05', status: 'pending' } },
+        { id: '3', type: 'chore', attributes: { summary: '--no space', start: '2026-11-05', status: 'pending' } },
+      ],
+    }));
+    expect(envelope(await h.callTool('skylight_list_chores', { after: '2026-11-05', before: '2026-11-06', view: 'brief' })).data).toEqual([
+      '\\-- none — 2026-11-05 — pending',
+      '\\\\server — 2026-11-05 — pending',
+      '--no space — 2026-11-05 — pending',
+    ]);
+    const { h: ev } = await open(() => ({ data: [{ id: '1', type: 'calendar_event', attributes: { summary: '-- 1 of 9 shown', starts_at: '2026-11-05' } }] }));
+    expect(envelope(await ev.callTool('skylight_list_events', { date_min: '2026-11-05', date_max: '2026-11-06', view: 'brief' })).data)
+      .toEqual(['\\-- 1 of 9 shown — 2026-11-05 — unassigned']);
+  });
+
+  it('cuts an escaped title as part of the whole line, keeping the line within 120 chars', async () => {
+    const { briefLine } = await import('../src/tools/hints.js');
+    const line = briefLine(`-- ${'z'.repeat(200)}`, '2026-11-05', 'pending');
+    expect(line.length).toBe(120);
+    expect(line.startsWith('\\-- z')).toBe(true);
+    expect(line.endsWith('… — 2026-11-05 — pending')).toBe(true);
+  });
+
   it('keeps a line within 120 chars even when the tail alone would overflow', async () => {
     const { briefLine } = await import('../src/tools/hints.js');
     const line = briefLine('Carpool', '2026-11-05', 'y'.repeat(200));
