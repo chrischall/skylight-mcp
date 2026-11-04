@@ -5,6 +5,7 @@ import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idAr
 import { confirmFileUpload, confirmTokenParam, framePath } from './_confirm.js';
 import { s3Upload, type S3Credentials } from '../s3-upload.js';
 import { readVettedUpload, vetUploadFile, type VettedUpload } from '../upload-guard.js';
+import { CHANGE, familyMeta } from './hints.js';
 
 const MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic',
@@ -73,6 +74,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
         confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: familyMeta('send', { aliases: ['photo', 'picture', 'frame'] }),
     },
     async (args: { image_path: string; caption?: string; frame_ids?: Array<string | number>; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });
@@ -112,6 +114,7 @@ export function registerPhotoTools(server: McpServer, getClient: GetClient) {
         confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     async (args: { image_path: string; category_ids?: Array<string | number>; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       const file = await vetUploadFile(args.image_path, { mimeByExt: MIME, maxBytes: MAX_PHOTO_BYTES });

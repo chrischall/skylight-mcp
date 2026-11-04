@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, type GetClient, type JsonApiDoc, type RelatedResource, type ResourceRef } from './_shared.js';
 import { affectsMultipleOccurrences, confirmTokenParam, confirmWrite, framePath } from './_confirm.js';
+import { CHANGE, LOOKUP, familyMeta } from './hints.js';
 
 // LIVE-VERIFIED: GET /frames/{f}/meals/sittings requires BOTH date_min and
 // date_max (each is a separate 422 — "Date min is required." / "Date max is
@@ -75,6 +76,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/meals/recipes`)))),
@@ -88,6 +90,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/meals/categories`)))),
@@ -103,6 +106,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: familyMeta('lookup', { aliases: ['dinner', 'meal plan', 'meals', 'menu'] }),
     },
     frameScoped(getClient, async (c, f, { date_min, date_max }: { date_min: string; date_max: string; frameId?: string }) => {
       const doc = await c.request<SittingDoc>('GET', apiPath`/frames/${f}/meals/sittings`, {
@@ -121,6 +125,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/meals/recipes/${id}?include=meal_category`)))),
@@ -137,6 +142,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { meal_category_id, summary, description }: { meal_category_id: string | number; summary: string; description?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/meals/recipes?include=meal_category`, {
@@ -158,6 +164,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, meal_category_id, summary, description }: { id: string; meal_category_id?: string | number; summary?: string; description?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PATCH', apiPath`/frames/${f}/meals/recipes/${id}?include=meal_category`, {
@@ -176,6 +183,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/meals/recipes/${id}`);
@@ -200,6 +208,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { meal_recipe_id, meal_category_id, date, rrule, summary, description, note, add_to_grocery_list, saveToRecipeBox }: { meal_recipe_id?: string | number; meal_category_id: string | number; date: string; rrule?: string; summary: string; description?: string; note?: string; add_to_grocery_list?: boolean; saveToRecipeBox?: boolean; frameId?: string }) => {
       const body = pruneUndefined({ meal_recipe_id, meal_category_id, date, rrule, summary, description, note, add_to_grocery_list, saveToRecipeBox });
@@ -313,6 +322,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
       // apply_to 'one' and 'future' do not edit in place — they rewrite the
       // original series' rrule and spawn additional sittings.
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     async (args: UpdateMealArgs, ctx: ServerContext) => {
       // Same rule as the delete: 'one' edits the occurrence named, but
@@ -372,6 +382,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     async (args: { id: string | number; instance_date: string; apply_to?: ApplyTo; frameId?: string; confirmToken?: string }, ctx: ServerContext) => {
       // Gated only when the scope reaches PAST the occurrence named: `future`
@@ -405,6 +416,7 @@ export function registerMealTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, list_id }: { id: string; list_id?: string | number; frameId?: string }) => {
       // NOTE: add_to_grocery_list body (list_id) is inferred, not live-verified.

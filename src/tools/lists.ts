@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc } from './_shared.js';
 import { confirmTokenParam, confirmWrite, nameSome } from './_confirm.js';
+import { CHANGE, LOOKUP, familyMeta } from './hints.js';
 
 export function registerListTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -12,6 +13,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/lists`)))),
@@ -26,6 +28,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: familyMeta('lookup', { aliases: ['grocery list', 'shopping list', 'to do list'] }),
     },
     frameScoped(getClient, async (c, f, { listId }: { listId: string; frameId?: string }) =>
       textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/lists/${listId}/list_items`)))),
@@ -42,6 +45,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { label, color, kind }: { label: string; color: string; kind: 'shopping' | 'to_do'; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/lists`, { body: pruneUndefined({ label, color, kind }) });
@@ -59,6 +63,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: familyMeta('change', { aliases: ['grocery list', 'shopping list', 'add to list', 'to do list'] }),
     },
     frameScoped(getClient, async (c, f, { listId, label }: { listId: string; label: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/lists/${listId}/list_items`, { body: pruneUndefined({ label }) });
@@ -79,6 +84,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { listId, itemId, label, checked, section }: { listId: string; itemId: string; label?: string; checked?: boolean; section?: string | null; frameId?: string }) => {
       const status = checked === undefined ? undefined : (checked ? 'completed' : 'pending');
@@ -97,6 +103,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { listId, itemId }: { listId: string; itemId: string; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}/list_items/${itemId}`);
@@ -116,6 +123,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { listId, label, color, kind }: { listId: string; label?: string; color?: string; kind?: 'shopping' | 'to_do'; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/lists/${listId}`, { body: pruneUndefined({ label, color, kind }) });
@@ -133,6 +141,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     // Gated (fleet-audit#1338) on the same rule as clear_list: the caller named
     // a list, not the items it destroys — and this removes the list too, so it
@@ -175,6 +184,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { listId, itemId, afterItemId }: { listId: string; itemId: string; afterItemId?: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/lists/${listId}/list_items/${itemId}/move`, { body: { after_item_id: afterItemId ?? null } });
@@ -194,6 +204,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         confirmToken: confirmTokenParam,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     // Gated (fleet-audit#964): the caller named a list, not the items in it.
     // The items are read on both phases, so the preview names what is about to
@@ -230,6 +241,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { listId, item_ids }: { listId: string; item_ids: Array<string | number>; frameId?: string }) => {
       await c.request('DELETE', apiPath`/frames/${f}/lists/${listId}/list_items/bulk_destroy`, { body: { ids: item_ids } });
@@ -249,6 +261,7 @@ export function registerListTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { listId, item_ids, section }: { listId: string; item_ids: Array<string | number>; section?: string | null; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/lists/${listId}/list_items/bulk_update_section`, { body: { item_ids, section: section ?? null } });

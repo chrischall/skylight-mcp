@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { apiPath, textContent, flattenJsonApi, frameScoped, idParam, type GetClient, type JsonApiDoc } from './_shared.js';
+import { CHANGE, LOOKUP } from './hints.js';
 
 export function registerFrameTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -9,6 +10,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       description: 'List Skylight frames (family hubs) on this account.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     async () => {
       const c = await getClient();
@@ -22,6 +24,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       description: 'Get one Skylight frame and its settings.',
       inputSchema: z.object({ frameId: z.string().optional().describe('Frame id; defaults to the resolved frame.') }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}`)))),
   );
@@ -32,6 +35,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       description: 'List members (frame_users) of a Skylight frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}/users`)))),
   );
@@ -42,6 +46,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       description: 'List physical devices attached to a Skylight frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request('GET', apiPath`/frames/${f}/devices`)))),
   );
@@ -52,6 +57,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       description: 'Get Skylight Plus subscription / entitlement status.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     async () => {
       const c = await getClient();
@@ -65,6 +71,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       description: 'Get reward-point balances per family member (lifetime earned + current balance).',
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/reward_points`)))),
   );
@@ -75,6 +82,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
       description: 'Get household configuration for the frame.',
       inputSchema: z.object({ frameId: z.string().optional() }),
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f) => textContent(flattenJsonApi(await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/household_config`)))),
   );
@@ -90,6 +98,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, current_album_id }: { id: string | number; current_album_id: string | number; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/devices/${id}`, { body: { current_album_id } });
@@ -107,6 +116,7 @@ export function registerFrameTools(server: McpServer, getClient: GetClient) {
         frameId: z.string().optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, name }: { id: string | number; name: string; frameId?: string }) => {
       const doc = await c.request<JsonApiDoc>('PUT', apiPath`/frames/${f}/devices/${id}`, { body: { name } });
