@@ -651,6 +651,64 @@ describe('chore tools', () => {
     vi.useRealTimers();
   });
 
+  // LIVE-VERIFIED wire shape (2026-11-04, skylight-api-version 2026-05-01):
+  // the reward's owner exists only as `relationships.category.data`.
+  it('list_rewards inlines relationships.category as a stringified category_id', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [
+      {
+        id: '11150707', type: 'reward',
+        attributes: { name: 'SweetFrog Trip', point_value: 150, redeemed_at: '2026-10-09T11:50:42.772Z' },
+        relationships: { category: { data: { id: 7645463, type: 'category' } } },
+      },
+    ] });
+    const out = await tools.skylight_list_rewards({ redeemed_at_min: 'a', redeemed_at_max: 'b' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{
+      id: '11150707', type: 'reward', name: 'SweetFrog Trip', point_value: 150,
+      redeemed_at: '2026-10-09T11:50:42.772Z', category_id: '7645463',
+    }]);
+  });
+
+  it('list_rewards emits category_ids when the category ref is an array', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [
+      { id: '1', type: 'reward', attributes: { name: 'Shared' }, relationships: { category: { data: [{ id: 5, type: 'category' }, { id: '6', type: 'category' }] } } },
+    ] });
+    const out = await tools.skylight_list_rewards({ redeemed_at_min: 'a', redeemed_at_max: 'b' });
+    const [row] = JSON.parse(out.content[0].text);
+    expect(row.category_ids).toEqual(['5', '6']);
+    expect(row).not.toHaveProperty('category_id');
+  });
+
+  it('list_rewards lets an explicit category_id attribute win over the relationship', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [
+      { id: '1', type: 'reward', attributes: { category_id: 42 }, relationships: { category: { data: { id: '7', type: 'category' } } } },
+    ] });
+    const out = await tools.skylight_list_rewards({ redeemed_at_min: 'a', redeemed_at_max: 'b' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', type: 'reward', category_id: '42' }]);
+  });
+
+  it('list_rewards with a null category ref and no relationships flattens exactly as before', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [
+      { id: '1', type: 'reward', attributes: { name: 'A' }, relationships: { category: { data: null } } },
+      { id: '2', type: 'reward', attributes: { name: 'B' } },
+    ] });
+    const out = await tools.skylight_list_rewards({ redeemed_at_min: 'a', redeemed_at_max: 'b' });
+    expect(JSON.parse(out.content[0].text)).toEqual([
+      { id: '1', type: 'reward', name: 'A' },
+      { id: '2', type: 'reward', name: 'B' },
+    ]);
+  });
+
+  it('list_rewards hands an unrecognised (non-array) envelope to the shared flattener', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '1', type: 'reward', attributes: { name: 'Solo' } } });
+    const out = await tools.skylight_list_rewards({ redeemed_at_min: 'a', redeemed_at_max: 'b' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '1', type: 'reward', name: 'Solo' });
+  });
+
   it('list_rewards with explicit frameId uses it and skips resolveFrameId', async () => {
     const { tools, request, resolveFrameId } = harness();
     request.mockResolvedValue({ data: [] });

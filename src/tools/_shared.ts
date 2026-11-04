@@ -30,6 +30,51 @@ export interface RelatedResource extends ResourceRef {
   relationships?: Record<string, { data?: ResourceRef | ResourceRef[] | null }>;
 }
 
+/**
+ * Inline a resource's `relationships.<rel>.data` ref as `<key>` (a string id),
+ * or as `<key>s` (string[]) when the API links several resources. An attribute
+ * already named `<key>` wins, so the inlining only fills a gap if the API ever
+ * starts returning the id directly; either way the value is stringified so one
+ * list can never mix `111` and `"111"`. A `null` or absent ref sets nothing, so
+ * an absent singular key means *none*, never *many*.
+ */
+export function inlineRelationshipId(flat: Record<string, unknown>, resource: RelatedResource, rel: string, key: string): void {
+  const ref = resource.relationships?.[rel]?.data;
+  if (Array.isArray(ref)) {
+    flat[`${key}s`] = ref.map((r) => String(r.id));
+    return;
+  }
+  const id = flat[key] ?? ref?.id;
+  if (id != null) flat[key] = String(id);
+}
+
+/**
+ * Flatten one reward, inlining its owner.
+ *
+ * LIVE-VERIFIED (2026-11-04, skylight-api-version 2026-05-01): a reward's
+ * family member exists ONLY as the `relationships.category.data` ref — there is
+ * no `category_id` attribute — so the shared `flattenJsonApi()` drops it and the
+ * caller cannot tell whose reward or redemption a row is. Same bug and same fix
+ * as `flattenChore` in chores.ts; `category_id` is the name the reward write
+ * tools already use for the value (`category_ids` on create/update).
+ */
+export function flattenReward(reward: RelatedResource): Record<string, unknown> {
+  const flat: Record<string, unknown> = { ...reward.attributes, id: reward.id, type: reward.type };
+  inlineRelationshipId(flat, reward, 'category', 'category_id');
+  return flat;
+}
+
+/** Flatten a reward envelope — a single resource (`GET …/rewards/{id}`,
+ *  create/update responses) or a collection (`GET …/rewards`). Anything else is
+ *  a shape we do not recognise, and the shared flattener verbatim beats a
+ *  confident wrong answer. */
+export function flattenRewards(doc: { data?: RelatedResource | RelatedResource[] | null }): unknown {
+  const rows = doc.data;
+  if (Array.isArray(rows)) return rows.map(flattenReward);
+  if (rows && typeof rows === 'object') return flattenReward(rows);
+  return flattenJsonApi(doc);
+}
+
 export type GetClient = () => Promise<SkylightClient>;
 
 /** Wrap a frame-scoped tool handler: resolves the client + frame id once,

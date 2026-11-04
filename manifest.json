@@ -336,7 +336,7 @@
     },
     {
       "name": "skylight_list_rewards",
-      "description": "List redeemed rewards for a Skylight frame, defaulting to the last 30 days."
+      "description": "List rewards for a Skylight frame. The `redeemed_at_min`/`redeemed_at_max` window defaults to the last 30 days, but the endpoint returns every reward, with `redeemed_at` null for one not yet redeemed. Each reward carries its owner in `category_id` (a family-member category — resolve names via skylight_list_categories), pluralised to `category_ids` when the API links several members."
     },
     {
       "name": "skylight_list_recipes",
