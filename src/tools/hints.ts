@@ -53,11 +53,14 @@ function str(v: unknown): string | undefined {
 /**
  * One brief line, `title — <ISO date | no date> — <status>`, at most 120
  * characters: the title is shortened first, and a tail that alone would
- * overflow is cut with an ellipsis.
+ * overflow is cut with an ellipsis. A title starting with `-- ` (a note's
+ * prefix) or `\` is escaped with one leading `\`, which the gateway strips
+ * after its note check, so an item can never masquerade as a note.
  */
 export function briefLine(title: unknown, date: unknown, status: string): string {
   const tail = ` — ${str(date) ?? 'no date'} — ${status}`;
-  const name = str(title) ?? '(untitled)';
+  const raw = str(title) ?? '(untitled)';
+  const name = raw.startsWith('-- ') || raw.startsWith('\\') ? `\\${raw}` : raw;
   const room = BRIEF_MAX - tail.length;
   if (room >= 2) return `${name.length > room ? `${name.slice(0, room - 1)}…` : name}${tail}`;
   return `${name.slice(0, 1)}${tail}`.slice(0, BRIEF_MAX - 1) + '…';
