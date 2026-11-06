@@ -20,7 +20,7 @@ import { makeClient } from './tools/_setup.js';
 /**
  * The .mcpb manifest's `tools` array is what a client shows BEFORE install, and
  * what a reviewer reads to see what the bundle can do. It sat at the original
- * 22 while the server grew to 114 — every write, upload and delete unlisted
+ * 22 while the server grew to 115 — every write, upload and delete unlisted
  * (fleet-audit#1123). So it is derived from the REGISTERED server, the same
  * registrar list `src/index.ts` passes, and this test holds the file to it.
  *
@@ -72,6 +72,6 @@ describe('manifest.json tools', () => {
   });
 
   it('covers the whole surface (guards against a registrar being dropped here)', () => {
-    expect(registeredTools()).toHaveLength(114);
+    expect(registeredTools()).toHaveLength(115);
   });
 });

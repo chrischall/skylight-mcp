@@ -1,5 +1,6 @@
 import type { ServerContext } from '@modelcontextprotocol/server';
 import { confirmTokenParam, confirmWrite } from '@chrischall/mcp-utils';
+import type { UploadSource } from '@chrischall/mcp-utils/export';
 import type { VettedUpload } from '../upload-guard.js';
 import { apiPath } from './_shared.js';
 
@@ -96,6 +97,50 @@ export function confirmFileUpload(
       method: w.method,
       path: w.path,
       body: { ...w.extra, image_path: file.resolved, mime: file.mime, bytes: file.size },
+    },
+    confirmToken: w.confirmToken,
+  });
+}
+
+/**
+ * {@link confirmWrite} for a tool that takes a caller's file by any route —
+ * a local path, inline base64, or a blob-store upload slot — resolved by
+ * `resolveUploadSource` (the photo tools). The preview names where the file
+ * came from (the absolute path, or the filename and slot key), its type and
+ * size, and the bound body carries its SHA-256: the confirmed call resolves
+ * the file again, so different bytes behind the same path or key are
+ * `DRAFT_CHANGED`, never uploaded on the strength of the earlier preview.
+ */
+export function confirmUploadSource(
+  ctx: ServerContext,
+  src: UploadSource,
+  w: {
+    tool: string;
+    action: string;
+    summary: string;
+    /** The absolute path the caller named (path route only). */
+    absolutePath?: string;
+    method: string;
+    path: string;
+    extra?: Record<string, unknown>;
+    confirmToken: string | undefined;
+  },
+) {
+  const where = src.origin === 'path'
+    ? { image_path: w.absolutePath }
+    : src.origin === 'blob'
+      ? { image_blob_key: src.blobKey, filename: src.fileName }
+      : { filename: src.fileName };
+  return confirmWrite(ctx, {
+    tool: w.tool,
+    action: w.action,
+    summary: w.summary,
+    account: undefined,
+    target: w.absolutePath ?? src.blobKey ?? `inline:${src.fileName}`,
+    request: {
+      method: w.method,
+      path: w.path,
+      body: { ...w.extra, source: src.origin, ...where, mime: src.mimeType, bytes: src.sizeBytes, sha256: src.sha256 },
     },
     confirmToken: w.confirmToken,
   });

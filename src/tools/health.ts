@@ -8,7 +8,7 @@ import type { GetClient } from './_shared.js';
  * working?", and the only tool here that reports a failure as DATA rather
  * than throwing.
  *
- * Skylight had none. The other 113 tools are functional operations, so the
+ * Skylight had none. The other 114 tools are functional operations, so the
  * closest stand-in was `skylight_list_frames` — a frames query, which is the
  * problem: an empty or failed result reads as a data problem ("no frames on
  * this account") when the real cause is that nothing ever authenticated.

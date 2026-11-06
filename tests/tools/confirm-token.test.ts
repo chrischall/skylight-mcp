@@ -20,7 +20,20 @@ import { makeClient } from './_setup.js';
 // the two-phase preview-token flow.
 
 vi.mock('../../src/s3-upload.js', () => ({ s3Upload: vi.fn() }));
-vi.mock('../../src/upload-guard.js', () => ({ vetUploadFile: vi.fn(), readVettedUpload: vi.fn() }));
+// The avatar upload's local-path guard; the photo tools below are driven
+// with inline bytes, which never touch the filesystem.
+vi.mock('../../src/upload-guard.js', () => ({
+  vetUploadFile: vi.fn(),
+  readVettedUpload: vi.fn(),
+  uploadRoots: () => [],
+  explainUploadRefusal: (err: unknown) => { throw err; },
+}));
+
+// Synthetic image heads — just enough for the magic-number check.
+const JPEG_B64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]).toString('base64');
+const PNG_B64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
+const JPEG_SHA = 'fc16d7dcee9cae83ef3923222a81ccd8fe96c9d25fdb7f504d66f1011e0cd870';
+const PNG_SHA = '4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6';
 
 const readMock = vi.mocked(readVettedUpload);
 const s3UploadMock = vi.mocked(s3Upload);
@@ -102,13 +115,13 @@ interface Phase1 { status: string; action: string; preview: Record<string, unkno
 const GATED: Array<{ tool: string; action: string; args: Record<string, unknown>; preview: Record<string, unknown> }> = [
   {
     tool: 'skylight_upload_photo', action: 'photo.upload',
-    args: { image_path: '/tmp/pic.jpg', caption: 'Hi' },
-    preview: { method: 'POST', path: '/messages/uploads', willSend: { caption: 'Hi', image_path: '/abs/tmp/pic.jpg', mime: 'image/jpeg', bytes: 8 } },
+    args: { image_inline: { filename: 'pic.jpg', contentBase64: JPEG_B64 }, caption: 'Hi' },
+    preview: { method: 'POST', path: '/messages/uploads', willSend: { caption: 'Hi', source: 'inline', filename: 'pic.jpg', mime: 'image/jpeg', bytes: 6, sha256: JPEG_SHA } },
   },
   {
     tool: 'skylight_import_events_from_photo', action: 'photo.import_events',
-    args: { image_path: '/tmp/flyer.png', category_ids: ['5'] },
-    preview: { method: 'POST', path: '/frames/{frame}/auto_creation_intents', willSend: { category_ids: ['5'], image_path: '/abs/tmp/flyer.png', mime: 'image/png', bytes: 8 } },
+    args: { image_inline: { filename: 'flyer.png', contentBase64: PNG_B64 }, category_ids: ['5'] },
+    preview: { method: 'POST', path: '/frames/{frame}/auto_creation_intents', willSend: { category_ids: ['5'], source: 'inline', filename: 'flyer.png', mime: 'image/png', bytes: 8, sha256: PNG_SHA } },
   },
   {
     tool: 'skylight_update_frame', action: 'frame.open_to_public',
@@ -270,8 +283,8 @@ describe('confirm-token flow — refusals', () => {
 
   it('changing the caption of an upload between the phases is DRAFT_CHANGED', async () => {
     const harness = await open();
-    const { confirmToken } = parseToolResult<Phase1>(await harness.callTool('skylight_upload_photo', { image_path: '/tmp/pic.jpg', caption: 'Hi' }));
-    const changed = await harness.callTool('skylight_upload_photo', { image_path: '/tmp/pic.jpg', caption: 'Bye', confirmToken });
+    const { confirmToken } = parseToolResult<Phase1>(await harness.callTool('skylight_upload_photo', { image_inline: { filename: 'pic.jpg', contentBase64: JPEG_B64 }, caption: 'Hi' }));
+    const changed = await harness.callTool('skylight_upload_photo', { image_inline: { filename: 'pic.jpg', contentBase64: JPEG_B64 }, caption: 'Bye', confirmToken });
     expect(parseToolResult<{ error: string }>(changed).error).toBe('DRAFT_CHANGED');
     expect(writes()).toBe(0);
     expect(readMock).not.toHaveBeenCalled();
