@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/skylight-mcp)](https://www.npmjs.com/package/skylight-mcp)
 [![license](https://img.shields.io/npm/l/skylight-mcp)](LICENSE)
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 114 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 115 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -167,8 +167,9 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | ai | `skylight_list_auto_creation_items` | R | List every draft item an AI intent created (meals, activities, list items) |
 | ai | `skylight_approve_auto_creation` | W | Approve AI-drafted events into real calendar events |
 | ai | `skylight_undo_auto_creation` | W | Undo/discard an AI auto-creation intent and its drafts |
-| photos | `skylight_upload_photo` | W | Upload a photo/video from a local file to the frame (confirm-gated) |
-| photos | `skylight_import_events_from_photo` | W | Import calendar events from a photo of a flyer/invite using Skylight's AI (best-effort; confirm-gated) |
+| photos | `skylight_upload_photo` | W | Upload a photo/video to the frame — a local file, inline base64, or (hosted) an upload-slot `image_blob_key` (confirm-gated) |
+| photos | `skylight_import_events_from_photo` | W | Import calendar events from a photo of a flyer/invite using Skylight's AI — same three file sources (best-effort; confirm-gated) |
+| photos | `skylight_upload_slots` | R | Hosted deployments: mint signed upload URLs for the photo tools (PUT the file, then pass `image_blob_key`); refused without a blob store |
 | health | `skylight_healthcheck` | R | Report whether the connector is working: which credential resolved, whether Skylight accepted it, and what to fix |
 
 ## Configuration
@@ -210,9 +211,29 @@ the env token already spent cannot recover without the login pair.
 | `SKYLIGHT_BASE_URL` | `https://app.ourskylight.com/api` | Override the API base URL |
 | `SKYLIGHT_APPLE_APP_PASSWORD` | *(none)* | App-specific password (from appleid.apple.com) that `skylight_link_apple_calendar` sends to Skylight. Env-only by design: it is never a tool argument, so it never passes through the model, the transcript or the host's tool-call log |
 | `SKYLIGHT_APPLE_ID` | *(none)* | Apple ID email for `skylight_link_apple_calendar`; the tool's `email` argument overrides it |
-| `SKYLIGHT_UPLOAD_DIR` | `~/Pictures` and `~/Downloads` (hosted: only `$MCP_DATA_DIR/uploads`) | Directories that `skylight_upload_photo`, `skylight_import_events_from_photo` and `skylight_set_member_avatar` may upload from (several separated by `:`, or `;` on Windows; `~` allowed). Any other path is refused before the confirmation preview, and the confirmed read re-checks it when the file is opened. Confinement is always on: unset means the default directories, not "anywhere" (the type, hidden-file, symlink, size and content checks always apply too) |
+| `SKYLIGHT_UPLOAD_DIR` | `~/Pictures` and `~/Downloads` (hosted: only `$MCP_DATA_DIR/uploads`, avatars only) | Directories that `skylight_upload_photo`, `skylight_import_events_from_photo` (`image_path`, local installs) and `skylight_set_member_avatar` may upload from (several separated by `:`, or `;` on Windows; `~` allowed). Any other path is refused before the confirmation preview, and the confirmed read re-checks it when the file is opened. Confinement is always on: unset means the default directories, not "anywhere" (the type, hidden-file, symlink, size and content checks always apply too) |
 
 Treat `.env` like a password file — it is gitignored, do not commit it.
+
+### Photo uploads on a hosted deployment
+
+A hosted server (the claude.ai connector on mcp-host) shares no disk with you,
+so `image_path` is refused there and the refusal says what to do instead. The
+photo tools take exactly one of three sources:
+
+| parameter | where | notes |
+|---|---|---|
+| `image_path` | local installs | a file inside `SKYLIGHT_UPLOAD_DIR`; max 200 MiB |
+| `image_blob_key` | hosted | call `skylight_upload_slots` with `{files: [{filename}]}`, PUT the file to the returned `uploadUrl` (the returned `curl` does it), then pass the slot's `blobKey`; max 200 MiB (the blob gateway itself caps one object at 100 MiB) |
+| `image_inline` | anywhere | `{filename, contentBase64, mimeType?}` — small files only: the whole file rides inside one tool call, and mcp-host caps a request at about 9.9 MiB |
+
+Every route accepts only jpg/jpeg, png, heic, gif, webp, mp4 and mov, and checks
+the file's leading bytes against its type. The confirmation preview carries the
+file's SHA-256 and the confirmed call reads the file again, so a file that
+changed in between is refused (`DRAFT_CHANGED`). A blob-store upload is deleted
+once Skylight accepts the photo (the result's `blob.deleted` says whether the
+delete worked) and kept if the upload fails, so the same `image_blob_key` can be
+retried. `skylight_upload_slots` is refused on a server with no blob store.
 
 ### Confirmations
 

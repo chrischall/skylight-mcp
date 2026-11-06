@@ -47,8 +47,12 @@ export function uploadRoots(): string[] {
   return [...LOCAL_DEFAULT_ROOTS];
 }
 
-/** Re-word the shared refusal for the case the user can act on: where uploads may come from. */
-function reword(err: unknown, roots: readonly string[]): never {
+/**
+ * Re-word the shared refusal for the case the user can act on: where uploads
+ * may come from. Exported for the photo tools, which vet paths through
+ * `resolveUploadSource` (mcp-utils export) rather than {@link vetUploadFile}.
+ */
+export function explainUploadRefusal(err: unknown, roots: readonly string[]): never {
   if (err instanceof UploadRefusedError && err.reason === 'outside-roots') {
     throw new UploadRefusedError(
       'outside-roots',
@@ -88,7 +92,7 @@ export async function vetUploadFile(
     });
     return { resolved: v.path, ext: v.ext, mime: v.mime, size: v.size, allowedRoots: roots };
   } catch (err) {
-    return reword(err, roots);
+    return explainUploadRefusal(err, roots);
   }
 }
 
@@ -110,7 +114,7 @@ export async function readVettedUpload(file: VettedUpload, maxBytes: number): Pr
       readAll: true,
     });
   } catch (err) {
-    return reword(err, file.allowedRoots);
+    return explainUploadRefusal(err, file.allowedRoots);
   }
   if (v.path !== file.resolved || v.size !== file.size || v.bytes === undefined) {
     throw new UploadRefusedError(

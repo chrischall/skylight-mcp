@@ -98,6 +98,11 @@ egress:
     # cloud_upload_credentials call at runtime — hence the wildcard: both
     # labels vary and a bare `amazonaws.com` matches nothing.
     - '*.amazonaws.com'
+    # Not listed: mcp-host's own blob store (MCP_BLOB_BASE_URL, the gateway
+    # serving this connector — its host differs per deployment). The photo
+    # tools GET and then DELETE files the caller PUT through
+    # skylight_upload_slots. Signed requests only; no Skylight credential is
+    # ever sent there.
     #
     # NOTE — SKYLIGHT_BASE_URL overrides the API base (and so the auth
     # origin); a deployment that sets it to another host must add that host

@@ -5,7 +5,7 @@ description: Read and manage your Skylight Calendar family hub — calendar even
 
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 114 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 115 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
 
 - **npm:** [npmjs.com/package/skylight-mcp](https://www.npmjs.com/package/skylight-mcp)
 - **Source:** [github.com/chrischall/skylight-mcp](https://github.com/chrischall/skylight-mcp)
@@ -98,10 +98,14 @@ and, unless `reassign_to_category_id` is given, their chore and reward history),
 `skylight_link_apple_calendar` (hands Skylight an iCloud account; the password
 comes from `SKYLIGHT_APPLE_APP_PASSWORD`, never from chat), and
 `skylight_update_frame` when it sets `open_to_public: true` — and so do the
-local-file uploads `skylight_upload_photo`, `skylight_import_events_from_photo`
-and `skylight_set_member_avatar`, whose preview echoes the resolved file path. Uploads only
-ever come from the upload directories (`SKYLIGHT_UPLOAD_DIR`; by default `~/Pictures` and
+file uploads `skylight_upload_photo`, `skylight_import_events_from_photo`
+and `skylight_set_member_avatar`, whose preview names the file (resolved path, or
+filename and slot key) and binds its SHA-256. A local path only ever comes from the
+upload directories (`SKYLIGHT_UPLOAD_DIR`; by default `~/Pictures` and
 `~/Downloads`) — ask the user to move a file there rather than reaching for another path.
+On the hosted connector a path cannot work: call `skylight_upload_slots`, PUT the file to
+the returned `uploadUrl` (run its `curl`), then pass `image_blob_key`; or, for a small
+file only, pass `image_inline` (base64). Pass exactly one of the three.
 
 A third rule gates the **bulk deletes**, `skylight_delete_messages`,
 `skylight_clear_list` and `skylight_delete_list` (when the list has items): the
