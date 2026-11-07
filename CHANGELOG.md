@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/chrischall/skylight-mcp/compare/v1.5.0...v1.6.0) (2026-11-07)
+
+
+### Features
+
+* **photos:** upload photos from hosted sessions via upload slots or inline base64 ([#269](https://github.com/chrischall/skylight-mcp/issues/269)) ([0f3056f](https://github.com/chrischall/skylight-mcp/commit/0f3056ffaf6e028b684fa6056efb3a318e00afdf))
+
+
+### Bug Fixes
+
+* **deps:** upgrade @chrischall/mcp-utils to 3.7.2 so uploads carry only the file's bytes ([#273](https://github.com/chrischall/skylight-mcp/issues/273)) ([aebae07](https://github.com/chrischall/skylight-mcp/commit/aebae07c20d6909c75c4cbdc4087754bf5a8fc9e))
+
 ## [1.5.0](https://github.com/chrischall/skylight-mcp/compare/v1.4.8...v1.5.0) (2026-11-04)
 
 
