@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/chrischall/skylight-mcp/compare/v1.6.0...v1.6.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **rewards:** show which family member each reward belongs to (thanks @rterakedis) ([#274](https://github.com/chrischall/skylight-mcp/issues/274)) ([1fa7ff4](https://github.com/chrischall/skylight-mcp/commit/1fa7ff4672af9e57b9dad9babbacabfd06e6f7aa))
+
 ## [1.6.0](https://github.com/chrischall/skylight-mcp/compare/v1.5.0...v1.6.0) (2026-11-07)
 
 
