@@ -43,6 +43,13 @@ describe('reward tools', () => {
     });
   });
 
+  it('get_reward falls back to the relationship when the category_id attribute is null', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'reward', attributes: { category_id: null }, relationships: { category: { data: { id: 9, type: 'category' } } } } });
+    const out = await tools.skylight_get_reward({ id: '7' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'reward', category_id: '9' });
+  });
+
   it('get_reward emits category_ids for an array ref', async () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: { id: '7', type: 'reward', attributes: {}, relationships: { category: { data: [{ id: 1, type: 'category' }] } } } });
