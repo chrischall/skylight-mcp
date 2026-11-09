@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource, flattenRewards } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedDoc, flattenRewards } from './_shared.js';
 import { CHANGE, LOOKUP } from './hints.js';
-
-interface RewardDoc { data?: RelatedResource | RelatedResource[] | null }
 
 export function registerRewardTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
@@ -15,7 +13,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       _meta: LOOKUP,
     },
     frameScoped(getClient, async (c, f, { id }: { id: string; frameId?: string }) =>
-      textContent(flattenRewards(await c.request<RewardDoc>('GET', apiPath`/frames/${f}/rewards/${id}`)))),
+      textContent(flattenRewards(await c.request<RelatedDoc>('GET', apiPath`/frames/${f}/rewards/${id}`)))),
   );
 
   server.registerTool(
@@ -34,7 +32,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { name, description, point_value, respawn_on_redemption, category_ids }: { name: string; description?: string; point_value: number; respawn_on_redemption?: boolean; category_ids: Array<string | number>; frameId?: string }) => {
-      const doc = await c.request<RewardDoc>('POST', apiPath`/frames/${f}/rewards`, { body: pruneUndefined({ name, description, point_value, respawn_on_redemption, category_ids }) });
+      const doc = await c.request<RelatedDoc>('POST', apiPath`/frames/${f}/rewards`, { body: pruneUndefined({ name, description, point_value, respawn_on_redemption, category_ids }) });
       return textContent(flattenRewards(doc));
     }),
   );
@@ -54,7 +52,7 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, name, point_value, category_ids }: { id: string; name?: string; point_value?: number; category_ids?: Array<string | number>; frameId?: string }) => {
-      const doc = await c.request<RewardDoc>('PATCH', apiPath`/frames/${f}/rewards/${id}`, { body: pruneUndefined({ name, point_value, category_ids }) });
+      const doc = await c.request<RelatedDoc>('PATCH', apiPath`/frames/${f}/rewards/${id}`, { body: pruneUndefined({ name, point_value, category_ids }) });
       return textContent(flattenRewards(doc));
     }),
   );
@@ -86,8 +84,8 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/rewards/${id}/redeem`, { body: pruneUndefined({ category_id }) });
-      return doc ? textContent(flattenJsonApi(doc)) : textContent({ redeemed: id });
+      const doc = await c.request<RelatedDoc | undefined>('POST', apiPath`/frames/${f}/rewards/${id}/redeem`, { body: pruneUndefined({ category_id }) });
+      return doc ? textContent(flattenRewards(doc)) : textContent({ redeemed: id });
     }),
   );
 
@@ -104,8 +102,8 @@ export function registerRewardTools(server: McpServer, getClient: GetClient) {
       _meta: CHANGE,
     },
     frameScoped(getClient, async (c, f, { id, category_id }: { id: string; category_id?: string | number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc | undefined>('POST', apiPath`/frames/${f}/rewards/${id}/unredeem`, { body: pruneUndefined({ category_id }) });
-      return doc ? textContent(flattenJsonApi(doc)) : textContent({ unredeemed: id });
+      const doc = await c.request<RelatedDoc | undefined>('POST', apiPath`/frames/${f}/rewards/${id}/unredeem`, { body: pruneUndefined({ category_id }) });
+      return doc ? textContent(flattenRewards(doc)) : textContent({ unredeemed: id });
     }),
   );
 

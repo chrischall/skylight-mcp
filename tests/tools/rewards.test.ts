@@ -216,6 +216,20 @@ describe('reward tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  it('redeem_reward inlines the redeeming member as category_id from the response', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: { redeemed_at: '2026-10-09T11:50:42.772Z' }, relationships: { category: { data: { id: 7645463, type: 'category' } } } } });
+    const out = await tools.skylight_redeem_reward({ id: '8' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '8', type: 'reward', redeemed_at: '2026-10-09T11:50:42.772Z', category_id: '7645463' });
+  });
+
+  it('unredeem_reward inlines the owner as category_id from the response', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: { redeemed_at: null }, relationships: { category: { data: { id: '7645463', type: 'category' } } } } });
+    const out = await tools.skylight_unredeem_reward({ id: '8' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '8', type: 'reward', redeemed_at: null, category_id: '7645463' });
+  });
+
   // ── skylight_add_reward_points ───────────────────────────────────────────
 
   it('add_reward_points POSTs {category_ids, points} (default frame)', async () => {

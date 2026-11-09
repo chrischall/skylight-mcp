@@ -30,6 +30,11 @@ export interface RelatedResource extends ResourceRef {
   relationships?: Record<string, { data?: ResourceRef | ResourceRef[] | null }>;
 }
 
+/** An envelope whose `data` is a `RelatedResource` (single-resource routes and
+ *  create/update/redeem responses) or an array of them (collection routes).
+ *  `null`/absent `data` is an empty-ish answer the shared flattener handles. */
+export interface RelatedDoc { data?: RelatedResource | RelatedResource[] | null }
+
 /**
  * Inline a resource's `relationships.<rel>.data` ref as `<key>` (a string id),
  * or as `<key>s` (string[]) when the API links several resources. An attribute
@@ -65,10 +70,10 @@ export function flattenReward(reward: RelatedResource): Record<string, unknown> 
 }
 
 /** Flatten a reward envelope — a single resource (`GET …/rewards/{id}`,
- *  create/update responses) or a collection (`GET …/rewards`). Anything else is
+ *  create/update/redeem/unredeem responses) or a collection (`GET …/rewards`). Anything else is
  *  a shape we do not recognise, and the shared flattener verbatim beats a
  *  confident wrong answer. */
-export function flattenRewards(doc: { data?: RelatedResource | RelatedResource[] | null }): unknown {
+export function flattenRewards(doc: RelatedDoc): unknown {
   const rows = doc.data;
   if (Array.isArray(rows)) return rows.map(flattenReward);
   if (rows && typeof rows === 'object') return flattenReward(rows);
