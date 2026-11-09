@@ -29,6 +29,62 @@ describe('reward tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  it('get_reward inlines relationships.category as a stringified category_id (live shape)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: {
+      id: '11150707', type: 'reward',
+      attributes: { name: 'SweetFrog Trip', point_value: 150, redeemed_at: '2026-10-09T11:50:42.772Z' },
+      relationships: { category: { data: { id: 7645463, type: 'category' } } },
+    } });
+    const out = await tools.skylight_get_reward({ id: '11150707' });
+    expect(JSON.parse(out.content[0].text)).toEqual({
+      id: '11150707', type: 'reward', name: 'SweetFrog Trip', point_value: 150,
+      redeemed_at: '2026-10-09T11:50:42.772Z', category_id: '7645463',
+    });
+  });
+
+  it('get_reward falls back to the relationship when the category_id attribute is null', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'reward', attributes: { category_id: null }, relationships: { category: { data: { id: 9, type: 'category' } } } } });
+    const out = await tools.skylight_get_reward({ id: '7' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'reward', category_id: '9' });
+  });
+
+  it('get_reward emits category_ids for an array ref', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '7', type: 'reward', attributes: {}, relationships: { category: { data: [{ id: 1, type: 'category' }] } } } });
+    const out = await tools.skylight_get_reward({ id: '7' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '7', type: 'reward', category_ids: ['1'] });
+  });
+
+  it('get_reward hands a collection-shaped envelope to the shared flattener', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '7', type: 'reward', attributes: { name: 'X' } }] });
+    const out = await tools.skylight_get_reward({ id: '7' });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '7', type: 'reward', name: 'X' }]);
+  });
+
+  it('get_reward hands an envelope with null data to the shared flattener', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: null });
+    const out = await tools.skylight_get_reward({ id: '7' });
+    expect(JSON.parse(out.content[0].text)).toBeNull();
+  });
+
+  it('create_reward inlines the owner category_id from the response', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: { name: 'Movie' }, relationships: { category: { data: { id: '3', type: 'category' } } } } });
+    const out = await tools.skylight_create_reward({ name: 'Movie', point_value: 50, category_ids: [3] });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '8', type: 'reward', name: 'Movie', category_id: '3' });
+  });
+
+  it('update_reward inlines the owner category_id from the response', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: {}, relationships: { category: { data: { id: 3, type: 'category' } } } } });
+    const out = await tools.skylight_update_reward({ id: '8', name: 'X' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '8', type: 'reward', category_id: '3' });
+  });
+
   // ── skylight_create_reward ───────────────────────────────────────────────
 
   it('create_reward POSTs flat {name, point_value, category_ids}', async () => {
@@ -158,6 +214,20 @@ describe('reward tools', () => {
     await tools.skylight_unredeem_reward({ id: '8', frameId: '99' });
     expect(request).toHaveBeenCalledWith('POST', '/frames/99/rewards/8/unredeem', { body: {} });
     expect(resolveFrameId).not.toHaveBeenCalled();
+  });
+
+  it('redeem_reward inlines the redeeming member as category_id from the response', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: { redeemed_at: '2026-10-09T11:50:42.772Z' }, relationships: { category: { data: { id: 7645463, type: 'category' } } } } });
+    const out = await tools.skylight_redeem_reward({ id: '8' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '8', type: 'reward', redeemed_at: '2026-10-09T11:50:42.772Z', category_id: '7645463' });
+  });
+
+  it('unredeem_reward inlines the owner as category_id from the response', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '8', type: 'reward', attributes: { redeemed_at: null }, relationships: { category: { data: { id: '7645463', type: 'category' } } } } });
+    const out = await tools.skylight_unredeem_reward({ id: '8' });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '8', type: 'reward', redeemed_at: null, category_id: '7645463' });
   });
 
   // ── skylight_add_reward_points ───────────────────────────────────────────

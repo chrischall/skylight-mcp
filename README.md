@@ -121,7 +121,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | chores | `skylight_update_chore` | W | Update a chore (supports recurrence + `apply_to`) |
 | chores | `skylight_complete_chore_instance` | W | Mark a specific recurring-chore occurrence complete |
 | chores | `skylight_delete_chore` | W | Delete a chore (occurrence or whole series via `apply_to`) |
-| chores | `skylight_list_rewards` | R | List rewards configured for a frame |
+| chores | `skylight_list_rewards` | R | List rewards for a frame, each with its owner in `category_id` |
 | rewards | `skylight_get_reward` | R | Get one reward |
 | rewards | `skylight_create_reward` | W | Create a reward (name + description + point_value + respawn_on_redemption + category_ids) |
 | rewards | `skylight_update_reward` | W | Update a reward |

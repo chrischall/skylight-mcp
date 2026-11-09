@@ -1,10 +1,9 @@
 import { z } from 'zod';
 import type { McpServer, ServerContext } from '@modelcontextprotocol/server';
-import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource } from './_shared.js';
+import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idParam, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource, type RelatedDoc, flattenRewards, inlineRelationshipId } from './_shared.js';
 import { affectsMultipleOccurrences, confirmTokenParam, confirmWrite, framePath } from './_confirm.js';
 import { CHANGE, LOOKUP, briefLine, briefResponse, familyMeta, viewParam } from './hints.js';
 
-interface ChoreDoc { data?: RelatedResource | RelatedResource[] | null }
 
 /**
  * Flatten one chore, inlining its assignee.
@@ -22,20 +21,11 @@ interface ChoreDoc { data?: RelatedResource | RelatedResource[] | null }
  */
 function flattenChore(chore: RelatedResource): Record<string, unknown> {
   const flat: Record<string, unknown> = { ...chore.attributes, id: chore.id, type: chore.type };
+  // A multi-member assignment — `skylight_create_recurring_chore` takes the
+  // same value as `category_ids` — surfaces as the plural rather than being
+  // dropped: an absent `category_id` reads as *unassigned*, a wrong answer.
   for (const [rel, key] of [['category', 'category_id'], ['completed_category', 'completed_category_id']] as const) {
-    const ref = chore.relationships?.[rel]?.data;
-    if (Array.isArray(ref)) {
-      // A multi-member assignment — `skylight_create_recurring_chore` takes the
-      // same value as `category_ids`, so surface the plural rather than dropping
-      // the ref: an absent `category_id` reads as *unassigned*, a wrong answer.
-      flat[`${key}s`] = ref.map((r) => String(r.id));
-      continue;
-    }
-    // An attribute of the same name wins, so the inlining only fills a gap if
-    // the API ever starts returning the id directly. Either way the value is
-    // stringified, so one list can never mix `111` and `"111"`.
-    const id = flat[key] ?? ref?.id;
-    if (id != null) flat[key] = String(id);
+    inlineRelationshipId(flat, chore, rel, key);
   }
   return flat;
 }
@@ -44,7 +34,7 @@ function flattenChore(chore: RelatedResource): Record<string, unknown> {
  *  collection route and this has no other caller, so `data` is always an array;
  *  an envelope shaped any other way is one we do not recognise, and passing it
  *  to the shared flattener verbatim beats answering a confident empty list. */
-function flattenChores(doc: ChoreDoc): unknown {
+function flattenChores(doc: RelatedDoc): unknown {
   const rows = doc.data;
   if (!Array.isArray(rows)) return flattenJsonApi(doc);
   return rows.map(flattenChore);
@@ -76,7 +66,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       }),
     },
     frameScoped(getClient, async (c, f, { after, before, view }: { after: string; before: string; frameId?: string; view?: 'full' | 'brief' }) => {
-      const doc = await c.request<ChoreDoc | undefined>('GET', apiPath`/frames/${f}/chores`, { query: { after, before } });
+      const doc = await c.request<RelatedDoc | undefined>('GET', apiPath`/frames/${f}/chores`, { query: { after, before } });
       if (view === 'brief') {
         const who = 'Chore titles are written by members of the Skylight frame.';
         const rows = doc ? doc.data : [];
@@ -348,7 +338,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_list_rewards',
     {
-      description: 'List redeemed rewards for a Skylight frame, defaulting to the last 30 days.',
+      description: 'List rewards for a Skylight frame. The `redeemed_at_min`/`redeemed_at_max` window defaults to the last 30 days, but the endpoint returns every reward, with `redeemed_at` null for one not yet redeemed. Each reward carries its owner in `category_id` (a family-member category — resolve names via skylight_list_categories), pluralised to `category_ids` when the API links several members.',
       inputSchema: z.object({
         redeemed_at_min: z.string().optional(),
         redeemed_at_max: z.string().optional(),
@@ -361,8 +351,8 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       const now = new Date();
       const min = redeemed_at_min ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const max = redeemed_at_max ?? now.toISOString();
-      const doc = await c.request<JsonApiDoc>('GET', apiPath`/frames/${f}/rewards`, { query: { redeemed_at_min: min, redeemed_at_max: max } });
-      return textContent(flattenJsonApi(doc));
+      const doc = await c.request<RelatedDoc>('GET', apiPath`/frames/${f}/rewards`, { query: { redeemed_at_min: min, redeemed_at_max: max } });
+      return textContent(flattenRewards(doc));
     }),
   );
 }
