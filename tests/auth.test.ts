@@ -6,7 +6,8 @@ import { join } from 'node:path';
 // Mock auth-session-login at the module boundary.
 // vi.mock is hoisted — use vi.fn() inside the factory so the mocks are
 // created at hoist time, not at variable declaration time.
-vi.mock('../src/auth-session-login.js', () => ({
+vi.mock('../src/auth-session-login.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/auth-session-login.js')>()),
   login: vi.fn(),
   refresh: vi.fn(),
 }));
@@ -14,6 +15,7 @@ vi.mock('../src/auth-session-login.js', () => ({
 // Import the mocks AFTER vi.mock so we get the mocked versions.
 import { login as mockLoginImport, refresh as mockRefreshImport } from '../src/auth-session-login.js';
 import { resolveAuth } from '../src/auth.js';
+import { VerificationCodeRequiredError } from '../src/auth-session-login.js';
 import { NO_ENV_CONFIG_MARKER } from '../src/config.js';
 
 const mockLogin = mockLoginImport as ReturnType<typeof vi.fn>;
@@ -159,6 +161,43 @@ describe('resolveAuth', () => {
     // actionable error arrives on the first request instead of at construction.
     const { client } = await resolveAuth(noCache);
     await expect(client.request('GET', '/frames')).rejects.toThrow(/Skylight login failed/);
+  });
+
+  // #276: Skylight can answer the password with an emailed code.
+  it('holds an emailed-code login open and adopts the tokens the code mints, without logging in again', async () => {
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    const challenge = { submit: vi.fn(async () => GOOD_TOKENS), resend: vi.fn() };
+    mockLogin.mockRejectedValue(new VerificationCodeRequiredError(challenge));
+
+    const httpFetch = vi.fn().mockResolvedValue(okResponse());
+    const { client } = await resolveAuth({ ...noCache, httpFetch });
+    await expect(client.request('GET', '/frames')).rejects.toBeInstanceOf(VerificationCodeRequiredError);
+    // A second call re-reports the open challenge: a new login would mail a new code.
+    await expect(client.request('GET', '/frames')).rejects.toBeInstanceOf(VerificationCodeRequiredError);
+    expect(mockLogin).toHaveBeenCalledOnce();
+
+    await client.pendingLogin!.submit('123456');
+    await client.request('GET', '/frames');
+    expect(mockLogin).toHaveBeenCalledOnce();
+    const auth = (httpFetch.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    expect(JSON.stringify(auth)).toContain('Bearer AT');
+  });
+
+  it('adopts code-minted tokens ahead of a stale SKYLIGHT_REFRESH_TOKEN', async () => {
+    process.env.SKYLIGHT_REFRESH_TOKEN = 'STALE';
+    process.env.SKYLIGHT_EMAIL = 'a@b.com';
+    process.env.SKYLIGHT_PASSWORD = 'pw';
+    mockRefresh.mockRejectedValue(new Error('invalid_grant'));
+    const challenge = { submit: vi.fn(async () => GOOD_TOKENS), resend: vi.fn() };
+    mockLogin.mockRejectedValue(new VerificationCodeRequiredError(challenge));
+
+    const { client } = await resolveAuth({ ...noCache, httpFetch: vi.fn().mockResolvedValue(okResponse()) });
+    await expect(client.request('GET', '/frames')).rejects.toBeInstanceOf(VerificationCodeRequiredError);
+    await client.pendingLogin!.submit('123456');
+    mockRefresh.mockClear();
+    await client.request('GET', '/frames');
+    expect(mockRefresh).not.toHaveBeenCalled();
   });
 
   it('throws when no credentials are configured', async () => {

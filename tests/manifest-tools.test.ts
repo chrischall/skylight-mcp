@@ -15,6 +15,7 @@ import { registerRewardTools } from '../src/tools/rewards.js';
 import { registerAiTools } from '../src/tools/ai.js';
 import { registerPhotoTools } from '../src/tools/photos.js';
 import { registerHealthcheckTools } from '../src/tools/health.js';
+import { registerLoginTools } from '../src/tools/login.js';
 import { makeClient } from './tools/_setup.js';
 
 /**
@@ -51,6 +52,7 @@ function registeredTools(): Array<{ name: string; description: string }> {
     registerAiTools,
     registerPhotoTools,
     registerHealthcheckTools,
+    registerLoginTools,
   ]) {
     register(server, get as never);
   }
@@ -72,6 +74,6 @@ describe('manifest.json tools', () => {
   });
 
   it('covers the whole surface (guards against a registrar being dropped here)', () => {
-    expect(registeredTools()).toHaveLength(115);
+    expect(registeredTools()).toHaveLength(116);
   });
 });

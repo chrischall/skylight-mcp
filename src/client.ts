@@ -6,6 +6,7 @@ import {
 } from '@chrischall/mcp-utils/session';
 import type { Account } from './config.js';
 import type { Tokens } from './auth-session-login.js';
+import type { PendingLogin } from './login-challenge.js';
 
 export type { Tokens };
 export type HttpFetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -31,6 +32,8 @@ export interface SkylightClientOpts {
   refreshFn: (refreshToken: string) => Promise<Tokens>;
   /** HTTP transport for API calls. Defaults to global fetch. */
   httpFetch?: HttpFetch;
+  /** The emailed-code login holder `skylight_submit_login_code` finishes (#276). */
+  pendingLogin?: PendingLogin;
 }
 
 /** Per-request options forwarded to the shared client (query, JSON body, or multipart). */
@@ -52,8 +55,11 @@ const REQUEST_TIMEOUT_MS = 30_000;
 export class SkylightClient {
   private readonly api: ApiClient;
   private frameId?: string;
+  /** Present when the client logs in with email+password; see {@link PendingLogin}. */
+  readonly pendingLogin?: PendingLogin;
 
   constructor(opts: SkylightClientOpts) {
+    this.pendingLogin = opts.pendingLogin;
     // TokenManager owns the bearer-token lifecycle. Skylight's refreshFn returns a
     // RELATIVE `expiresInMs`; adapt it to TokenManager's absolute `expiresAt` —
     // absolute is also what gets persisted, so a cached token's remaining life is

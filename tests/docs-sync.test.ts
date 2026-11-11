@@ -32,6 +32,7 @@ import { registerRewardTools } from '../src/tools/rewards.js';
 import { registerAiTools } from '../src/tools/ai.js';
 import { registerPhotoTools } from '../src/tools/photos.js';
 import { registerHealthcheckTools } from '../src/tools/health.js';
+import { registerLoginTools } from '../src/tools/login.js';
 import type { GetClient } from '../src/tools/_shared.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,6 +58,7 @@ const MODULES: Array<[file: string, register: (s: McpServer, g: GetClient) => vo
   ['ai.ts', registerAiTools],
   ['photos.ts', registerPhotoTools],
   ['health.ts', registerHealthcheckTools],
+  ['login.ts', registerLoginTools],
 ];
 
 /** Register every module against a stub server; return file → tool names. */

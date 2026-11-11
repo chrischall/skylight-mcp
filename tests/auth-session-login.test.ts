@@ -674,31 +674,22 @@ describe('login', () => {
       .rejects.toThrow(/could not extract authorization code/);
   });
 
-  it('handles step-2 response with no Location header (covers ?? "" branch on line 142)', async () => {
-    // When step-2 has no Location header, location ?? '' gives '', which doesn't contain /auth/session/new
-    // so the flow continues to step 3
+  it('refuses a step-2 redirect with no Location header instead of carrying on to step 3 (#276)', async () => {
     let callIndex = 0;
     const httpFetch: HttpFetch = vi.fn().mockImplementation(async () => {
       callIndex++;
       if (callIndex === 1) return htmlResponse('<input name="authenticity_token" value="T">');
-      if (callIndex === 2) {
-        // Step 2 with no Location header → null → '' via ??
-        return {
-          status: 302,
-          ok: false,
-          headers: {
-            get: () => null, // no Location header
-            getSetCookie: () => [],
-          },
-          text: async () => '',
-          json: async () => { throw new Error('no'); },
-        } as unknown as Response;
-      }
-      if (callIndex === 3) return redirectResponse('https://ourskylight.com/welcome?code=C3');
-      return jsonResponse(200, TOKEN_BODY);
+      return {
+        status: 302,
+        ok: false,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => '',
+        json: async () => { throw new Error('no'); },
+      } as unknown as Response;
     });
-    const tokens = await login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch);
-    expect(tokens.accessToken).toBe('AT');
+    await expect(login({ authBaseUrl: AUTH_BASE, email: 'a@b.com', password: 'pw' }, httpFetch))
+      .rejects.toThrow(/did not complete at the password step \(HTTP 302\)/);
+    expect(httpFetch).toHaveBeenCalledTimes(2);
   });
 
   it('handles response without getSetCookie method (covers optional chain branch)', async () => {

@@ -5,7 +5,7 @@ description: Read and manage your Skylight Calendar family hub — calendar even
 
 # skylight-mcp
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 115 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 116 tools across calendar events, chores & rewards, shared lists, meals, messages & photo albums, photo/video upload, AI auto-creation, and frame/device/member settings.
 
 - **npm:** [npmjs.com/package/skylight-mcp](https://www.npmjs.com/package/skylight-mcp)
 - **Source:** [github.com/chrischall/skylight-mcp](https://github.com/chrischall/skylight-mcp)
@@ -52,6 +52,7 @@ Everything is scoped to a **frame** (your family hub); pass an optional `frameId
 | Chores & rewards | `skylight_list_chores`, `skylight_create_chore`, `skylight_complete_chore`, `skylight_list_rewards` |
 | Meals | `skylight_list_meals`, `skylight_list_recipes`, `skylight_get_recipe`, `skylight_create_recipe`, `skylight_plan_meal`, `skylight_update_meal`, `skylight_delete_meal`, `skylight_add_recipe_to_grocery_list` |
 | Health | `skylight_healthcheck` — is this connector working? Reports which credential resolved, whether Skylight accepted it, and what to fix. Start here when another tool fails: an empty result can mean "no data" or "never authenticated", and only this separates them. |
+| Login | `skylight_submit_login_code` — when a tool or the healthcheck says Skylight emailed a login code, ask the user for the 6-digit code and pass it here (`resend: true` mails a new one). Never guess a code. |
 
 ## Confirm gates on recurrence-scoped writes
 

@@ -14,6 +14,7 @@ import { registerRewardTools } from '../src/tools/rewards.js';
 import { registerAiTools } from '../src/tools/ai.js';
 import { registerPhotoTools } from '../src/tools/photos.js';
 import { registerHealthcheckTools } from '../src/tools/health.js';
+import { registerLoginTools } from '../src/tools/login.js';
 import { makeClient } from './tools/_setup.js';
 
 /**
@@ -46,7 +47,7 @@ async function open(respond: (method: string, path: string) => unknown = () => (
     for (const register of [
       registerFrameTools, registerSettingsTools, registerCalendarTools, registerMemberTools,
       registerEventTools, registerListTools, registerChoreTools, registerMealTools,
-      registerMessageTools, registerTaskTools, registerRewardTools, registerAiTools, registerPhotoTools,
+      registerMessageTools, registerTaskTools, registerRewardTools, registerAiTools, registerPhotoTools, registerLoginTools,
     ]) register(server, getClient);
     registerHealthcheckTools(server, getClient, () => ({ refreshToken: 'x' }) as never);
   });
@@ -67,7 +68,7 @@ const tool = (tools: Listed[], name: string) => {
 describe('_meta.mint hints on the served tool list', () => {
   it('every tool except the healthcheck carries domain "family" and a valid intent, in the contract shape', async () => {
     const tools = await served();
-    expect(tools.length).toBe(115);
+    expect(tools.length).toBe(116);
     for (const t of tools) {
       if (t.name === 'skylight_healthcheck') continue; // registered by mcp-utils, which takes no _meta
       const m = t._meta?.mint;
