@@ -135,7 +135,7 @@ function globalFetch(url: string, init: RequestInit): Promise<Response> {
  * The page body is NEVER echoed: it carries session state, and this error
  * surfaces through MCP tool results.
  */
-function extractAuthenticityToken(html: string, res: Response): string {
+function extractAuthenticityToken(html: string, res: Response, page = '/auth/session/new'): string {
   const attr = (name: string, value: string) =>
     new RegExp(`<[^>]*\\b${name}\\s*=\\s*["']authenticity_token["'][^>]*\\b${value}\\s*=\\s*["']([^"']+)["']`, 'i');
   // The form token, in either attribute order.
@@ -149,7 +149,7 @@ function extractAuthenticityToken(html: string, res: Response): string {
 
   const why = describeTokenlessResponse(html, res);
   throw new Error(
-    `Skylight login failed: could not find authenticity_token in /auth/session/new response (${why}). ` +
+    `Skylight login failed: could not find authenticity_token in ${page} response (${why}). ` +
     'Neither the hidden form input nor the csrf-token meta tag was present.',
   );
 }
@@ -245,14 +245,190 @@ export async function login(
   // behind the same edge.
   if (step2.status >= 400) throwIfEdgeBlocked(step2, await peekBody(step2), 'POST', '/auth/session');
 
-  const step2Location = step2.headers.get('location') ?? '';
-  if (step2Location.includes('/auth/session/new')) {
-    throw new Error(
-      'Skylight login failed — check SKYLIGHT_EMAIL/SKYLIGHT_PASSWORD ' +
-      '(or you may be temporarily rate-limited after repeated attempts).',
-    );
+  // Only a redirect to /auth/session/success means the session is signed in.
+  // Anything else used to fall through to step 3, where an unauthenticated
+  // /oauth/authorize answered 200 with no code and the failure was reported
+  // as an OAuth contract change (#276).
+  const step2Path = sameOriginRedirectPath(step2, `${authBaseUrl}/auth/session`, authBaseUrl);
+  if (step2Path === '/auth/session/success') {
+    return finishLogin({ authBaseUrl, deviceFingerprint, httpFetch, buildHeaders, jar });
   }
+  if (step2Path?.startsWith('/auth/session/new')) {
+    throw new Error(CREDENTIALS_REJECTED);
+  }
+  if (step2Path?.startsWith('/auth/mfa_challenge')) {
+    // Skylight emailed a one-time code (LIVE-VERIFIED 2026-11-11, #276):
+    // /auth/mfa_challenge/start sends the mail and redirects to
+    // /auth/mfa_challenge/new, a form POSTing `code` to /auth/mfa_challenge.
+    // Hold the signed-in-but-unverified session open for the caller.
+    const challenge = await openChallenge({
+      authBaseUrl, deviceFingerprint, httpFetch, buildHeaders, jar,
+      startUrl: new URL(step2.headers.get('location')!, `${authBaseUrl}/auth/session`).href,
+    });
+    throw new VerificationCodeRequiredError(challenge);
+  }
+  // A re-rendered sign-in form (200/422 carrying a password field) is a
+  // rejected credential that did not bother redirecting.
+  if (step2Path === null && /\bname\s*=\s*["']password["']/i.test(await peekBody(step2))) {
+    throw new Error(CREDENTIALS_REJECTED);
+  }
+  throw new Error(
+    `Skylight login did not complete at the password step (${describeStep(step2, step2Path)}): ` +
+    'expected a redirect to /auth/session/success. Skylight may have added a sign-in step this client does not handle.',
+  );
+}
 
+const CREDENTIALS_REJECTED =
+  'Skylight login failed — check SKYLIGHT_EMAIL/SKYLIGHT_PASSWORD ' +
+  '(or you may be temporarily rate-limited after repeated attempts).';
+
+/** Marker carried by every "a login code is needed" message (healthcheck keys on it). */
+export const VERIFICATION_CODE_MARKER = 'Skylight emailed a login verification code';
+
+/**
+ * Skylight answered the password with an emailed one-time code (#276). The
+ * session it opened is held by {@link challenge}: submit the code there to
+ * finish the login, without resending the password or spending another mail.
+ */
+export class VerificationCodeRequiredError extends Error {
+  constructor(readonly challenge: LoginChallenge) {
+    super(
+      `${VERIFICATION_CODE_MARKER} to SKYLIGHT_EMAIL. Call skylight_submit_login_code with the 6-digit code ` +
+      'from that email to finish signing in (it is only needed once; the token is cached afterwards).',
+    );
+    this.name = 'VerificationCodeRequiredError';
+  }
+}
+
+/** The code was wrong or expired; the challenge is still open for another try. */
+export class InvalidVerificationCodeError extends Error {
+  constructor(
+    message = 'Skylight rejected that login code — it may be mistyped or expired. Check the latest email and try again, ' +
+      'or call skylight_submit_login_code with resend: true for a new code.',
+  ) {
+    super(message);
+    this.name = 'InvalidVerificationCodeError';
+  }
+}
+
+/** An open emailed-code challenge: one signed-in-but-unverified session. */
+export interface LoginChallenge {
+  /** Verify the code and finish the login. Rejects with {@link InvalidVerificationCodeError} on a bad code. */
+  submit(code: string): Promise<Tokens>;
+  /** Ask Skylight to email a fresh code. */
+  resend(): Promise<void>;
+}
+
+interface LoginState {
+  authBaseUrl: string;
+  deviceFingerprint: string;
+  httpFetch: HttpFetch;
+  buildHeaders: (extra?: Record<string, string>) => Record<string, string>;
+  jar: CookieJar;
+}
+
+/**
+ * The same-origin path a redirect points at, or `null` when the response is
+ * not a redirect. A redirect off the auth origin is refused outright: the
+ * session cookie must never follow it.
+ */
+function sameOriginRedirectPath(res: Response, requestUrl: string, authBaseUrl: string): string | null {
+  const loc = res.headers.get('location');
+  if (res.status < 300 || res.status >= 400 || !loc) return null;
+  let dest: URL;
+  try {
+    dest = new URL(loc, requestUrl);
+  } catch {
+    throw new Error('Skylight login failed: unsafe redirect');
+  }
+  if (dest.origin !== new URL(authBaseUrl).origin || dest.username || dest.password) {
+    throw new Error('Skylight login failed: unsafe redirect');
+  }
+  return dest.pathname;
+}
+
+/** Status and redirect path only — never the query, which can carry state. */
+function describeStep(res: Response, path: string | null): string {
+  return path === null ? `HTTP ${res.status}` : `HTTP ${res.status} redirect to ${path}`;
+}
+
+/**
+ * GET the challenge start URL (which sends the email), follow its same-origin
+ * redirects to the code form, and return a {@link LoginChallenge} bound to
+ * that form's CSRF token and this login's cookie jar.
+ */
+async function openChallenge(state: LoginState & { startUrl: string }): Promise<LoginChallenge> {
+  const { authBaseUrl, httpFetch, buildHeaders, jar } = state;
+  let formToken = await loadChallengeForm(state, state.startUrl);
+
+  return {
+    async submit(code: string): Promise<Tokens> {
+      const trimmed = code.replace(/\s+/g, '');
+      if (!/^\d{6}$/.test(trimmed)) {
+        throw new InvalidVerificationCodeError('A Skylight login code is 6 digits — check the email and try again.');
+      }
+      const res = await httpFetch(`${authBaseUrl}/auth/mfa_challenge`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: buildHeaders({
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Origin': authBaseUrl,
+          'Referer': `${authBaseUrl}/auth/mfa_challenge/new`,
+        }),
+        body: new URLSearchParams({ authenticity_token: formToken, code: trimmed }).toString(),
+      });
+      jar.absorb(res.headers);
+      if (res.status >= 400) throwIfEdgeBlocked(res, await peekBody(res), 'POST', '/auth/mfa_challenge');
+      const path = sameOriginRedirectPath(res, `${authBaseUrl}/auth/mfa_challenge`, authBaseUrl);
+      if (path === '/auth/session/success') return finishLogin(state);
+      // LIVE-VERIFIED 2026-11-11: a wrong code redirects back to the form.
+      if (path?.startsWith('/auth/mfa_challenge')) {
+        formToken = await loadChallengeForm(state, `${authBaseUrl}${path}`);
+        throw new InvalidVerificationCodeError();
+      }
+      if (path?.startsWith('/auth/session/new')) {
+        throw new Error(
+          'Skylight ended the sign-in before the code was accepted (too many attempts or the session expired). ' +
+          'Retry any Skylight tool to start a new login; a new code will be emailed.',
+        );
+      }
+      throw new Error(
+        `Skylight login did not complete at the verification-code step (${describeStep(res, path)}).`,
+      );
+    },
+    async resend(): Promise<void> {
+      formToken = await loadChallengeForm(state, `${authBaseUrl}/auth/mfa_challenge/start?resend=true`);
+    },
+  };
+}
+
+/** Follow same-origin redirects (at most 3) to the code form; return its CSRF token. */
+async function loadChallengeForm(state: LoginState, url: string): Promise<string> {
+  const { authBaseUrl, httpFetch, buildHeaders, jar } = state;
+  let next = url;
+  for (let hop = 0; hop < 4; hop++) {
+    const res = await httpFetch(next, { redirect: 'manual', headers: buildHeaders() });
+    jar.absorb(res.headers);
+    const path = sameOriginRedirectPath(res, next, authBaseUrl);
+    if (path === null) {
+      const html = await res.text();
+      throwIfEdgeBlocked(res, html, 'GET', '/auth/mfa_challenge/new');
+      return extractAuthenticityToken(html, res, '/auth/mfa_challenge/new');
+    }
+    if (path.startsWith('/auth/session/new')) {
+      throw new Error(
+        'Skylight ended the sign-in before a code could be entered (the session expired). ' +
+        'Retry any Skylight tool to start a new login.',
+      );
+    }
+    next = new URL(res.headers.get('location')!, next).href;
+  }
+  throw new Error('Skylight login failed: too many redirects loading the verification-code form.');
+}
+
+/** Steps 3–4: trade the signed-in session for an authorization code, then tokens. */
+async function finishLogin(state: LoginState): Promise<Tokens> {
+  const { authBaseUrl, deviceFingerprint, httpFetch, buildHeaders, jar } = state;
   // -------------------------------------------------------------------------
   // Step 3: GET /oauth/authorize — exchange session for authorization code.
   // The PKCE challenge is mandatory here; without it Doorkeeper 400s.

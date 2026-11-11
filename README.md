@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/skylight-mcp)](https://www.npmjs.com/package/skylight-mcp)
 [![license](https://img.shields.io/npm/l/skylight-mcp)](LICENSE)
 
-MCP server for [Skylight Calendar](https://www.ourskylight.com) — 115 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
+MCP server for [Skylight Calendar](https://www.ourskylight.com) — 116 tools across calendar events (read+write), shared lists (read+write), chores and rewards (read+write), task-box items (read+write), meals (read+write), AI auto-creation (meal-plan + activity-idea generators with draft review/approve), messages and albums (read+write), photo/video upload, and frame/device/account settings + calendar + member management (read+write, incl. preset and custom-photo avatars).
 
 Every API request carries the `skylight-api-version: 2026-05-01` header (matching the official mobile app); without it some features 422 with "API version does not support …".
 
@@ -16,13 +16,15 @@ The transport remains stdio. A host can expose it over authenticated HTTP. This 
 
 ## Auth
 
-The server uses a headless email+password OAuth2 authorization-code flow — no SSO, no 2FA, no browser extension required. Configure it with `SKYLIGHT_REFRESH_TOKEN` if you already hold a token, or `SKYLIGHT_EMAIL` + `SKYLIGHT_PASSWORD` to log in for one.
+The server uses a headless email+password OAuth2 authorization-code flow — no SSO and no browser extension required. Configure it with `SKYLIGHT_REFRESH_TOKEN` if you already hold a token, or `SKYLIGHT_EMAIL` + `SKYLIGHT_PASSWORD` to log in for one.
 
 On first tool call, the server performs four steps against `https://app.ourskylight.com`:
 1. `GET /auth/session/new` — fetch the Rails CSRF token and session cookie.
 2. `POST /auth/session` — log in with email + password (must happen before OAuth authorize).
 3. `GET /oauth/authorize` — send an S256 PKCE `code_challenge` (the server requires it) and receive the one-time authorization code via redirect.
 4. `POST /oauth/token` — exchange the code plus the matching `code_verifier` for a bearer `access_token` + `refresh_token` (currently a 24-hour expiry; the client reads the returned `expires_in` rather than assuming).
+
+**Emailed login code.** Skylight may answer step 2 with a 6-digit code sent to the account's email (observed 2026-11-11). The tool call that hit it fails with a message saying so, and `skylight_healthcheck` reports `verification_code_required`. Read the email and have the assistant call `skylight_submit_login_code` with the code (or `resend: true` for a new one). The login then finishes and the token is cached, so you only need a code again when the cached token is lost — for example after deleting the cache or setting `SKYLIGHT_TOKEN_CACHE=false`. The open login lives in the running process: restarting the server before you submit the code starts over with a new email.
 
 OAuth redirects stay on the authentication origin. Relative redirects resolve against the current URL. The configured callback supplies the authorization code without receiving a request or session cookie. Unexpected destinations fail without including the redirect URL in the error.
 
@@ -171,6 +173,7 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | photos | `skylight_import_events_from_photo` | W | Import calendar events from a photo of a flyer/invite using Skylight's AI — same three file sources (best-effort; confirm-gated) |
 | photos | `skylight_upload_slots` | R | Hosted deployments: mint signed upload URLs for the photo tools (PUT the file, then pass `image_blob_key`); refused without a blob store |
 | health | `skylight_healthcheck` | R | Report whether the connector is working: which credential resolved, whether Skylight accepted it, and what to fix |
+| login | `skylight_submit_login_code` | W | Finish signing in with the 6-digit code Skylight emailed (or `resend: true` for a new code) |
 
 ## Configuration
 

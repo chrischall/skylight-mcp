@@ -12,6 +12,7 @@ import { registerTaskTools } from '../src/tools/tasks.js';
 import { registerRewardTools } from '../src/tools/rewards.js';
 import { registerAiTools } from '../src/tools/ai.js';
 import { registerPhotoTools } from '../src/tools/photos.js';
+import { registerLoginTools } from '../src/tools/login.js';
 import { makeClient } from './tools/_setup.js';
 
 /**
@@ -51,6 +52,7 @@ function registeredAnnotations(): Record<string, Ann | undefined> {
     registerRewardTools,
     registerAiTools,
     registerPhotoTools,
+    registerLoginTools,
   ]) {
     register(server, get as never);
   }
@@ -63,7 +65,7 @@ describe('every tool declares whether it is a read', () => {
   it('registers the full surface (guards against a registrar being dropped here)', () => {
     // A meta-test that silently stops covering half the tools is worse than no
     // meta-test, so the count is asserted before the property is.
-    expect(Object.keys(registeredAnnotations())).toHaveLength(114);
+    expect(Object.keys(registeredAnnotations())).toHaveLength(115);
   });
 
   it('sets an explicit boolean readOnlyHint on all of them', () => {
@@ -98,7 +100,7 @@ describe('every tool declares whether it is a read', () => {
   it('holds the destructive set at its measured size', () => {
     // Counted off the built server, not derived — an earlier version of this
     // test reasoned "16 DELETEs plus the three that reach a person" and
-    // asserted 20, which is wrong. A tripwire, in the same spirit as the 114
+    // asserted 20, which is wrong. A tripwire, in the same spirit as the 115
     // above: growing this set should be a decision somebody makes, not a
     // side effect of adding a tool.
     const destructive = Object.entries(registeredAnnotations())

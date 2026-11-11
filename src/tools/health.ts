@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { registerCredentialHealthcheckTool } from '@chrischall/mcp-utils/healthcheck';
 import { loadAccount as defaultLoadAccount, NO_ENV_CONFIG_MARKER, type Account } from '../config.js';
 import type { GetClient } from './_shared.js';
+import { VERIFICATION_CODE_MARKER } from '../auth-session-login.js';
 
 /**
  * `skylight_healthcheck` — the one call that answers "is this connector
@@ -39,13 +40,29 @@ export function classifySkylightError(err: unknown): { kind: string; hint?: stri
   if (msg.includes(NO_ENV_CONFIG_MARKER)) {
     return { kind: 'no_credential' };
   }
+  // The password was accepted; Skylight wants the code it emailed (#276).
+  if (msg.includes(VERIFICATION_CODE_MARKER)) {
+    return {
+      kind: 'verification_code_required',
+      hint:
+        'Skylight accepted the password and emailed a 6-digit login code to SKYLIGHT_EMAIL. Ask the user for it ' +
+        'and call skylight_submit_login_code. Only needed once — the token is cached afterwards.',
+    };
+  }
+  // Step 2 ended somewhere other than a signed-in session or a known challenge.
+  if (msg.includes('did not complete at the password step')) {
+    return {
+      kind: 'login_step_changed',
+      hint: 'Skylight answered the password with a sign-in step this client does not recognise. Check for a newer skylight-mcp.',
+    };
+  }
   // Step 3 rejected the request itself — not the credential. This is what a
   // server-side OAuth change looks like from here.
   if (msg.includes('could not extract authorization code')) {
     return {
       kind: 'oauth_contract_changed',
       hint:
-        'Login reached Skylight but /oauth/authorize issued no code, so the credential was never the problem. ' +
+        'The password step succeeded, but /oauth/authorize then issued no code — the credential was not the problem. ' +
         'Skylight changed the authorization contract (it began requiring a PKCE code_challenge in 0.8.2). ' +
         'Check for a newer skylight-mcp, and see the flow in CLAUDE.md "Auth resolution".',
     };

@@ -9,7 +9,7 @@ let child: ChildProcessWithoutNullStreams;
 afterEach(() => child?.kill());
 
 describe('production stdio entry point', () => {
-  it('supports modern discovery, all 115 tools, and credential-free healthcheck', async () => {
+  it('supports modern discovery, all 116 tools, and credential-free healthcheck', async () => {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('SKYLIGHT_')));
     // Stripping `SKYLIGHT_*` from the inherited env is not enough on its own:
     // `dist/index.js` calls `loadDotenvSafely()`, and `dotenv.config()` with no
@@ -36,7 +36,7 @@ describe('production stdio entry point', () => {
       return response.result;
     };
     await rpc('server/discover');
-    expect((await rpc('tools/list')).tools).toHaveLength(115);
+    expect((await rpc('tools/list')).tools).toHaveLength(116);
     expect(JSON.stringify(await rpc('tools/call', {name: 'skylight_healthcheck', arguments: {}}))).toContain('no_credential');
   });
 

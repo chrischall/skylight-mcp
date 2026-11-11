@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { registerHealthcheckTools } from '../../src/tools/health.js';
+import { VERIFICATION_CODE_MARKER } from '../../src/auth-session-login.js';
 
 /**
  * The helper registers via `server.registerTool` (not `server.tool`, which the
@@ -78,6 +79,23 @@ describe('skylight_healthcheck', () => {
     expect(out.error.kind).toBe('oauth_contract_changed');
     expect(out.hint).toMatch(/authorize/i);
     expect(out.error.kind).not.toBe('credential_rejected');
+  });
+
+  // #276: an emailed login code used to surface as oauth_contract_changed.
+  it('reports an emailed login code as verification_code_required, pointing at the submit tool', async () => {
+    const out = await run(harness({
+      probe: async () => { throw new Error(`${VERIFICATION_CODE_MARKER} to SKYLIGHT_EMAIL. Call skylight_submit_login_code …`); },
+    }));
+    expect(out.ok).toBe(false);
+    expect(out.error.kind).toBe('verification_code_required');
+    expect(out.hint).toContain('skylight_submit_login_code');
+  });
+
+  it('reports an unrecognised password-step answer as login_step_changed', async () => {
+    const out = await run(harness({
+      probe: async () => { throw new Error('Skylight login did not complete at the password step (HTTP 200): expected …'); },
+    }));
+    expect(out.error.kind).toBe('login_step_changed');
   });
 
   it('flags a changed login page distinctly', async () => {

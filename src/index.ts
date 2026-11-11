@@ -16,6 +16,7 @@ import { registerRewardTools } from './tools/rewards.js';
 import { registerAiTools } from './tools/ai.js';
 import { registerPhotoTools } from './tools/photos.js';
 import { registerHealthcheckTools } from './tools/health.js';
+import { registerLoginTools } from './tools/login.js';
 
 await loadDotenvSafely();
 
@@ -57,6 +58,7 @@ serveStdio(() => createMcpServer<typeof getClient>({
     registerAiTools,
     registerPhotoTools,
     registerHealthcheckTools,
+    registerLoginTools,
   ],
 }), {
   onerror: (error) => {

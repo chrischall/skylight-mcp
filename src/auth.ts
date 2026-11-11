@@ -5,6 +5,7 @@ import { loadAccount, NO_ENV_CONFIG_MARKER } from './config.js';
 const NO_LOGIN_PAIR =
   'Skylight has no login configured — set SKYLIGHT_EMAIL and SKYLIGHT_PASSWORD, or SKYLIGHT_REFRESH_TOKEN.';
 import { login, refresh } from './auth-session-login.js';
+import { PendingLogin } from './login-challenge.js';
 import { SkylightClient, type HttpFetch } from './client.js';
 import { createTokenPersistence, reportCacheWriteFailure } from './token-store.js';
 import type { BearerTokens, StatePersistence } from '@chrischall/mcp-utils/session';
@@ -36,10 +37,13 @@ export async function resolveAuth(
   const loginPair =
     account.email && account.password ? { email: account.email, password: account.password } : null;
 
+  // An emailed-code challenge outlives the tool call that raised it (#276).
+  const pendingLogin = new PendingLogin();
+
   const doLogin = () => {
     /* istanbul ignore next — loadAccount rejects this combination up front. */
     if (!loginPair) throw new Error(NO_LOGIN_PAIR);
-    return login({ authBaseUrl: account.authBaseUrl, ...loginPair }, httpFetch);
+    return pendingLogin.login(() => login({ authBaseUrl: account.authBaseUrl, ...loginPair }, httpFetch));
   };
 
   /**
@@ -53,6 +57,9 @@ export async function resolveAuth(
    * failure mode untappd-mcp#140 fixed for the same shape of credential.
    */
   const mintTokens = async () => {
+    // A just-submitted login code already minted the pair; spend nothing else.
+    const verified = pendingLogin.take();
+    if (verified) return verified;
     if (!account.refreshToken) return doLogin();
     // Token-only: the env token is single-use (Skylight rotates it on the
     // refresh grant), and the rotated one survives this process only through
@@ -119,6 +126,7 @@ export async function resolveAuth(
     onPersistError: (err) => reportCacheWriteFailure(err, { refreshTokenOnly }),
     refreshFn: (refreshToken) => refresh({ authBaseUrl: account.authBaseUrl, refreshToken }, httpFetch),
     httpFetch,
+    pendingLogin,
   });
 
   return { client, source: 'env' };

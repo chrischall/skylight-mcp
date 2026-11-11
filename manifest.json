@@ -533,6 +533,10 @@
     {
       "name": "skylight_healthcheck",
       "description": "Resolves the credential the way real tools do, then makes one authenticated request to app.ourskylight.com. Reports which source supplied the credential, whether app.ourskylight.com accepted it, the round-trip time, and a plain-English hint distinguishing 'no credential' from 'credential rejected' from 'a app.ourskylight.com-side problem'. Read-only; never returns the credential itself. Call this when a real tool fails and you want to know which hop broke."
+    },
+    {
+      "name": "skylight_submit_login_code",
+      "description": "Finish signing in to Skylight with the 6-digit login code Skylight emailed to the account. Use only after a Skylight tool reported that a login code was emailed; ask the user for the code — never guess one. Pass resend: true (without a code) to have Skylight email a new code."
     }
   ]
 }
