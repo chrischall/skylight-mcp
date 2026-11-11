@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/chrischall/skylight-mcp/compare/v1.6.1...v1.6.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* **auth:** finish logins that Skylight pauses for an emailed code ([#277](https://github.com/chrischall/skylight-mcp/issues/277)) ([31ce275](https://github.com/chrischall/skylight-mcp/commit/31ce275e10ed929fd18d7d224cd25d6fe5b89cfa)), closes [#276](https://github.com/chrischall/skylight-mcp/issues/276)
+
 ## [1.6.1](https://github.com/chrischall/skylight-mcp/compare/v1.6.0...v1.6.1) (2026-11-09)
 
 
