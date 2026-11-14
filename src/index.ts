@@ -40,7 +40,7 @@ const getClient = makeGetClient();
 // the MCP wire, and it is where `banner` already writes.
 serveStdio(() => createMcpServer<typeof getClient>({
   name: 'skylight-mcp',
-  version: '1.6.2', // x-release-please-version
+  version: '1.6.3', // x-release-please-version
   banner: 'skylight-mcp ready',
   deps: getClient,
   tools: [
