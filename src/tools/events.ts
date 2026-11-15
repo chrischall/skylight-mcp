@@ -97,7 +97,7 @@ const eventAttrs = {
  * account id) answers 200 and leaves the event where it was.
  */
 const calendarIdParam = z.string().min(1).optional().describe(
-  'Synced calendar to create the event on, so it also appears in that Google (or other linked) calendar: the `source_id` of an `editable: true` calendar from skylight_list_source_calendars — for Google, the calendar\'s address. Omit for an event that lives only on the Skylight. Cannot be changed after creation.',
+  'Synced calendar to create the event on, so it also appears in that Google or Apple iCloud calendar: the `source_id` of an `editable: true` calendar from skylight_list_source_calendars — for Google, the calendar\'s address; for iCloud, its CalDAV URL. Omit for an event that lives only on the Skylight. Cannot be changed after creation.',
 );
 
 interface SourceCalendarsDoc {
@@ -112,7 +112,8 @@ interface SourceCalendarsDoc {
  * event to it. LIVE-VERIFIED 2026-11-15: `calendar_id` alone is silently
  * ignored — the event comes back `source: "skylight"`, `calendar_id: null` —
  * and only with the owning account's `calendar_account_id` beside it does
- * Skylight create it on the provider (`source: "google"`). That account id
+ * Skylight create it on the provider (`source: "google"`, or `"caldav"` for an
+ * iCloud calendar — the same two fields, no provider-specific handling). That account id
  * lives only in the source calendar's `calendar_account` relationship, which
  * `flattenJsonApi()` drops, so a caller could never supply it; look it up here.
  *
@@ -228,7 +229,7 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_create_event',
     {
-      description: 'Create a calendar event on a Skylight frame. By default the event lives only on the Skylight; pass calendar_id to also create it on a synced calendar (e.g. Google).' + INVITE_GATE_NOTE,
+      description: 'Create a calendar event on a Skylight frame. By default the event lives only on the Skylight; pass calendar_id to also create it on a synced Google or Apple iCloud calendar.' + INVITE_GATE_NOTE,
       inputSchema: z.object({ ...eventAttrs, calendar_id: calendarIdParam, frameId: z.string().optional(), confirmToken: confirmTokenParam }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       _meta: CHANGE,
