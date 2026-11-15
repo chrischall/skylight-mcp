@@ -95,11 +95,11 @@ All data in Skylight is scoped to a *frame* (the family hub device). On first us
 | frames | `skylight_rename_device` | W | Rename a Skylight device |
 | events | `skylight_list_events` | R | List calendar events within a date range |
 | events | `skylight_get_event` | R | Get details for a specific event |
-| events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members; confirm-gated when `invited_emails` is set, the preview names every recipient) |
+| events | `skylight_create_event` | W | Create a new calendar event (optional `category_ids` assigns members; optional `calendar_id` also creates it on a synced Google/linked calendar; confirm-gated when `invited_emails` is set, the preview names every recipient) |
 | events | `skylight_update_event` | W | Update an existing calendar event (optional `category_ids` assigns members; confirm-gated when `invited_emails` is set) |
 | events | `skylight_delete_event` | W | Delete a calendar event |
 | events | `skylight_list_categories` | R | List event categories for a frame |
-| events | `skylight_list_source_calendars` | R | List external source calendars linked to a frame |
+| events | `skylight_list_source_calendars` | R | List external source calendars linked to a frame (an `editable` one's `source_id` is a valid `calendar_id` for `skylight_create_event`) |
 | events | `skylight_list_recent_invited_emails` | R | List recently-invited email addresses |
 | events | `skylight_update_event_notification_settings` | W | Update calendar-event notification settings |
 | lists | `skylight_list_lists` | R | List all shared lists on a frame |

@@ -54,6 +54,16 @@ Everything is scoped to a **frame** (your family hub); pass an optional `frameId
 | Health | `skylight_healthcheck` — is this connector working? Reports which credential resolved, whether Skylight accepted it, and what to fix. Start here when another tool fails: an empty result can mean "no data" or "never authenticated", and only this separates them. |
 | Login | `skylight_submit_login_code` — when a tool or the healthcheck says Skylight emailed a login code, ask the user for the 6-digit code and pass it here (`resend: true` mails a new one). Never guess a code. |
 
+## Putting an event on a synced (Google) calendar
+
+`skylight_create_event` makes a Skylight-only event unless you pass
+`calendar_id`. When the user wants the event on a linked calendar too — "add it
+to my Google calendar", or any event they will want on their phone — call
+`skylight_list_source_calendars`, pick an `editable: true` entry, and pass its
+`source_id` as `calendar_id`. The frame's `default_for_new_events` calendar is
+not applied for you. An event cannot be moved onto a synced calendar afterwards
+(`skylight_update_event` has no `calendar_id`): delete it and create it again.
+
 ## Confirm gates on recurrence-scoped writes
 
 Four tools **ask for confirmation instead of acting** when their `apply_to`

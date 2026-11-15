@@ -212,6 +212,88 @@ describe('event tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  // ── calendar_id routes the event to a synced calendar ───────────────────
+
+  /** `GET /frames/{f}/source_calendars`, trimmed to the live shape (2026-11-15). */
+  const SOURCE_CALENDARS = {
+    data: [
+      {
+        id: '11', type: 'source_calendar_detail',
+        attributes: { label: 'robert@example.com', source_id: 'robert@example.com', kind: 'gmail', role: 'owner', editable: true },
+        relationships: { calendar_account: { data: { id: '501', type: 'calendar_account' } } },
+      },
+      {
+        id: '12', type: 'source_calendar_detail',
+        attributes: { label: 'Team schedule', source_id: 'team#sports@group.v.calendar.google.com', kind: 'gmail', role: 'reader', editable: false },
+        relationships: { calendar_account: { data: { id: '501', type: 'calendar_account' } } },
+      },
+      {
+        id: '13', type: 'source_calendar_detail',
+        attributes: { label: 'Orphan', source_id: 'orphan@example.com', kind: 'gmail', role: 'owner', editable: true },
+        relationships: { calendar_account: { data: null } },
+      },
+    ],
+  };
+
+  it('create_event with calendar_id looks up the calendar\'s account and sends both ids', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValueOnce(SOURCE_CALENDARS);
+    request.mockResolvedValueOnce({ data: { id: '5', type: 'calendar_event', attributes: { summary: 'Dentist', source: 'google', calendar_id: 'robert@example.com' } } });
+    const res = await tools.skylight_create_event({ summary: 'Dentist', calendar_id: 'robert@example.com' });
+    expect(request).toHaveBeenNthCalledWith(1, 'GET', '/frames/3435252/source_calendars');
+    expect(request).toHaveBeenNthCalledWith(2, 'POST', '/frames/3435252/calendar_events', {
+      body: { summary: 'Dentist', calendar_id: 'robert@example.com', calendar_account_id: '501' },
+    });
+    expect(JSON.parse(res.content[0].text)).toMatchObject({ id: '5', source: 'google', calendar_id: 'robert@example.com' });
+  });
+
+  it('create_event without calendar_id reads no source calendars', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'calendar_event', attributes: {} } });
+    await tools.skylight_create_event({ summary: 'Dentist' });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][0]).toBe('POST');
+  });
+
+  it('create_event refuses a calendar_id no linked calendar has, naming the ones that accept events', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValueOnce(SOURCE_CALENDARS);
+    await expect(tools.skylight_create_event({ summary: 'Dentist', calendar_id: 'nobody@example.com' }))
+      .rejects.toThrow(/No linked calendar has source_id "nobody@example\.com".*robert@example\.com/);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('create_event refuses a read-only calendar instead of silently creating a Skylight-only event', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValueOnce(SOURCE_CALENDARS);
+    await expect(tools.skylight_create_event({ summary: 'Game', calendar_id: 'team#sports@group.v.calendar.google.com' }))
+      .rejects.toThrow(/cannot take new events/);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('create_event refuses a calendar with no calendar account behind it', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValueOnce(SOURCE_CALENDARS);
+    await expect(tools.skylight_create_event({ summary: 'Dentist', calendar_id: 'orphan@example.com' }))
+      .rejects.toThrow(/cannot take new events/);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('create_event with calendar_id on a frame with no source calendars says none accept events', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValueOnce({});
+    await expect(tools.skylight_create_event({ summary: 'Dentist', calendar_id: 'robert@example.com' }))
+      .rejects.toThrow(/Calendars that accept new events: none/);
+  });
+
+  it('create_event binds the resolved calendar into the invitation preview', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue(SOURCE_CALENDARS);
+    const out = phaseOne(await tools.skylight_create_event({ summary: 'Soccer', calendar_id: 'robert@example.com', invited_emails: ['coach@example.com'] }));
+    expect(out.preview.willSend).toMatchObject({ calendar_id: 'robert@example.com', calendar_account_id: '501' });
+    expect(request.mock.calls.every(([method]) => method === 'GET')).toBe(true);
+  });
+
   // ── invitations are confirm-gated (fleet-audit#1200) ────────────────────
 
   it('create_event with invited_emails previews the recipients and sends nothing until confirmed', async () => {
