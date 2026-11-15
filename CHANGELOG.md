@@ -5,7 +5,7 @@
 
 ### Features
 
-* **events:** create events on a synced Google calendar with calendar_id ([#281](https://github.com/chrischall/skylight-mcp/issues/281)) ([7117da8](https://github.com/chrischall/skylight-mcp/commit/7117da88d0d1c7802e64f87cd050d4dd6f9ccce7))
+* **events:** create events on a synced Google calendar with calendar_id (thanks @rterakedis) ([#281](https://github.com/chrischall/skylight-mcp/issues/281)) ([7117da8](https://github.com/chrischall/skylight-mcp/commit/7117da88d0d1c7802e64f87cd050d4dd6f9ccce7))
 
 
 ### Bug Fixes
