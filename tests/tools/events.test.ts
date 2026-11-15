@@ -19,8 +19,9 @@ describe('event tools', () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: [{ id: '1', type: 'calendar_event', attributes: { summary: 'Soccer' } }] });
     const out = await tools.skylight_list_events({ date_min: '2026-05-01', date_max: '2026-06-01', timezone: 'America/New_York' });
+    // date_max is inclusive here and exclusive upstream (#282): send the next day.
     expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/calendar_events', {
-      query: { date_min: '2026-05-01', date_max: '2026-06-01', timezone: 'America/New_York', include: 'categories,calendar_account,event_notification_setting' },
+      query: { date_min: '2026-05-01', date_max: '2026-06-02', timezone: 'America/New_York', include: 'categories,calendar_account,event_notification_setting' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', type: 'calendar_event', summary: 'Soccer' }]);
   });
@@ -30,7 +31,7 @@ describe('event tools', () => {
     request.mockResolvedValue({ data: [] });
     await tools.skylight_list_events({ date_min: '2026-05-01', date_max: '2026-06-01', frameId: '99' });
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/calendar_events', {
-      query: { date_min: '2026-05-01', date_max: '2026-06-01', timezone: undefined, include: 'categories,calendar_account,event_notification_setting' },
+      query: { date_min: '2026-05-01', date_max: '2026-06-02', timezone: undefined, include: 'categories,calendar_account,event_notification_setting' },
     });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
@@ -41,6 +42,33 @@ describe('event tools', () => {
     await tools.skylight_list_events({ date_min: '2026-05-01', date_max: '2026-06-01' });
     const callArgs = request.mock.calls[0];
     expect(callArgs[2].query.timezone).toBeUndefined();
+  });
+
+  // LIVE-VERIFIED 2026-11-15 (#282): Skylight's date_max is EXCLUSIVE —
+  // 11-16..11-16 returned [] on a busy day, 11-16..11-17 returned only 11-16.
+  it('list_events treats a single day (date_min == date_max) as that whole day (#282)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_events({ date_min: '2026-11-16', date_max: '2026-11-16' });
+    expect(request.mock.calls[0][2].query).toMatchObject({ date_min: '2026-11-16', date_max: '2026-11-17' });
+  });
+
+  it('list_events rolls an inclusive date_max over month and year ends (#282)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_events({ date_min: '2026-02-01', date_max: '2026-02-28' });
+    await tools.skylight_list_events({ date_min: '2026-12-01', date_max: '2026-12-31' });
+    expect(request.mock.calls[0][2].query.date_max).toBe('2026-03-01');
+    expect(request.mock.calls[1][2].query.date_max).toBe('2027-01-01');
+  });
+
+  it('list_events passes a date_max that is not a plain YYYY-MM-DD through unchanged', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_events({ date_min: '2026-11-16', date_max: '2026-11-16T18:00:00Z' });
+    await tools.skylight_list_events({ date_min: '2026-11-16', date_max: '2026-02-30' });
+    expect(request.mock.calls[0][2].query.date_max).toBe('2026-11-16T18:00:00Z');
+    expect(request.mock.calls[1][2].query.date_max).toBe('2026-02-30');
   });
 
   it('list_events inlines each event\'s family-member categories from the sideload (#262)', async () => {
@@ -119,7 +147,8 @@ describe('event tools', () => {
     const { tools, request } = harness();
     request.mockResolvedValue({ data: [ev('9747859180-1793318400', 'Dad Week')] });
     await tools.skylight_get_event({ id: '9747859180-1793318400', date_min: '2026-01-01', date_max: '2026-02-01' });
-    expect(request.mock.calls[0][2].query).toMatchObject({ date_min: '2026-01-01', date_max: '2026-02-01' });
+    // A caller's date_max is inclusive, like list_events' (#282).
+    expect(request.mock.calls[0][2].query).toMatchObject({ date_min: '2026-01-01', date_max: '2026-02-02' });
   });
 
   it('get_event fills only the missing bound of a half-given window', async () => {
