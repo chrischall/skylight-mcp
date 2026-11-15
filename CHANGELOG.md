@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/chrischall/skylight-mcp/compare/v1.6.2...v1.7.0) (2026-11-15)
+
+
+### Features
+
+* **events:** create events on a synced Google calendar with calendar_id (thanks @rterakedis) ([#281](https://github.com/chrischall/skylight-mcp/issues/281)) ([7117da8](https://github.com/chrischall/skylight-mcp/commit/7117da88d0d1c7802e64f87cd050d4dd6f9ccce7))
+
+
+### Bug Fixes
+
+* **deps:** bump dotenv ([#279](https://github.com/chrischall/skylight-mcp/issues/279)) ([80fcda2](https://github.com/chrischall/skylight-mcp/commit/80fcda2a48a300b613736a6bebb15753a06fe8db))
+
 ## [1.6.2](https://github.com/chrischall/skylight-mcp/compare/v1.6.1...v1.6.2) (2026-11-11)
 
 
