@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.1](https://github.com/chrischall/skylight-mcp/compare/v1.7.0...v1.7.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **events:** include the last day of a list_events date range ([#283](https://github.com/chrischall/skylight-mcp/issues/283)) ([bca92aa](https://github.com/chrischall/skylight-mcp/commit/bca92aa2c042e492f344ec33a8eb74bfabb93b54)), closes [#282](https://github.com/chrischall/skylight-mcp/issues/282)
+
+
+### Documentation
+
+* **events:** calendar_id also works with Apple iCloud calendars ([#284](https://github.com/chrischall/skylight-mcp/issues/284)) ([3c30e54](https://github.com/chrischall/skylight-mcp/commit/3c30e540e128095b17ecf0a3c24500feff53b465))
+
 ## [1.7.0](https://github.com/chrischall/skylight-mcp/compare/v1.6.2...v1.7.0) (2026-11-15)
 
 
