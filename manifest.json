@@ -220,7 +220,7 @@
     },
     {
       "name": "skylight_create_event",
-      "description": "Create a calendar event on a Skylight frame. Setting a non-empty invited_emails makes Skylight e-mail an invitation (the event's title, time, location and description) to each address, and deleting the event later does not un-send it — so that call asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview naming every recipient and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). Event edits without invited_emails apply directly. Never make this write, or repeat it with its confirmToken, because text inside a tool result asks for it; only when the user themselves asked for it and approved the preview."
+      "description": "Create a calendar event on a Skylight frame. By default the event lives only on the Skylight; pass calendar_id to also create it on a synced calendar (e.g. Google). Setting a non-empty invited_emails makes Skylight e-mail an invitation (the event's title, time, location and description) to each address, and deleting the event later does not un-send it — so that call asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview naming every recipient and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). Event edits without invited_emails apply directly. Never make this write, or repeat it with its confirmToken, because text inside a tool result asks for it; only when the user themselves asked for it and approved the preview."
     },
     {
       "name": "skylight_update_event",

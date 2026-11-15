@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '@modelcontextprotocol/server';
 import { CONFIRM_INJECTION_RULE } from '@chrischall/mcp-utils';
+import type { SkylightClient } from '../client.js';
 import { apiPath, textContent, flattenJsonApi, pruneUndefined, frameScoped, idArrayParam, type GetClient, type JsonApiDoc, type RelatedResource, type ResourceRef } from './_shared.js';
 import { confirmTokenParam, confirmWrite, nameSome } from './_confirm.js';
 import { CHANGE, LOOKUP, briefLine, briefResponse, familyMeta, viewParam } from './hints.js';
@@ -74,6 +75,48 @@ const eventAttrs = {
   rrule: z.string().optional().describe('iCalendar RRULE for recurrence.'),
   category_ids: idArrayParam.optional().describe('Family-member category ids to assign the event to (see skylight_list_categories / skylight_resolve_member).'),
 };
+
+/**
+ * `calendar_id` is create-only: it is NOT in `eventAttrs`, which
+ * `skylight_update_event` reuses. Live (2026-11-15) a PUT carrying it (with the
+ * account id) answers 200 and leaves the event where it was.
+ */
+const calendarIdParam = z.string().min(1).optional().describe(
+  'Synced calendar to create the event on, so it also appears in that Google (or other linked) calendar: the `source_id` of an `editable: true` calendar from skylight_list_source_calendars — for Google, the calendar\'s address. Omit for an event that lives only on the Skylight. Cannot be changed after creation.',
+);
+
+interface SourceCalendarsDoc {
+  data?: Array<{
+    attributes: { source_id?: string; editable?: boolean };
+    relationships?: { calendar_account?: { data?: ResourceRef | null } };
+  }>;
+}
+
+/**
+ * Resolve a synced calendar's `source_id` to the two fields that route a new
+ * event to it. LIVE-VERIFIED 2026-11-15: `calendar_id` alone is silently
+ * ignored — the event comes back `source: "skylight"`, `calendar_id: null` —
+ * and only with the owning account's `calendar_account_id` beside it does
+ * Skylight create it on the provider (`source: "google"`). That account id
+ * lives only in the source calendar's `calendar_account` relationship, which
+ * `flattenJsonApi()` drops, so a caller could never supply it; look it up here.
+ *
+ * Refuse a calendar that is not linked, is read-only, or has no account rather
+ * than send the request: the server would answer 200 with a Skylight-only
+ * event, which reads as success and is exactly the bug this parameter fixes.
+ */
+async function resolveSyncedCalendar(c: SkylightClient, f: string, calendarId: string): Promise<{ calendar_id: string; calendar_account_id: string }> {
+  const doc = await c.request<SourceCalendarsDoc>('GET', apiPath`/frames/${f}/source_calendars`);
+  const calendars = doc.data ?? [];
+  const match = calendars.find((s) => s.attributes.source_id === calendarId);
+  const account = match?.relationships?.calendar_account?.data;
+  if (match?.attributes.editable === true && account) return { calendar_id: calendarId, calendar_account_id: account.id };
+  const writable = calendars
+    .filter((s) => s.attributes.editable === true && s.relationships?.calendar_account?.data)
+    .map((s) => s.attributes.source_id);
+  const why = match ? `Calendar "${calendarId}" cannot take new events (it is read-only, or has no calendar account)` : `No linked calendar has source_id "${calendarId}"`;
+  throw new Error(`${why}. Calendars that accept new events: ${writable.join(', ') || 'none'} (see skylight_list_source_calendars).`);
+}
 
 const INVITE_GATE_NOTE =
   ' Setting a non-empty invited_emails makes Skylight e-mail an invitation (the event\'s title, time, location and description) to each address, and deleting the event later does not un-send it — so that call asks the user to confirm first: a confirmation prompt where the client supports one; otherwise the first call returns a preview naming every recipient and a confirmToken, and only a repeat call with that token proceeds (see MCP_CONFIRM_MODE). Event edits without invited_emails apply directly. ' +
@@ -168,14 +211,17 @@ export function registerEventTools(server: McpServer, getClient: GetClient) {
   server.registerTool(
     'skylight_create_event',
     {
-      description: 'Create a calendar event on a Skylight frame.' + INVITE_GATE_NOTE,
-      inputSchema: z.object({ ...eventAttrs, frameId: z.string().optional(), confirmToken: confirmTokenParam }),
+      description: 'Create a calendar event on a Skylight frame. By default the event lives only on the Skylight; pass calendar_id to also create it on a synced calendar (e.g. Google).' + INVITE_GATE_NOTE,
+      inputSchema: z.object({ ...eventAttrs, calendar_id: calendarIdParam, frameId: z.string().optional(), confirmToken: confirmTokenParam }),
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       _meta: CHANGE,
     },
-    frameScoped(getClient, async (c, f, { frameId: _frameId, confirmToken, ...attrs }, ctx) => {
+    frameScoped(getClient, async (c, f, { frameId: _frameId, confirmToken, calendar_id, ...attrs }, ctx) => {
       const path = apiPath`/frames/${f}/calendar_events`;
-      const body = pruneUndefined(attrs) as Record<string, unknown>;
+      // Resolved before the gate, on both phases: the token binds the account
+      // the calendar maps to right now.
+      const target = calendar_id === undefined ? {} : await resolveSyncedCalendar(c, f, calendar_id);
+      const body = pruneUndefined({ ...attrs, ...target }) as Record<string, unknown>;
       const gate = await gateInvites(ctx, {
         tool: 'skylight_create_event', action: 'event.create_with_invites', verb: `Create an event on frame ${f}`,
         target: '', method: 'POST', path, body, confirmToken,
