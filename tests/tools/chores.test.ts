@@ -30,9 +30,18 @@ describe('chore tools', () => {
     request.mockResolvedValue({ data: [{ id: '1', type: 'chore', attributes: { name: 'Dishes' } }] });
     const out = await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01' });
     expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/chores', {
-      query: { after: '2026-05-01', before: '2026-06-01' },
+      query: { after: '2026-05-01', before: '2026-06-01', include_up_for_grabs: 'true' },
     });
     expect(JSON.parse(out.content[0].text)).toEqual([{ id: '1', type: 'chore', name: 'Dishes' }]);
+  });
+
+  it('list_chores passes include_up_for_grabs: false and include_late through', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [] });
+    await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01', include_up_for_grabs: false, include_late: true });
+    expect(request).toHaveBeenCalledWith('GET', '/frames/3435252/chores', {
+      query: { after: '2026-05-01', before: '2026-06-01', include_up_for_grabs: 'false', include_late: 'true' },
+    });
   });
 
   it('list_chores with explicit frameId uses it and skips resolveFrameId', async () => {
@@ -40,7 +49,7 @@ describe('chore tools', () => {
     request.mockResolvedValue({ data: [] });
     await tools.skylight_list_chores({ after: '2026-05-01', before: '2026-06-01', frameId: '99' });
     expect(request).toHaveBeenCalledWith('GET', '/frames/99/chores', {
-      query: { after: '2026-05-01', before: '2026-06-01' },
+      query: { after: '2026-05-01', before: '2026-06-01', include_up_for_grabs: 'true' },
     });
     expect(resolveFrameId).not.toHaveBeenCalled();
   });

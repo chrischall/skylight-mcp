@@ -55,6 +55,8 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       inputSchema: z.object({
         after: z.string().describe('YYYY-MM-DD inclusive lower bound (required by the API).'),
         before: z.string().describe('YYYY-MM-DD inclusive upper bound (required by the API).'),
+        include_up_for_grabs: z.boolean().optional().describe('Include unassigned up-for-grabs chores. Defaults to true: without it Skylight leaves them out.'),
+        include_late: z.boolean().optional().describe('Also return overdue chores from before `after` that are still open.'),
         frameId: z.string().optional(),
         view: viewParam.describe('"full" (default) returns the flattened chores; "brief" returns one line per chore — title — <date[Ttime], or "no date"> — <status> — inside the untrusted-data envelope, "-- none" when the range is empty.'),
       }),
@@ -65,8 +67,10 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         aliases: ['chores', 'chore chart', 'routines', 'kids chores', 'to do', 'skylight'],
       }),
     },
-    frameScoped(getClient, async (c, f, { after, before, view }: { after: string; before: string; frameId?: string; view?: 'full' | 'brief' }) => {
-      const doc = await c.request<RelatedDoc | undefined>('GET', apiPath`/frames/${f}/chores`, { query: { after, before } });
+    frameScoped(getClient, async (c, f, { after, before, include_up_for_grabs, include_late, view }: { after: string; before: string; include_up_for_grabs?: boolean; include_late?: boolean; frameId?: string; view?: 'full' | 'brief' }) => {
+      const query: Record<string, string> = { after, before, include_up_for_grabs: String(include_up_for_grabs ?? true) };
+      if (include_late !== undefined) query.include_late = String(include_late);
+      const doc = await c.request<RelatedDoc | undefined>('GET', apiPath`/frames/${f}/chores`, { query });
       if (view === 'brief') {
         const who = 'Chore titles are written by members of the Skylight frame.';
         const rows = doc ? doc.data : [];
