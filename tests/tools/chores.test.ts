@@ -277,10 +277,13 @@ describe('chore tools', () => {
     expect(JSON.parse(out.content[0].text)).toEqual([{ id: '5', type: 'chore', summary: 'Take out trash', up_for_grabs: true }]);
   });
 
-  it('create_chore with up_for_grabs refuses a missing start without calling the API', async () => {
+  it('create_chore with up_for_grabs and no start sends an undated chore with no recurrence', async () => {
     const { tools, request } = harness();
-    await expect(tools.skylight_create_chore({ summary: 'Take out trash', up_for_grabs: true })).rejects.toThrow(/start date/);
-    expect(request).not.toHaveBeenCalled();
+    request.mockResolvedValue({ data: [{ id: '8', type: 'chore', attributes: { summary: 'Wipe counters', up_for_grabs: true } }] });
+    await tools.skylight_create_chore({ summary: 'Wipe counters', up_for_grabs: true });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/create_multiple', {
+      body: { summary: 'Wipe counters', up_for_grabs: true },
+    });
   });
 
   it('create_chore with up_for_grabs:false and a category_id is a normal assigned chore', async () => {

@@ -93,7 +93,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         summary: z.string().describe('Chore title.'),
         category_id: idParam.optional().describe('Category / family-member id the chore belongs to. Get ids from skylight_list_categories. Omit when up_for_grabs is true.'),
         up_for_grabs: z.boolean().optional().describe('Set true for an unassigned "anyone can do it" chore (pass no category_id).'),
-        start: z.string().optional().describe('YYYY-MM-DD start date. Required when up_for_grabs is true.'),
+        start: z.string().optional().describe('YYYY-MM-DD date. Omit for an undated chore.'),
         description: z.string().optional(),
         reward_points: z.number().optional().describe('Reward points/stars for completing.'),
         frameId: z.string().optional(),
@@ -110,9 +110,11 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
         throw new Error('Pass category_id (a family member from skylight_list_categories) or up_for_grabs: true for an unassigned chore.');
       }
       if (unassigned) {
-        if (start === undefined) throw new Error('An up-for-grabs chore needs a start date (YYYY-MM-DD).');
+        // Dated: a single-occurrence RRULE pins it to `start`. Undated: no recurrence_set and no
+        // start, like the app's undated up-for-grabs chores (NOT yet live-verified).
+        const recurrence_set = start === undefined ? undefined : ['RRULE:FREQ=DAILY;COUNT=1'];
         const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores/create_multiple`, {
-          body: pruneUndefined({ summary, up_for_grabs: true, recurrence_set: ['RRULE:FREQ=DAILY;COUNT=1'], start, description, reward_points }),
+          body: pruneUndefined({ summary, up_for_grabs: true, recurrence_set, start, description, reward_points }),
         });
         return textContent(flattenJsonApi(doc));
       }
