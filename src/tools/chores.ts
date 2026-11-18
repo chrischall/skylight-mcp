@@ -111,7 +111,7 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       }
       if (unassigned) {
         // Dated: a single-occurrence RRULE pins it to `start`. Undated: no recurrence_set and no
-        // start, like the app's undated up-for-grabs chores (NOT yet live-verified).
+        // start, like the app's undated up-for-grabs chores (LIVE-VERIFIED 2026-11-18).
         const recurrence_set = start === undefined ? undefined : ['RRULE:FREQ=DAILY;COUNT=1'];
         const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores/create_multiple`, {
           body: pruneUndefined({ summary, up_for_grabs: true, recurrence_set, start, description, reward_points }),
