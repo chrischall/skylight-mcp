@@ -267,14 +267,20 @@ describe('chore tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
-  it('create_chore with up_for_grabs sends up_for_grabs:true and no category_id', async () => {
+  it('create_chore with up_for_grabs goes through create_multiple as a single occurrence (POST /chores 422s without a category)', async () => {
     const { tools, request } = harness();
-    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { summary: 'Take out trash', up_for_grabs: true } } });
+    request.mockResolvedValue({ data: [{ id: '5', type: 'chore', attributes: { summary: 'Take out trash', up_for_grabs: true } }] });
     const out = await tools.skylight_create_chore({ summary: 'Take out trash', up_for_grabs: true, start: '2026-11-20', reward_points: 2 });
-    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores', {
-      body: { summary: 'Take out trash', up_for_grabs: true, start: '2026-11-20', reward_points: 2 },
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/create_multiple', {
+      body: { summary: 'Take out trash', up_for_grabs: true, recurrence_set: ['RRULE:FREQ=DAILY;COUNT=1'], start: '2026-11-20', reward_points: 2 },
     });
-    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', summary: 'Take out trash', up_for_grabs: true });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '5', type: 'chore', summary: 'Take out trash', up_for_grabs: true }]);
+  });
+
+  it('create_chore with up_for_grabs refuses a missing start without calling the API', async () => {
+    const { tools, request } = harness();
+    await expect(tools.skylight_create_chore({ summary: 'Take out trash', up_for_grabs: true })).rejects.toThrow(/start date/);
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('create_chore with up_for_grabs:false and a category_id is a normal assigned chore', async () => {
