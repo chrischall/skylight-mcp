@@ -304,7 +304,7 @@
     },
     {
       "name": "skylight_create_chore",
-      "description": "Create a chore on a Skylight frame."
+      "description": "Create a one-time chore on a Skylight frame, either assigned to one family member (`category_id`) or unassigned so anyone can claim it (`up_for_grabs: true`). Pass exactly one of the two. For a repeating up-for-grabs chore use skylight_create_recurring_chore."
     },
     {
       "name": "skylight_create_recurring_chore",

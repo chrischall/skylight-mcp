@@ -80,15 +80,18 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     }),
   );
 
-  // LIVE-VERIFIED: create_chore requires flat {summary, category_id} — category_id is mandatory
-  // (422 "Category is required" without it). The `name` field does not exist; use `summary`.
+  // LIVE-VERIFIED: create_chore takes flat {summary, category_id}; an assigned chore without
+  // category_id 422s "Category is required". The `name` field does not exist; use `summary`.
+  // An unassigned chore instead sends up_for_grabs:true and no category_id — the same flag
+  // create_multiple accepts (works because of the skylight-api-version header).
   server.registerTool(
     'skylight_create_chore',
     {
-      description: 'Create a chore on a Skylight frame.',
+      description: 'Create a one-time chore on a Skylight frame, either assigned to one family member (`category_id`) or unassigned so anyone can claim it (`up_for_grabs: true`). Pass exactly one of the two. For a repeating up-for-grabs chore use skylight_create_recurring_chore.',
       inputSchema: z.object({
         summary: z.string().describe('Chore title.'),
-        category_id: idParam.describe('Category / family-member id the chore belongs to (required). Get ids from skylight_list_categories.'),
+        category_id: idParam.optional().describe('Category / family-member id the chore belongs to. Get ids from skylight_list_categories. Omit when up_for_grabs is true.'),
+        up_for_grabs: z.boolean().optional().describe('Set true for an unassigned "anyone can do it" chore (pass no category_id).'),
         start: z.string().optional().describe('YYYY-MM-DD start date.'),
         description: z.string().optional(),
         reward_points: z.number().optional().describe('Reward points/stars for completing.'),
@@ -97,8 +100,18 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: CHANGE,
     },
-    frameScoped(getClient, async (c, f, { summary, category_id, start, description, reward_points }: { summary: string; category_id: string | number; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
-      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores`, { body: pruneUndefined({ summary, category_id, start, description, reward_points }) });
+    frameScoped(getClient, async (c, f, { summary, category_id, up_for_grabs, start, description, reward_points }: { summary: string; category_id?: string | number; up_for_grabs?: boolean; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
+      const unassigned = up_for_grabs === true;
+      if (unassigned && category_id !== undefined) {
+        throw new Error('An up-for-grabs chore has no assignee: pass up_for_grabs: true OR category_id, not both.');
+      }
+      if (!unassigned && category_id === undefined) {
+        throw new Error('Pass category_id (a family member from skylight_list_categories) or up_for_grabs: true for an unassigned chore.');
+      }
+      const body = unassigned
+        ? pruneUndefined({ summary, up_for_grabs: true, start, description, reward_points })
+        : pruneUndefined({ summary, category_id, start, description, reward_points });
+      const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores`, { body });
       return textContent(flattenJsonApi(doc));
     }),
   );

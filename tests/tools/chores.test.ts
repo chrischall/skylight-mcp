@@ -267,6 +267,38 @@ describe('chore tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  it('create_chore with up_for_grabs sends up_for_grabs:true and no category_id', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '5', type: 'chore', attributes: { summary: 'Take out trash', up_for_grabs: true } } });
+    const out = await tools.skylight_create_chore({ summary: 'Take out trash', up_for_grabs: true, start: '2026-11-20', reward_points: 2 });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores', {
+      body: { summary: 'Take out trash', up_for_grabs: true, start: '2026-11-20', reward_points: 2 },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual({ id: '5', type: 'chore', summary: 'Take out trash', up_for_grabs: true });
+  });
+
+  it('create_chore with up_for_grabs:false and a category_id is a normal assigned chore', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '6', type: 'chore', attributes: {} } });
+    await tools.skylight_create_chore({ summary: 'Dishes', category_id: '7', up_for_grabs: false });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores', {
+      body: { summary: 'Dishes', category_id: '7' },
+    });
+  });
+
+  it('create_chore refuses both up_for_grabs and category_id without calling the API', async () => {
+    const { tools, request } = harness();
+    await expect(tools.skylight_create_chore({ summary: 'Dishes', category_id: '7', up_for_grabs: true }))
+      .rejects.toThrow(/not both/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('create_chore refuses neither category_id nor up_for_grabs without calling the API', async () => {
+    const { tools, request } = harness();
+    await expect(tools.skylight_create_chore({ summary: 'Dishes' })).rejects.toThrow(/category_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   // ── skylight_create_recurring_chore ──────────────────────────────────────
 
   it('create_recurring_chore POSTs create_multiple with recurrence_set array body', async () => {
