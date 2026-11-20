@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0](https://github.com/chrischall/skylight-mcp/compare/v1.7.1...v1.8.0) (2026-11-20)
+
+
+### Features
+
+* **chores:** support up_for_grabs in skylight_create_chore ([#286](https://github.com/chrischall/skylight-mcp/issues/286)) ([23e16a6](https://github.com/chrischall/skylight-mcp/commit/23e16a6c7be8290d94c19bb46d24f4c1e7c86c6e))
+
+
+### Bug Fixes
+
+* **chores:** include up-for-grabs chores in skylight_list_chores ([#287](https://github.com/chrischall/skylight-mcp/issues/287)) ([a10cd6a](https://github.com/chrischall/skylight-mcp/commit/a10cd6a4b0ac163b9bb87f91a2e1c299746be044))
+
 ## [1.7.1](https://github.com/chrischall/skylight-mcp/compare/v1.7.0...v1.7.1) (2026-11-15)
 
 
