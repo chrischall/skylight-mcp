@@ -267,6 +267,47 @@ describe('chore tools', () => {
     expect(resolveFrameId).not.toHaveBeenCalled();
   });
 
+  it('create_chore with up_for_grabs goes through create_multiple as a single occurrence (POST /chores 422s without a category)', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '5', type: 'chore', attributes: { summary: 'Take out trash', up_for_grabs: true } }] });
+    const out = await tools.skylight_create_chore({ summary: 'Take out trash', up_for_grabs: true, start: '2026-11-20', reward_points: 2 });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/create_multiple', {
+      body: { summary: 'Take out trash', up_for_grabs: true, recurrence_set: ['RRULE:FREQ=DAILY;COUNT=1'], start: '2026-11-20', reward_points: 2 },
+    });
+    expect(JSON.parse(out.content[0].text)).toEqual([{ id: '5', type: 'chore', summary: 'Take out trash', up_for_grabs: true }]);
+  });
+
+  it('create_chore with up_for_grabs and no start sends an undated chore with no recurrence', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: [{ id: '8', type: 'chore', attributes: { summary: 'Wipe counters', up_for_grabs: true } }] });
+    await tools.skylight_create_chore({ summary: 'Wipe counters', up_for_grabs: true });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores/create_multiple', {
+      body: { summary: 'Wipe counters', up_for_grabs: true },
+    });
+  });
+
+  it('create_chore with up_for_grabs:false and a category_id is a normal assigned chore', async () => {
+    const { tools, request } = harness();
+    request.mockResolvedValue({ data: { id: '6', type: 'chore', attributes: {} } });
+    await tools.skylight_create_chore({ summary: 'Dishes', category_id: '7', up_for_grabs: false });
+    expect(request).toHaveBeenCalledWith('POST', '/frames/3435252/chores', {
+      body: { summary: 'Dishes', category_id: '7' },
+    });
+  });
+
+  it('create_chore refuses both up_for_grabs and category_id without calling the API', async () => {
+    const { tools, request } = harness();
+    await expect(tools.skylight_create_chore({ summary: 'Dishes', category_id: '7', up_for_grabs: true }))
+      .rejects.toThrow(/not both/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('create_chore refuses neither category_id nor up_for_grabs without calling the API', async () => {
+    const { tools, request } = harness();
+    await expect(tools.skylight_create_chore({ summary: 'Dishes' })).rejects.toThrow(/category_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   // ── skylight_create_recurring_chore ──────────────────────────────────────
 
   it('create_recurring_chore POSTs create_multiple with recurrence_set array body', async () => {

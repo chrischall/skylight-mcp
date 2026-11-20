@@ -80,16 +80,20 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
     }),
   );
 
-  // LIVE-VERIFIED: create_chore requires flat {summary, category_id} — category_id is mandatory
-  // (422 "Category is required" without it). The `name` field does not exist; use `summary`.
+  // LIVE-VERIFIED: create_chore takes flat {summary, category_id}; without category_id it
+  // 422s "Category is required" — even with up_for_grabs:true (verified 2026-11-18). So an
+  // unassigned one-time chore goes through create_multiple, which accepts up_for_grabs, with a
+  // single-occurrence RRULE (FREQ=DAILY;COUNT=1): one up-for-grabs chore on `start`
+  // (LIVE-VERIFIED 2026-11-18). The `name` field does not exist; use `summary`.
   server.registerTool(
     'skylight_create_chore',
     {
-      description: 'Create a chore on a Skylight frame.',
+      description: 'Create a one-time chore on a Skylight frame, either assigned to one family member (`category_id`) or unassigned so anyone can claim it (`up_for_grabs: true`). Pass exactly one of the two. For a repeating up-for-grabs chore use skylight_create_recurring_chore.',
       inputSchema: z.object({
         summary: z.string().describe('Chore title.'),
-        category_id: idParam.describe('Category / family-member id the chore belongs to (required). Get ids from skylight_list_categories.'),
-        start: z.string().optional().describe('YYYY-MM-DD start date.'),
+        category_id: idParam.optional().describe('Category / family-member id the chore belongs to. Get ids from skylight_list_categories. Omit when up_for_grabs is true.'),
+        up_for_grabs: z.boolean().optional().describe('Set true for an unassigned "anyone can do it" chore (pass no category_id).'),
+        start: z.string().optional().describe('YYYY-MM-DD date. Omit for an undated chore.'),
         description: z.string().optional(),
         reward_points: z.number().optional().describe('Reward points/stars for completing.'),
         frameId: z.string().optional(),
@@ -97,7 +101,23 @@ export function registerChoreTools(server: McpServer, getClient: GetClient) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: CHANGE,
     },
-    frameScoped(getClient, async (c, f, { summary, category_id, start, description, reward_points }: { summary: string; category_id: string | number; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
+    frameScoped(getClient, async (c, f, { summary, category_id, up_for_grabs, start, description, reward_points }: { summary: string; category_id?: string | number; up_for_grabs?: boolean; start?: string; description?: string; reward_points?: number; frameId?: string }) => {
+      const unassigned = up_for_grabs === true;
+      if (unassigned && category_id !== undefined) {
+        throw new Error('An up-for-grabs chore has no assignee: pass up_for_grabs: true OR category_id, not both.');
+      }
+      if (!unassigned && category_id === undefined) {
+        throw new Error('Pass category_id (a family member from skylight_list_categories) or up_for_grabs: true for an unassigned chore.');
+      }
+      if (unassigned) {
+        // Dated: a single-occurrence RRULE pins it to `start`. Undated: no recurrence_set and no
+        // start, like the app's undated up-for-grabs chores (LIVE-VERIFIED 2026-11-18).
+        const recurrence_set = start === undefined ? undefined : ['RRULE:FREQ=DAILY;COUNT=1'];
+        const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores/create_multiple`, {
+          body: pruneUndefined({ summary, up_for_grabs: true, recurrence_set, start, description, reward_points }),
+        });
+        return textContent(flattenJsonApi(doc));
+      }
       const doc = await c.request<JsonApiDoc>('POST', apiPath`/frames/${f}/chores`, { body: pruneUndefined({ summary, category_id, start, description, reward_points }) });
       return textContent(flattenJsonApi(doc));
     }),
