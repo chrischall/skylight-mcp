@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/chrischall/skylight-mcp/compare/v1.8.0...v1.8.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **deps:** bump @chrischall/mcp-utils ([#289](https://github.com/chrischall/skylight-mcp/issues/289)) ([a310a41](https://github.com/chrischall/skylight-mcp/commit/a310a41c1876baa9474dd5c8e4707f61fc901712))
+
 ## [1.8.0](https://github.com/chrischall/skylight-mcp/compare/v1.7.1...v1.8.0) (2026-11-20)
 
 
